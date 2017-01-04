@@ -1,19 +1,18 @@
 version: 1.0
-pidfile: ./jobserver.pid
+pidfile: ./humpback-center.pid
 discovery:
     uris: zk://192.168.1.80:2181
     syspath: humpback/center
     heartbeat: 8s
-    ttl: 20s
-    cluster: e3
 storage:
-    hosts: mongodb://192.168.1.80:27017,192.168.1.81:27017,192.168.1.82:27017/humpback?replicaSet=mgoCluster
-    dbname: humpback
-    #auth: 
-        #user: admin
-        #password: 123
+    mongodb:
+        hosts: mongodb://192.168.1.80:27017,192.168.1.81:27017,192.168.1.82:27017/humpback?replicaSet=mgoCluster
+        database: humpback
+    #    auth: 
+    #        user: admin
+    #        password: 123
 api:
-    bind: :8985
+    bind: :8579
     cors:
         origin: ["*"]
         methods: ["POST", "PUT", "GET", "DELETE", "OPTIONS"]
@@ -22,4 +21,3 @@ logger:
     loglevel: debug
     logsize: 20971520
 ...
-

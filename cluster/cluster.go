@@ -21,7 +21,7 @@ func NewCluster(d *discovery.Discovery) (*Cluster, error) {
 		groups:    make(map[string]*Group),
 	}
 	cluster.watch()
-	return nil, nil
+	return cluster, nil
 }
 
 func (c *Cluster) AddGroup(id string, name string) (*Group, error) {
@@ -47,7 +47,7 @@ func (c *Cluster) watch() error {
 func (c *Cluster) watchHandleFunc(added backends.Entries, removed backends.Entries, err error) {
 
 	if err != nil {
-		logger.INFO("[#cluster#] cluster discovery handler error:%s", err.Error())
+		logger.ERROR("[#cluster#] cluster discovery handlefunc error:%s", err.Error())
 		return
 	}
 
