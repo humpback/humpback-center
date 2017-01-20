@@ -9,18 +9,18 @@ import (
 
 func main() {
 
-	center, err := server.NewServerCenter()
+	service, err := server.NewCenterService()
 	if err != nil {
 		panic(err)
 		os.Exit(EXITCODE_INITFAILED)
 	}
 
 	defer func() {
-		center.Stop()
+		service.Stop()
 		os.Exit(EXITCODE_EXITED)
 	}()
 
-	if err := center.Startup(); err != nil {
+	if err := service.Startup(); err != nil {
 		panic(err)
 		os.Exit(EXITCODE_STARTFAILED)
 	}

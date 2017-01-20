@@ -3,48 +3,49 @@ package cluster
 import "github.com/humpback/discovery"
 import "github.com/humpback/discovery/backends"
 import "github.com/humpback/gounits/logger"
+import "github.com/humpback/humpback-center/models"
 
-import "sync"
-import "fmt"
+import (
+	"fmt"
+	"sync"
+)
 
 // Cluster is exported
 type Cluster struct {
 	sync.RWMutex
 	discovery *discovery.Discovery
-	groups    map[string]*Group
+	engines   map[string]*Engine
+	groups    map[string]*models.Group
+	stopCh    chan struct{}
 }
 
-func NewCluster(d *discovery.Discovery) (*Cluster, error) {
+// NewCluster is exported
+func NewCluster(discovery *discovery.Discovery) (*Cluster, error) {
 
-	cluster := &Cluster{
-		discovery: d,
-		groups:    make(map[string]*Group),
-	}
-	cluster.watch()
-	return cluster, nil
+	return &Cluster{
+		discovery: discovery,
+		engines:   make(map[string]*Engine),
+		groups:    make(map[string]*models.Group),
+		stopCh:    make(chan struct{}),
+	}, nil
 }
 
-func (c *Cluster) AddGroup(id string, name string) (*Group, error) {
-
-	return nil, nil
-}
-
-func (c *Cluster) RemoveGroup(id string) bool {
-
-	return false
-}
-
-func (c *Cluster) watch() error {
+func (cluster *Cluster) Start() error {
 
 	logger.INFO("[#cluster#] cluster discovery watching...")
-	if c.discovery != nil {
-		c.discovery.Watch(nil, c.watchHandleFunc)
+	if cluster.discovery != nil {
+		cluster.discovery.Watch(cluster.stopCh, cluster.watchHandleFunc)
 		return nil
 	}
 	return fmt.Errorf("cluster discovery invalid.")
 }
 
-func (c *Cluster) watchHandleFunc(added backends.Entries, removed backends.Entries, err error) {
+func (cluster *Cluster) Stop() {
+
+	close(cluster.stopCh)
+}
+
+func (cluster *Cluster) watchHandleFunc(added backends.Entries, removed backends.Entries, err error) {
 
 	if err != nil {
 		logger.ERROR("[#cluster#] cluster discovery handlefunc error:%s", err.Error())

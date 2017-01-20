@@ -1,0 +1,111 @@
+package cluster
+
+import "github.com/humpback/discovery"
+import "github.com/humpback/discovery/backends"
+import "github.com/humpback/gounits/logger"
+
+import (
+	"fmt"
+	"sync"
+)
+
+type Engines map[string]*Engine
+
+// Group is exported
+type Group struct {
+	ID      string
+	engines map[string]*Engine
+}
+
+// Cluster is exported
+type Cluster struct {
+	sync.RWMutex
+	Discovery *discovery.Discovery
+	engines   map[string]*Engine
+	groups    map[string]*Group
+	stopCh    chan struct{}
+}
+
+// NewCluster is exported
+func NewCluster(discovery *discovery.Discovery) (*Cluster, error) {
+
+	return &Cluster{
+		stopCh:    make(chan struct{}),
+		Discovery: discovery,
+		groups:    make(map[string]*Group),
+	}, nil
+}
+
+func (cluster *Cluster) GetGroups() []*Group {
+
+	cluster.RLock()
+	defer cluster.RUnlock()
+	groups := []*Group{}
+	for _, group := range cluster.groups {
+		groups = append(groups, group)
+	}
+	return groups
+}
+
+func (cluster *Cluster) CreateGroup(id string, ips []string) (*Group, error) {
+
+	cluster.Lock()
+	defer cluster.Unlock()
+	if _, ret := cluster.groups[id]; !ret {
+		group := NewGroup(id)
+		for _, ip := range ips {
+			group.AddEngine(ip)
+		}
+		cluster.groups[id] = group
+		return group, nil
+	}
+	return nil, fmt.Errorf("create group conflict of id:%s\n", id)
+}
+
+func (cluster *Cluster) ChangeGroup(id string, ips []string) (*Group, error) {
+
+	return nil, nil
+}
+
+func (cluster *Cluster) RemoveGroup(id string) bool {
+
+	cluster.Lock()
+	defer cluster.Unlock()
+	if group, ret := cluster.groups[id]; ret {
+		group.ClearEngines()
+		delete(cluster.groups, id)
+		return true
+	}
+	return false
+}
+
+func (cluster *Cluster) Start() error {
+
+	logger.INFO("[#cluster#] cluster discovery watching...")
+	if cluster.Discovery != nil {
+		cluster.Discovery.Watch(cluster.stopCh, cluster.watchHandleFunc)
+		return nil
+	}
+	return fmt.Errorf("cluster discovery invalid.")
+}
+
+func (cluster *Cluster) Stop() {
+
+	close(cluster.stopCh)
+}
+
+func (cluster *Cluster) watchHandleFunc(added backends.Entries, removed backends.Entries, err error) {
+
+	if err != nil {
+		logger.ERROR("[#cluster#] cluster discovery handlefunc error:%s", err.Error())
+		return
+	}
+
+	//for _, entry := range removed {
+	// set engine state to disconnected.
+	//}
+
+	//for _, entry := range added {
+	// set engine state to pending.
+	//}
+}

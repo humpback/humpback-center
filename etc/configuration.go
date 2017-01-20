@@ -1,5 +1,6 @@
 package etc
 
+import "github.com/humpback/gounits/logger"
 import "gopkg.in/yaml.v2"
 
 import (
@@ -9,33 +10,30 @@ import (
 
 type Configuration struct {
 
-	//基本配置参数
+	//base options
 	Version string `yaml:"version"`
-	PidFile string `yaml:"pidfile"`
 
-	//服务发现配置
+	//service discovery options
 	Discovery struct {
 		URIs      string `yaml:"uris"`
 		SysPath   string `yaml:"syspath"`
 		Heartbeat string `yaml:"heartbeat"`
 	} `yaml:"discovery"`
 
-	//持久化存储配置(目前暂支持mongo)
+	//storage options
 	Storage struct {
 		Mongodb struct {
-			Hosts    string            `yaml:"hosts"`
-			DataBase string            `yaml:"database"`
-			Auth     map[string]string `yaml:"auth,omitempty"`
+			URIs string `yaml:"uris"`
 		} `yaml:"mongodb,omitempty"`
 	} `yaml:"storage"`
 
-	//API服务配置
-	APIServer struct {
-		Bind string              `yaml:"bind"`
-		Cors map[string][]string `yaml:"cors"`
-	} `yaml:"apiserver"`
+	//api options
+	API struct {
+		Hosts      []string `yaml:"hosts"`
+		EnableCors bool     `yaml:"enablecors"`
+	} `yaml:"api"`
 
-	//日志选项配置
+	//log options
 	Logger struct {
 		LogFile  string `yaml:"logfile"`
 		LogLevel string `yaml:"loglevel"`
@@ -56,9 +54,18 @@ func NewConfiguration(file string) (*Configuration, error) {
 		return nil, err
 	}
 
-	c := &Configuration{}
-	if err := yaml.Unmarshal([]byte(data), c); err != nil {
+	configuration := &Configuration{}
+	if err := yaml.Unmarshal([]byte(data), configuration); err != nil {
 		return nil, err
 	}
-	return c, nil
+	return configuration, nil
+}
+
+func (configuration *Configuration) GetLogger() *logger.Args {
+
+	return &logger.Args{
+		FileName: configuration.Logger.LogFile,
+		Level:    configuration.Logger.LogLevel,
+		MaxSize:  configuration.Logger.LogSize,
+	}
 }

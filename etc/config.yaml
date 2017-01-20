@@ -1,21 +1,14 @@
-version: 1.0
-pidfile: ./humpback-center.pid
+version: 1.0.0
 discovery:
-    uris: zk://192.168.1.80:2181
+    uris: zk://192.168.1.80:2181,192.168.1.81:2181,192.168.1.82:2181
     syspath: humpback/center
     heartbeat: 8s
 storage:
     mongodb:
-        hosts: mongodb://192.168.1.80:27017,192.168.1.81:27017,192.168.1.82:27017/humpback?replicaSet=mgoCluster
-        database: humpback
-    #    auth: 
-    #        user: admin
-    #        password: 123
+        uris: mongodb://192.168.1.80:27017,192.168.1.81:27017,192.168.1.82:27017/humpback?replicaSet=mgoCluster&maxPoolSize=10
 api:
-    bind: :8579
-    cors:
-        origin: ["*"]
-        methods: ["POST", "PUT", "GET", "DELETE", "OPTIONS"]
+    hosts: ["tcp://:8580", "unix:///var/run/humpback-center.sock"]
+    enablecors: true
 logger:
     logfile: ./logs/humpback-center.log
     loglevel: debug
