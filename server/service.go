@@ -3,6 +3,7 @@ package server
 import "github.com/humpback/humpback-center/etc"
 import "github.com/humpback/humpback-center/api"
 import "github.com/humpback/humpback-center/cluster"
+import "github.com/humpback/humpback-center/repository"
 import "github.com/humpback/humpback-center/storage"
 import "github.com/humpback/gounits/logger"
 
@@ -15,9 +16,10 @@ ServerCenter
 humpback center service
 */
 type CenterService struct {
-	APIServer   *api.Server
-	Cluster     *cluster.Cluster
-	DataStorage *storage.DataStorage
+	APIServer       *api.Server
+	Cluster         *cluster.Cluster
+	RepositoryCache *repository.RepositoryCache
+	DataStorage     *storage.DataStorage
 }
 
 // NewCenterService exported
@@ -44,7 +46,8 @@ func NewCenterService() (*CenterService, error) {
 		return nil, err
 	}
 
-	router := api.NewRouter(cluster, nil, configuration.API.EnableCors)
+	repositorycache := repository.NewRepositoryCache()
+	router := api.NewRouter(cluster, repositorycache, configuration.API.EnableCors)
 	apiserver := api.NewServer(configuration.API.Hosts, nil, router)
 	return &CenterService{
 		APIServer:   apiserver,

@@ -1,25 +1,25 @@
 package api
 
 import "github.com/humpback/humpback-center/cluster"
+import "github.com/humpback/humpback-center/repository"
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"net/http"
 )
 
 type Context struct {
 	context.Context
-	Cluster   *cluster.Cluster
-	tlsConfig *tls.Config
+	Cluster         *cluster.Cluster
+	RepositoryCache *repository.RepositoryCache
 }
 
-func NewContext(cluster *cluster.Cluster, tlsConfig *tls.Config) *Context {
+func NewContext(cluster *cluster.Cluster, repositorycache *repository.RepositoryCache) *Context {
 
 	return &Context{
-		Cluster:   cluster,
-		tlsConfig: tlsConfig,
+		Cluster:         cluster,
+		RepositoryCache: repositorycache,
 	}
 }
 
