@@ -1,8 +1,13 @@
 package api
 
-import "net/http"
+import (
+	"fmt"
+	"net/http"
+)
 
-func getClusterEngines(ctx *Context, w http.ResponseWriter, r *http.Request) {
+func getClusterEngines(ctx *Context) {
 
-	ctx.JSON(w, http.StatusOK, "engines...")
+	p := ctx.Query("callback")
+	fmt.Printf("pcal:%s\n", p)
+	ctx.JSON(http.StatusOK, "engines...")
 }
