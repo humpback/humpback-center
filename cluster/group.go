@@ -63,7 +63,7 @@ func (cluster *Cluster) SetGroupServers(groupid string, servers []string) bool {
 	cluster.Lock()
 	defer cluster.Unlock()
 	if group, ret := cluster.groups[groupid]; ret {
-		group.Set(servers)
+		group.Servers = servers
 		return true
 	}
 	return false
