@@ -13,16 +13,20 @@ type handler func(c *Context)
 var routes = map[string]map[string]handler{
 	"GET": {
 		"/v1/_ping":                     ping,
-		"/v1/cluster/engines":           getClusterEngines,
-		"/v1/repository/images/refresh": getImagesRefresh,
-		"/v1/repository/images/catalog": getImagesCatalog,
-		"/v1/repository/images/tags/*":  getImagesTags,
+		"/v1/cluster/groups":            getClusterGroups,
+		"/v1/repository/images/catalog": getRepositoryImagesCatalog,
+		"/v1/repository/images/tags/*":  getRepositoryImagesTags,
 	},
 	"POST": {
-		"v1/repository/images/migrate": postImagesMigrate,
+		//"v1/cluster/groups":            postClusterGroups,
+		"v1/repository/images/migrate": postRepositoryImagesMigrate,
+	},
+	"PUT": {
+	//"v1/cluster/groups": putGroups,
 	},
 	"DELETE": {
-		"v1/repository/images/{name:.*}": deleteImages,
+		//"v1/cluster/groups":              deleteClusterGroups,
+		"v1/repository/images/{name:.*}": deleteRepositoryImages,
 	},
 }
 

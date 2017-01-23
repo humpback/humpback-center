@@ -3,7 +3,7 @@ package storage
 import "gopkg.in/mgo.v2"
 import "github.com/humpback/humpback-center/models"
 
-func (datastorage *DataStorage) GetClusterGroups() []*models.Group {
+func (datastorage *DataStorage) GetGroups() []*models.Group {
 
 	groups := []*models.Group{}
 	datastorage.M(C_GROUPS, func(c *mgo.Collection) error {
@@ -12,7 +12,7 @@ func (datastorage *DataStorage) GetClusterGroups() []*models.Group {
 	return groups
 }
 
-func (datastorage *DataStorage) GetClusterGroup(groupid string) *models.Group {
+func (datastorage *DataStorage) GetGroup(groupid string) *models.Group {
 
 	group := models.Group{}
 	if err := datastorage.M(C_GROUPS, func(c *mgo.Collection) error {

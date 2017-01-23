@@ -1,18 +1,20 @@
 package api
 
+import "github.com/humpback/gounits/logger"
+import "github.com/humpback/humpback-center/api/request"
+import "github.com/humpback/humpback-center/api/response"
+
 import (
-	"fmt"
 	"net/http"
 )
 
-func getClusterEngines(c *Context) {
+func getClusterGroups(c *Context) {
 
-	p1 := c.Query("callback")
-	fmt.Printf("p1:%s\n", p1)
-	p2 := c.Query("name")
-	fmt.Printf("p2:%s\n", p2)
-	p3 := c.Query("value")
-	fmt.Printf("p3:%s\n", p3)
-
-	c.JSON(http.StatusOK, "engines...")
+	logger.INFO("[#api#] getClusterGroups id:%s request resolve successed.", c.ID)
+	result := &response.ResponseResult{ResponseID: c.ID}
+	groups := c.Cluster.GetGroups()
+	response := response.NewClusterGroupsResponse(groups)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster groups")
+	result.SetResponse(response)
+	c.JSON(http.StatusOK, result)
 }

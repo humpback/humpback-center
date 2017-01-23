@@ -2,6 +2,7 @@ package api
 
 import "github.com/humpback/humpback-center/cluster"
 import "github.com/humpback/humpback-center/repository"
+import "github.com/humpback/gounits/system"
 
 import (
 	"context"
@@ -21,6 +22,7 @@ type (
 
 	Context struct {
 		context.Context
+		ID              string
 		request         *http.Request
 		response        *Response
 		query           url.Values
@@ -86,6 +88,7 @@ func NewContext(w http.ResponseWriter, r *http.Request,
 	cluster *cluster.Cluster, repositorycache *repository.RepositoryCache) *Context {
 
 	return &Context{
+		ID:              system.MakeKey(true),
 		request:         r,
 		response:        NewResponse(w),
 		store:           make(store),

@@ -20,7 +20,7 @@ func createCluster(c *etc.Configuration) (*cluster.Cluster, error) {
 		return nil, fmt.Errorf("discovery heartbeat should be at least 1s.")
 	}
 
-	configopts := map[string]string{"kv.path": c.Discovery.SysPath}
+	configopts := map[string]string{"kv.path": c.Discovery.Cluster}
 	discovery, err := discovery.New(c.Discovery.URIs, heartbeat, 0, configopts)
 	if err != nil {
 		return nil, err

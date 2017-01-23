@@ -18,6 +18,11 @@ func (group *Group) Contains(server string) bool {
 	return false
 }
 
+func (group *Group) Set(servers []string) {
+
+	group.Servers = servers
+}
+
 func (group *Group) Insert(server string) bool {
 
 	if ret := group.Contains(server); !ret {

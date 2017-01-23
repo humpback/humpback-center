@@ -16,7 +16,7 @@ type Configuration struct {
 	//service discovery options
 	Discovery struct {
 		URIs      string `yaml:"uris"`
-		SysPath   string `yaml:"syspath"`
+		Cluster   string `yaml:"cluster"`
 		Heartbeat string `yaml:"heartbeat"`
 	} `yaml:"discovery"`
 

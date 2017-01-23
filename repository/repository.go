@@ -4,7 +4,7 @@ type RepositoryCache struct {
 	Name             string
 	Host             string
 	Root             string
-	CacheFilter      []string
+	DirFilter        []string
 	AuthRoot         string
 	MaxRoutine       int
 	Recovery         int
