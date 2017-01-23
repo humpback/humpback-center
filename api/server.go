@@ -95,3 +95,17 @@ func (server *Server) Startup() error {
 	}
 	return nil
 }
+
+func newListener(proto string, addr string, tlsConfig *tls.Config) (net.Listener, error) {
+
+	l, err := net.Listen(proto, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	if tlsConfig != nil {
+		tlsConfig.NextProtos = []string{"http/1.1"}
+		l = tls.NewListener(l, tlsConfig)
+	}
+	return l, nil
+}

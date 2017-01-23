@@ -8,7 +8,7 @@ import (
 	"net/http"
 )
 
-type handler func(ctx *Context)
+type handler func(c *Context)
 
 var routes = map[string]map[string]handler{
 	"GET": {
@@ -38,8 +38,8 @@ func NewRouter(cluster *cluster.Cluster, repositorycache *repository.RepositoryC
 				if enableCors {
 					writeCorsHeaders(w, r)
 				}
-				ctx := NewContext(w, r, cluster, repositorycache)
-				routehandler(ctx)
+				c := NewContext(w, r, cluster, repositorycache)
+				routehandler(c)
 			}
 			router.Path(routepattern).Methods(routemethod).HandlerFunc(wrap)
 			if enableCors {
@@ -49,8 +49,8 @@ func NewRouter(cluster *cluster.Cluster, repositorycache *repository.RepositoryC
 					if enableCors {
 						writeCorsHeaders(w, r)
 					}
-					ctx := NewContext(w, r, cluster, repositorycache)
-					optionshandler(ctx)
+					c := NewContext(w, r, cluster, repositorycache)
+					optionshandler(c)
 				}
 				router.Path(routepattern).Methods(optionsmethod).HandlerFunc(wrap)
 			}

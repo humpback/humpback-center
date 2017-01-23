@@ -2,27 +2,27 @@ package api
 
 import "net/http"
 
-func getImagesRefresh(ctx *Context) {
+func getImagesRefresh(c *Context) {
 
-	ctx.JSON(http.StatusOK, "Refresh...")
+	c.JSON(http.StatusOK, "Refresh...")
 }
 
-func getImagesCatalog(ctx *Context) {
+func getImagesCatalog(c *Context) {
 
-	ctx.JSON(http.StatusOK, "Catalog.")
+	c.JSON(http.StatusOK, "Catalog.")
 }
 
-func getImagesTags(ctx *Context) {
+func getImagesTags(c *Context) {
 
-	ctx.JSON(http.StatusOK, "Tags.")
+	c.JSON(http.StatusOK, "Tags.")
 }
 
-func postImagesMigrate(ctx *Context) {
+func postImagesMigrate(c *Context) {
 
-	ctx.JSON(http.StatusOK, "Migrate...")
+	c.JSON(http.StatusOK, "Migrate...")
 }
 
-func deleteImages(ctx *Context) {
+func deleteImages(c *Context) {
 
-	ctx.JSON(http.StatusOK, "Remove.")
+	c.JSON(http.StatusOK, "Remove.")
 }

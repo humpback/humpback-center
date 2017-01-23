@@ -11,6 +11,8 @@ import (
 )
 
 type (
+	store map[string]interface{}
+
 	Response struct {
 		writer http.ResponseWriter
 		status int
@@ -22,6 +24,7 @@ type (
 		request         *http.Request
 		response        *Response
 		query           url.Values
+		store           store
 		Cluster         *cluster.Cluster
 		RepositoryCache *repository.RepositoryCache
 	}
@@ -58,7 +61,9 @@ func (r *Response) WriteHeader(code int) {
 func (r *Response) Write(b []byte) (int, error) {
 
 	n, err := r.writer.Write(b)
-	r.size += int64(n)
+	if err == nil {
+		r.size += int64(n)
+	}
 	return n, err
 }
 
@@ -83,65 +88,79 @@ func NewContext(w http.ResponseWriter, r *http.Request,
 	return &Context{
 		request:         r,
 		response:        NewResponse(w),
+		store:           make(store),
 		Cluster:         cluster,
 		RepositoryCache: repositorycache,
 	}
 }
 
-func (ctx *Context) Request() *http.Request {
+func (c *Context) Request() *http.Request {
 
-	return ctx.request
+	return c.request
 }
 
-func (ctx *Context) Response() *Response {
+func (c *Context) Response() *Response {
 
-	return ctx.response
+	return c.response
 }
 
-func (ctx *Context) WriteHeader(code int) {
+func (c *Context) Get(key string) interface{} {
 
-	ctx.response.WriteHeader(code)
+	return c.store[key]
 }
 
-func (ctx *Context) Query(name string) string {
+func (c *Context) Set(key string, v interface{}) {
 
-	if ctx.query == nil {
-		ctx.query = ctx.request.URL.Query()
+	if c.store == nil {
+		c.store = make(store)
 	}
-	return ctx.query.Get(name)
+	c.store[key] = v
 }
 
-func (ctx *Context) Form(name string) string {
+func (c *Context) WriteHeader(code int) {
 
-	return ctx.request.FormValue(name)
+	c.response.WriteHeader(code)
 }
 
-func (ctx *Context) JSON(code int, v interface{}) error {
+func (c *Context) Query(name string) string {
+
+	if c.query == nil {
+		c.query = c.request.URL.Query()
+	}
+	return c.query.Get(name)
+}
+
+func (c *Context) Form(name string) string {
+
+	return c.request.FormValue(name)
+}
+
+func (c *Context) JSON(code int, v interface{}) error {
 
 	data, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
-	ctx.response.Header().Set("Content-Type", "application/json; charset=utf-8")
-	ctx.response.WriteHeader(code)
-	if _, err := ctx.response.Write(data); err != nil {
+	c.response.Header().Set("Content-Type", "application/json; charset=utf-8")
+	c.response.WriteHeader(code)
+	if _, err := c.response.Write(data); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (ctx *Context) JSONP(code int, callback string, v interface{}) error {
+func (c *Context) JSONP(code int, callback string, v interface{}) error {
 
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
-	ctx.response.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-	ctx.response.WriteHeader(code)
+	c.response.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	c.response.WriteHeader(code)
 	data := []byte(callback + "(")
 	data = append(data, b...)
 	data = append(data, []byte(");")...)
-	if _, err := ctx.response.Write(data); err != nil {
+	if _, err := c.response.Write(data); err != nil {
 		return err
 	}
 	return nil
