@@ -30,7 +30,7 @@ func getClusterGroup(c *Context) error {
 		return c.JSON(http.StatusBadRequest, result)
 	}
 
-	logger.INFO("[#api#] %s resolve getclustergroup request successed.", c.ID)
+	logger.INFO("[#api#] %s resolve getclustergroup request successed. %+v", c.ID, req)
 	group := c.Cluster.GetGroup(req.GroupID)
 	if group == nil {
 		logger.ERROR("[#api#] %s get cluster group %s not found.", c.ID, req.GroupID)
@@ -42,4 +42,20 @@ func getClusterGroup(c *Context) error {
 	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster group")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
+}
+
+func postClusterGroupEvent(c *Context) error {
+
+	result := &response.ResponseResult{ResponseID: c.ID}
+	req, err := request.ResolveClusterGroupEventRequest(c.Request())
+	if err != nil {
+		logger.ERROR("[#api#] %s resolve postclustergroupevent request faild, %s", c.ID, err.Error())
+		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
+		return c.JSON(http.StatusBadRequest, result)
+	}
+	logger.INFO("[#api#] %s resolve postclustergroupevent request successed. %+v", c.ID, req)
+	resp := response.NewClusterGroupEventResponse("accepted")
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster group event")
+	result.SetResponse(resp)
+	return c.JSON(http.StatusAccepted, result)
 }

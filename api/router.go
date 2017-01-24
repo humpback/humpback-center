@@ -19,15 +19,11 @@ var routes = map[string]map[string]handler{
 		"/v1/repository/images/tags/*":  getRepositoryImagesTags,
 	},
 	"POST": {
-		//"v1/cluster/groups":            postClusterGroups,
-		"v1/repository/images/migrate": postRepositoryImagesMigrate,
-	},
-	"PUT": {
-	//"v1/cluster/groups": putGroups,
+		"/v1/cluster/groups/event":      postClusterGroupEvent,
+		"/v1/repository/images/migrate": postRepositoryImagesMigrate,
 	},
 	"DELETE": {
-		//"v1/cluster/groups":              deleteClusterGroups,
-		"v1/repository/images/{name:.*}": deleteRepositoryImages,
+		"/v1/repository/images/{name:.*}": deleteRepositoryImages,
 	},
 }
 
