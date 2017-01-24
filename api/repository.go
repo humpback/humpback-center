@@ -2,22 +2,22 @@ package api
 
 import "net/http"
 
-func getRepositoryImagesCatalog(c *Context) {
+func getRepositoryImagesCatalog(c *Context) error {
 
-	c.JSON(http.StatusOK, "Catalog.")
+	return c.JSON(http.StatusOK, "Catalog.")
 }
 
-func getRepositoryImagesTags(c *Context) {
+func getRepositoryImagesTags(c *Context) error {
 
-	c.JSON(http.StatusOK, "Tags.")
+	return c.JSON(http.StatusOK, "Tags.")
 }
 
-func postRepositoryImagesMigrate(c *Context) {
+func postRepositoryImagesMigrate(c *Context) error {
 
-	c.JSON(http.StatusOK, "Migrate...")
+	return c.JSON(http.StatusOK, "Migrate...")
 }
 
-func deleteRepositoryImages(c *Context) {
+func deleteRepositoryImages(c *Context) error {
 
-	c.JSON(http.StatusOK, "Remove.")
+	return c.JSON(http.StatusOK, "Remove.")
 }

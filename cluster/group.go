@@ -13,6 +13,16 @@ func (cluster *Cluster) GetGroups() []*models.Group {
 	return groups
 }
 
+func (cluster *Cluster) GetGroup(groupid string) *models.Group {
+
+	cluster.RLock()
+	defer cluster.RUnlock()
+	if group, ret := cluster.groups[groupid]; ret {
+		return group
+	}
+	return nil
+}
+
 func (cluster *Cluster) CreateGroup(groupid string, servers []string) bool {
 
 	cluster.Lock()

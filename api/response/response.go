@@ -19,7 +19,7 @@ type ResponseResult struct {
 	Error      string      `json:"error"`
 	Content    string      `json:"contnet"`
 	ResponseID string      `json:"responseid"`
-	Data       interface{} `json:"data,omitempty"`
+	Data       interface{} `json:"data,omitpty"`
 }
 
 func (r *ResponseResult) SetError(code int, err error, content string) {

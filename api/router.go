@@ -8,12 +8,13 @@ import (
 	"net/http"
 )
 
-type handler func(c *Context)
+type handler func(c *Context) error
 
 var routes = map[string]map[string]handler{
 	"GET": {
 		"/v1/_ping":                     ping,
 		"/v1/cluster/groups":            getClusterGroups,
+		"/v1/cluster/groups/{groupid}":  getClusterGroup,
 		"/v1/repository/images/catalog": getRepositoryImagesCatalog,
 		"/v1/repository/images/tags/*":  getRepositoryImagesTags,
 	},
@@ -63,12 +64,13 @@ func NewRouter(cluster *cluster.Cluster, repositorycache *repository.RepositoryC
 	return router
 }
 
-func ping(ctx *Context) {
+func ping(ctx *Context) error {
 
-	ctx.JSON(http.StatusOK, "PANG")
+	return ctx.JSON(http.StatusOK, "PANG")
 }
 
-func optionsHandler(ctx *Context) {
+func optionsHandler(ctx *Context) error {
 
 	ctx.WriteHeader(http.StatusOK)
+	return nil
 }

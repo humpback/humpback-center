@@ -59,16 +59,12 @@ func NewCenterService() (*CenterService, error) {
 func (service *CenterService) Startup() error {
 
 	logger.INFO("[#service#] service start...")
+	initCluster(service.Cluster, service.DataStorage)
 	go func() {
 		if err := service.APIServer.Startup(); err != nil {
 			logger.ERROR("[#service#] service API start error:%s", err.Error())
 		}
 	}()
-
-	groups := service.DataStorage.GetGroups()
-	for _, group := range groups {
-		service.Cluster.CreateGroup(group.ID, group.Servers)
-	}
 	return service.Cluster.Start()
 }
 
