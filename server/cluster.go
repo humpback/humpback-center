@@ -1,10 +1,8 @@
 package server
 
 import "github.com/humpback/humpback-center/cluster"
-import "github.com/humpback/humpback-center/storage"
 import "github.com/humpback/humpback-center/etc"
 import "github.com/humpback/discovery"
-import "github.com/humpback/gounits/logger"
 
 import (
 	"fmt"
@@ -33,13 +31,4 @@ func createCluster(c *etc.Configuration) (*cluster.Cluster, error) {
 		return nil, err
 	}
 	return cluster, nil
-}
-
-func initCluster(cluster *cluster.Cluster, dataStorage *storage.DataStorage) {
-
-	groups := dataStorage.GetGroups()
-	logger.INFO("[#service#] initialize cluster groups:%d", len(groups))
-	for _, group := range groups {
-		cluster.CreateGroup(group.ID, group.Servers)
-	}
 }

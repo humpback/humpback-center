@@ -48,6 +48,16 @@ func (cluster *Cluster) RemoveGroup(groupid string) bool {
 	return false
 }
 
+func (cluster *Cluster) ClearGroups() {
+
+	cluster.Lock()
+	for groupid, group := range cluster.groups {
+		group.Servers = group.Servers[0:0]
+		delete(cluster.groups, groupid)
+	}
+	cluster.Unlock()
+}
+
 func (cluster *Cluster) InsertGroupServer(groupid string, server string) bool {
 
 	cluster.Lock()
@@ -77,4 +87,13 @@ func (cluster *Cluster) SetGroupServers(groupid string, servers []string) bool {
 		return true
 	}
 	return false
+}
+
+func (cluster *Cluster) ClearGroupServers(groupid string) {
+
+	cluster.Lock()
+	if group, ret := cluster.groups[groupid]; ret {
+		group.Servers = group.Servers[0:0]
+	}
+	cluster.Unlock()
 }

@@ -1,7 +1,7 @@
 package api
 
 import "github.com/humpback/humpback-center/api/middleware"
-import "github.com/gorilla/mux"
+import "github.com/humpback/humpback-center/ctrl"
 
 import (
 	"crypto/tls"
@@ -36,8 +36,9 @@ type Server struct {
 	dispatcher *Dispatcher
 }
 
-func NewServer(hosts []string, tlsConfig *tls.Config, router *mux.Router) *Server {
+func NewServer(hosts []string, tlsConfig *tls.Config, controller *ctrl.Controller, enablecors bool) *Server {
 
+	router := NewRouter(controller, enablecors)
 	return &Server{
 		hosts:     hosts,
 		tlsConfig: tlsConfig,

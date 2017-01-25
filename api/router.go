@@ -1,7 +1,6 @@
 package api
 
-import "github.com/humpback/humpback-center/cluster"
-import "github.com/humpback/humpback-center/repository"
+import "github.com/humpback/humpback-center/ctrl"
 import "github.com/gorilla/mux"
 
 import (
@@ -27,7 +26,7 @@ var routes = map[string]map[string]handler{
 	},
 }
 
-func NewRouter(cluster *cluster.Cluster, repositorycache *repository.RepositoryCache, enableCors bool) *mux.Router {
+func NewRouter(controller *ctrl.Controller, enableCors bool) *mux.Router {
 
 	router := mux.NewRouter()
 	for method, mappings := range routes {
@@ -39,7 +38,7 @@ func NewRouter(cluster *cluster.Cluster, repositorycache *repository.RepositoryC
 				if enableCors {
 					writeCorsHeaders(w, r)
 				}
-				c := NewContext(w, r, cluster, repositorycache)
+				c := NewContext(w, r, controller)
 				routehandler(c)
 			}
 			router.Path(routepattern).Methods(routemethod).HandlerFunc(wrap)
@@ -50,7 +49,7 @@ func NewRouter(cluster *cluster.Cluster, repositorycache *repository.RepositoryC
 					if enableCors {
 						writeCorsHeaders(w, r)
 					}
-					c := NewContext(w, r, cluster, repositorycache)
+					c := NewContext(w, r, controller)
 					optionshandler(c)
 				}
 				router.Path(routepattern).Methods(optionsmethod).HandlerFunc(wrap)

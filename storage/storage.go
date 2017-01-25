@@ -26,6 +26,7 @@ type M bson.M
 // bson element
 type D bson.D
 
+// DataStorage exported
 type DataStorage struct {
 	sync.RWMutex
 	rawuris     string
@@ -35,6 +36,7 @@ type DataStorage struct {
 	stopCh      chan struct{}
 }
 
+// read mongo uris
 func readArgs(rawuris string) (string, map[string]string) {
 
 	var dbname string
@@ -66,6 +68,7 @@ func readArgs(rawuris string) (string, map[string]string) {
 	return dbname, opts
 }
 
+// NewDataStorage exported
 func NewDataStorage(rawuris string) (*DataStorage, error) {
 
 	datastorage := &DataStorage{

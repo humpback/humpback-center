@@ -26,7 +26,7 @@ func ResolveClusterGroupRequest(r *http.Request) (*ClusterGroupRequest, error) {
 	vars := mux.Vars(r)
 	groupid := strings.TrimSpace(vars["groupid"])
 	if groupid == "" {
-		return nil, fmt.Errorf("cluster groupid invalid")
+		return nil, fmt.Errorf("request groupid invalid.")
 	}
 
 	return &ClusterGroupRequest{
@@ -67,7 +67,7 @@ func ResolveClusterGroupEventRequest(r *http.Request) (*ClusterGroupEventRequest
 	if request.Event != GROUP_CREATE_EVENT &&
 		request.Event != GROUP_REMOVE_EVENT &&
 		request.Event != GROUP_CHANGE_EVENT {
-		return nil, fmt.Errorf("cluster group event invalid")
+		return nil, fmt.Errorf("request group event invalid.")
 	}
 	return request, nil
 }

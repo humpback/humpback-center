@@ -1,7 +1,6 @@
 package api
 
-import "github.com/humpback/humpback-center/cluster"
-import "github.com/humpback/humpback-center/repository"
+import "github.com/humpback/humpback-center/ctrl"
 import "github.com/humpback/gounits/system"
 
 import (
@@ -22,13 +21,12 @@ type (
 
 	Context struct {
 		context.Context
-		ID              string
-		request         *http.Request
-		response        *Response
-		query           url.Values
-		store           store
-		Cluster         *cluster.Cluster
-		RepositoryCache *repository.RepositoryCache
+		ID         string
+		request    *http.Request
+		response   *Response
+		query      url.Values
+		store      store
+		Controller *ctrl.Controller
 	}
 )
 
@@ -84,16 +82,14 @@ func (r *Response) Status() int {
 	return r.status
 }
 
-func NewContext(w http.ResponseWriter, r *http.Request,
-	cluster *cluster.Cluster, repositorycache *repository.RepositoryCache) *Context {
+func NewContext(w http.ResponseWriter, r *http.Request, controller *ctrl.Controller) *Context {
 
 	return &Context{
-		ID:              system.MakeKey(true),
-		request:         r,
-		response:        NewResponse(w),
-		store:           make(store),
-		Cluster:         cluster,
-		RepositoryCache: repositorycache,
+		ID:         system.MakeKey(true),
+		request:    r,
+		response:   NewResponse(w),
+		store:      make(store),
+		Controller: controller,
 	}
 }
 

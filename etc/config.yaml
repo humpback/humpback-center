@@ -7,7 +7,7 @@ storage:
     mongodb:
         uris: mongodb://192.168.1.80:27017,192.168.1.81:27017,192.168.1.82:27017/humpback?replicaSet=mgoCluster&maxPoolSize=10
 api:
-    hosts: ["tcp://:8580", "unix:///var/run/humpback-center.sock"]
+    hosts: [":8580"]
     enablecors: true
 logger:
     logfile: ./logs/humpback-center.log
