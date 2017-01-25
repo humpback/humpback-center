@@ -3,8 +3,6 @@ package server
 import "github.com/humpback/humpback-center/api"
 import "github.com/humpback/humpback-center/ctrl"
 import "github.com/humpback/humpback-center/etc"
-import "github.com/humpback/humpback-center/repository"
-import "github.com/humpback/humpback-center/storage"
 import "github.com/humpback/gounits/logger"
 
 import (
@@ -16,9 +14,8 @@ ServerCenter
 humpback center service
 */
 type CenterService struct {
-	APIServer   *api.Server
-	Controller  *ctrl.Controller
-	DataStorage *storage.DataStorage
+	APIServer  *api.Server
+	Controller *ctrl.Controller
 }
 
 // NewCenterService exported
@@ -34,25 +31,15 @@ func NewCenterService() (*CenterService, error) {
 
 	largs := configuration.GetLogger()
 	logger.OPEN(largs)
-	mongo := configuration.Storage.Mongodb
-	datastorage, err := storage.NewDataStorage(mongo.URIs)
+	controller, err := ctrl.NewController(configuration)
 	if err != nil {
 		return nil, err
 	}
 
-	cluster, err := createCluster(configuration)
-	if err != nil {
-		return nil, err
-	}
-
-	repositorycache := repository.NewRepositoryCache()
-	controller := ctrl.NewController(cluster, repositorycache, datastorage)
 	apiserver := api.NewServer(configuration.API.Hosts, nil, controller, configuration.API.EnableCors)
-
 	return &CenterService{
-		APIServer:   apiserver,
-		Controller:  controller,
-		DataStorage: datastorage,
+		APIServer:  apiserver,
+		Controller: controller,
 	}, nil
 }
 
@@ -74,7 +61,6 @@ func (service *CenterService) Startup() error {
 func (service *CenterService) Stop() error {
 
 	service.Controller.UnInitialize()
-	service.DataStorage.Close()
 	logger.INFO("[#service#] service closed.")
 	logger.CLOSE()
 	return nil

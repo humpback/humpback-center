@@ -1,38 +1,41 @@
 package ctrl
 
 import "github.com/humpback/humpback-center/cluster"
+import "github.com/humpback/humpback-center/etc"
 import "github.com/humpback/humpback-center/repository"
 import "github.com/humpback/humpback-center/storage"
 import "github.com/humpback/gounits/logger"
 
 type Controller struct {
+	Configuration   *etc.Configuration
 	Cluster         *cluster.Cluster
 	DataStorage     *storage.DataStorage
 	RepositoryCache *repository.RepositoryCache
 }
 
-func NewController(cluster *cluster.Cluster, repositorycache *repository.RepositoryCache,
-	dataStorage *storage.DataStorage) *Controller {
+func NewController(configuration *etc.Configuration) (*Controller, error) {
+
+	mongo := configuration.Storage.Mongodb
+	datastorage, err := storage.NewDataStorage(mongo.URIs)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster, err := CreateCluster(configuration)
+	if err != nil {
+		return nil, err
+	}
+
+	repositorycache, err := CreateRepositoryCache(configuration)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Controller{
 		Cluster:         cluster,
-		DataStorage:     dataStorage,
+		DataStorage:     datastorage,
 		RepositoryCache: repositorycache,
-	}
-}
-
-func (c *Controller) SetCluster(cluster *cluster.Cluster) {
-
-	if cluster != nil {
-		c.Cluster = cluster
-	}
-}
-
-func (c *Controller) SetRepositoryCache(repositorycache *repository.RepositoryCache) {
-
-	if repositorycache != nil {
-		c.RepositoryCache = repositorycache
-	}
+	}, nil
 }
 
 func (c *Controller) Initialize() error {
@@ -47,5 +50,6 @@ func (c *Controller) Initialize() error {
 func (c *Controller) UnInitialize() {
 
 	c.stopCluster()
+	c.DataStorage.Close()
 	logger.INFO("[#ctrl#] controller uninitialized.")
 }
