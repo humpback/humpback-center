@@ -12,7 +12,7 @@ type Configuration struct {
 
 	//base options
 	Version string `yaml:"version"`
-
+	PIDFile string `yaml:"pidfile"`
 	//service discovery options
 	Discovery struct {
 		URIs      string `yaml:"uris"`

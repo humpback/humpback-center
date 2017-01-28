@@ -12,17 +12,17 @@ func main() {
 	service, err := server.NewCenterService()
 	if err != nil {
 		panic(err)
-		os.Exit(EXITCODE_INITFAILED)
+		os.Exit(system.PorcessExitCode(err))
 	}
 
 	defer func() {
 		service.Stop()
-		os.Exit(EXITCODE_EXITED)
+		os.Exit(0)
 	}()
 
 	if err := service.Startup(); err != nil {
 		panic(err)
-		os.Exit(EXITCODE_STARTFAILED)
+		os.Exit(system.PorcessExitCode(err))
 	}
 	system.InitSignal(nil)
 }
