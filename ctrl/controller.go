@@ -8,8 +8,8 @@ import "github.com/humpback/gounits/logger"
 
 type Controller struct {
 	Configuration   *etc.Configuration
-	Cluster         *cluster.Cluster
 	DataStorage     *storage.DataStorage
+	Cluster         *cluster.Cluster
 	RepositoryCache *repository.RepositoryCache
 }
 
@@ -21,12 +21,12 @@ func NewController(configuration *etc.Configuration) (*Controller, error) {
 		return nil, err
 	}
 
-	cluster, err := CreateCluster(configuration)
+	cluster, err := createCluster(configuration)
 	if err != nil {
 		return nil, err
 	}
 
-	repositorycache, err := CreateRepositoryCache(configuration)
+	repositorycache, err := createRepositoryCache(configuration)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func NewController(configuration *etc.Configuration) (*Controller, error) {
 func (c *Controller) Initialize() error {
 
 	logger.INFO("[#ctrl#] controller initialize.....")
-	if err := c.InitCluster(); err != nil {
+	if err := c.initCluster(); err != nil {
 		return err
 	}
 	return c.startCluster()

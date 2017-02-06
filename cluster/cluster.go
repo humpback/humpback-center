@@ -53,10 +53,12 @@ func (cluster *Cluster) watchHandleFunc(added backends.Entries, removed backends
 	}
 
 	//for _, entry := range removed {
-	// set engine state to disconnected.
+	//set engine state to disconnected.
 	//}
 
 	//for _, entry := range added {
 	// set engine state to pending.
+	//entry.Key
+	//entry.Data //解析出服务ip，加入集群，状态为unhealthy
 	//}
 }

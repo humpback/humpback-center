@@ -3,7 +3,7 @@ package ctrl
 import "github.com/humpback/humpback-center/etc"
 import "github.com/humpback/humpback-center/repository"
 
-func CreateRepositoryCache(configuration *etc.Configuration) (*repository.RepositoryCache, error) {
+func createRepositoryCache(configuration *etc.Configuration) (*repository.RepositoryCache, error) {
 
 	repositorycache := repository.NewRepositoryCache()
 	return repositorycache, nil

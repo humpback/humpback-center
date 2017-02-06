@@ -4,6 +4,7 @@ import "github.com/humpback/gounits/system"
 import "github.com/humpback/humpback-center/server"
 
 import (
+	"log"
 	"os"
 )
 
@@ -11,7 +12,7 @@ func main() {
 
 	service, err := server.NewCenterService()
 	if err != nil {
-		panic(err)
+		log.Printf("service error:%s\n", err.Error())
 		os.Exit(system.PorcessExitCode(err))
 	}
 
@@ -21,7 +22,7 @@ func main() {
 	}()
 
 	if err := service.Startup(); err != nil {
-		panic(err)
+		log.Printf("service start error:%s\n", err.Error())
 		os.Exit(system.PorcessExitCode(err))
 	}
 	system.InitSignal(nil)

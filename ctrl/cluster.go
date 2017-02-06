@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func CreateCluster(configuration *etc.Configuration) (*cluster.Cluster, error) {
+func createCluster(configuration *etc.Configuration) (*cluster.Cluster, error) {
 
 	heartbeat, err := time.ParseDuration(configuration.Discovery.Heartbeat)
 	if err != nil {
@@ -35,7 +35,7 @@ func CreateCluster(configuration *etc.Configuration) (*cluster.Cluster, error) {
 	return cluster, nil
 }
 
-func (c *Controller) InitCluster() error {
+func (c *Controller) initCluster() error {
 
 	c.Cluster.ClearGroups()
 	groups, err := c.DataStorage.GetGroups()
@@ -49,13 +49,6 @@ func (c *Controller) InitCluster() error {
 	return nil
 }
 
-func (c *Controller) SetCluster(cluster *cluster.Cluster) {
-
-	if cluster != nil {
-		c.Cluster = cluster
-	}
-}
-
 func (c *Controller) startCluster() error {
 
 	logger.INFO("[#ctrl#] start cluster.")
@@ -66,6 +59,13 @@ func (c *Controller) stopCluster() {
 
 	logger.INFO("[#ctrl#] stop cluster.")
 	c.Cluster.Stop()
+}
+
+func (c *Controller) SetCluster(cluster *cluster.Cluster) {
+
+	if cluster != nil {
+		c.Cluster = cluster
+	}
 }
 
 func (c *Controller) GetClusterGroups() []*models.Group {
