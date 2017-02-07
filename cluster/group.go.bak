@@ -1,5 +1,20 @@
 package cluster
 
+type Group struct {
+	ID string
+	Servers map[string]string //key: ip value: register key
+}
+
+type Cluster struct {
+	sync.RWMutex
+	discovery *discovery.Discovery
+	engines   map[string]*Engine //key: register key
+	groups    map[string]*Group  //key: groupid
+	stopCh    chan struct{}
+}
+
+
+
 import "fmt"
 
 // Group is exported

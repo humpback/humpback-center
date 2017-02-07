@@ -2,10 +2,11 @@ package models
 
 // group is exported
 type Group struct {
-	ID      string   `bson:"ID"`
-	Servers []string `bson:"Servers"`
+	ID      string   `json:"id" bson:"ID"`
+	Servers []string `json:"servers" bson:"Servers"`
 }
 
+/*
 func (group *Group) Contains(server string) bool {
 
 	if len(group.Servers) > 0 {
@@ -44,3 +45,4 @@ func (group *Group) Clear() {
 		group.Servers = group.Servers[0:0]
 	}
 }
+*/
