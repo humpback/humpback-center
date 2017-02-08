@@ -35,14 +35,14 @@ func ResolveClusterGroupRequest(r *http.Request) (*ClusterGroupRequest, error) {
 }
 
 const (
-	GROUP_CREATE_EVENT = 0x01
-	GROUP_REMOVE_EVENT = 0x02
-	GROUP_CHANGE_EVENT = 0x03
+	GROUP_CREATE_EVENT = "create"
+	GROUP_REMOVE_EVENT = "remove"
+	GROUP_CHANGE_EVENT = "change"
 )
 
 type ClusterGroupEventRequest struct {
 	GroupID string `json:"groupid"`
-	Event   int    `json:"event"`
+	Event   string `json:"event"`
 }
 
 /*
@@ -64,6 +64,8 @@ func ResolveClusterGroupEventRequest(r *http.Request) (*ClusterGroupEventRequest
 		return nil, err
 	}
 
+	request.Event = strings.ToLower(request.Event)
+	request.Event = strings.TrimSpace(request.Event)
 	if request.Event != GROUP_CREATE_EVENT &&
 		request.Event != GROUP_REMOVE_EVENT &&
 		request.Event != GROUP_CHANGE_EVENT {

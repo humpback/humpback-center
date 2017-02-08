@@ -134,7 +134,7 @@ func (cluster *Cluster) SetGroup(groupid string, servers []string) {
 		if engine := cluster.GetEngineByIP(server); engine != nil {
 			logger.INFO("[#cluster#] cluster engine %s %s bind to group %s > %s", engine.ID, engine.Addr, group.ID, server)
 			cluster.Lock()
-			group.Servers[server] = engine.ID
+			group.Servers[server] = engine.ID //bind
 			cluster.Unlock()
 		}
 	}
@@ -173,7 +173,7 @@ func (cluster *Cluster) addEngine(engineid string, opts *RegistClusterOptions) b
 	//bind engine to groups.
 	for _, group := range cluster.groups {
 		if _, ret := group.Servers[engine.IP]; ret {
-			group.Servers[engine.IP] = engineid
+			group.Servers[engine.IP] = engineid //bind
 			logger.INFO("[#cluster#] cluster engine %s %s bind to group %s > %s", engineid, opts.Addr, group.ID, engine.IP)
 		}
 	}
@@ -195,7 +195,7 @@ func (cluster *Cluster) removeEngine(engineid string, opts *RegistClusterOptions
 	//unbind engine to groups.
 	for _, group := range cluster.groups {
 		if _, ret := group.Servers[engine.IP]; ret {
-			group.Servers[engine.IP] = ""
+			group.Servers[engine.IP] = "" //unbind
 			logger.INFO("[#cluster#] cluster engine %s %s unbind to group %s > %s", engineid, opts.Addr, group.ID, engine.IP)
 		}
 	}

@@ -2,6 +2,7 @@ package ctrl
 
 import "github.com/humpback/discovery"
 import "github.com/humpback/gounits/logger"
+import "github.com/humpback/humpback-center/api/request"
 import "github.com/humpback/humpback-center/cluster"
 import "github.com/humpback/humpback-center/etc"
 import "github.com/humpback/humpback-center/models"
@@ -93,4 +94,23 @@ func (c *Controller) GetClusterGroup(groupid string) *models.Group {
 		return it
 	}
 	return nil
+}
+
+func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
+
+	switch event {
+	case request.GROUP_CREATE_EVENT, request.GROUP_CHANGE_EVENT:
+		{
+			group, err := c.DataStorage.GetGroup(groupid)
+			if err != nil {
+				logger.ERROR("[#ctrl#] set cluster groupevent %s %s, error:%s", groupid, event, err.Error())
+				return
+			}
+			c.Cluster.SetGroup(group.ID, group.Servers)
+		}
+	case request.GROUP_REMOVE_EVENT:
+		{
+			c.Cluster.RemoveGroup(groupid)
+		}
+	}
 }
