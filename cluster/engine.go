@@ -36,6 +36,11 @@ func NewEngine(id string, addr string) (*Engine, error) {
 	}, nil
 }
 
+func (engine *Engine) String() string {
+
+	return engine.ID
+}
+
 //func (e *Engine) refreshLoop() {
 //select {
 //	case <-e.stopCh:

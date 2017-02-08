@@ -1,33 +1,6 @@
 package cluster
 
-// Cluster Group is exported
-// Servers map:[ip]engineid, value is engine id.
-type Group struct {
-	ID      string
-	Servers map[string]string
-}
-
-func (cluster *Cluster) GetGroups() []*Group {
-
-	cluster.RLock()
-	groups := []*Group{}
-	for _, group := range cluster.groups {
-		groups = append(groups, group)
-	}
-	cluster.RUnlock()
-	return groups
-}
-
-func (cluster *Cluster) GetGroup(groupid string) *Group {
-
-	cluster.RLock()
-	defer cluster.RUnlock()
-	if group, ret := cluster.groups[groupid]; ret {
-		return group
-	}
-	return nil
-}
-
+/*
 func (cluster *Cluster) CreateGroup(groupid string, servers []string) bool {
 
 	cluster.Lock()
@@ -51,7 +24,6 @@ func (cluster *Cluster) SetGroupServer(server string, engineid string) bool {
 	return false
 }
 
-/*
 func (cluster *Cluster) CreateGroup(groupid string, servers []string) bool {
 
 	cluster.Lock()

@@ -10,7 +10,16 @@ import (
 	"sync"
 )
 
+// Group is exported
+// Servers map:[ip]engineid, value is engineid.
+type Group struct {
+	ID      string
+	Servers map[string]string
+}
+
 // Cluster is exported
+// engines: map[engineid]*Engine
+// groups:  map[groupid]*Group
 type Cluster struct {
 	sync.RWMutex
 	Discovery *discovery.Discovery
@@ -37,7 +46,7 @@ func (cluster *Cluster) Start() error {
 		cluster.Discovery.Watch(cluster.stopCh, cluster.watchHandleFunc)
 		return nil
 	}
-	return fmt.Errorf("cluster discovery watch invalid.")
+	return fmt.Errorf("cluster discovery watch fail.")
 }
 
 func (cluster *Cluster) Stop() {
@@ -46,14 +55,33 @@ func (cluster *Cluster) Stop() {
 	logger.INFO("[#cluster#] cluster discovery closed.")
 }
 
-func (cluster *Cluster) GetEngineByIP(ip string) *Engine {
+func (cluster *Cluster) GetGroups() []*Group {
+
+	cluster.RLock()
+	groups := []*Group{}
+	for _, group := range cluster.groups {
+		groups = append(groups, group)
+	}
+	cluster.RUnlock()
+	return groups
+}
+
+func (cluster *Cluster) GetGroup(groupid string) *Group {
 
 	cluster.RLock()
 	defer cluster.RUnlock()
-	for _, engine := range cluster.engines {
-		if engine.IP == ip {
-			return engine
-		}
+	if group, ret := cluster.groups[groupid]; ret {
+		return group
+	}
+	return nil
+}
+
+func (cluster *Cluster) GetEngine(engineid string) *Engine {
+
+	cluster.RLock()
+	defer cluster.RUnlock()
+	if engine, ret := cluster.engines[engineid]; ret {
+		return engine
 	}
 	return nil
 }
@@ -70,45 +98,105 @@ func (cluster *Cluster) GetEngineByAddr(addr string) *Engine {
 	return nil
 }
 
-func (cluster *Cluster) addEngine(id string, opts *RegistClusterOptions) bool {
+func (cluster *Cluster) GetEngineByIP(ip string) *Engine {
 
-	if engine := cluster.GetEngineByAddr(opts.Addr); engine != nil {
-		logger.WARN("cluster add engine %s, engine %s %s", id, opts.Addr, "is already.")
-		return false
+	cluster.RLock()
+	defer cluster.RUnlock()
+	for _, engine := range cluster.engines {
+		if engine.IP == ip {
+			return engine
+		}
 	}
+	return nil
+}
 
-	engine, err := NewEngine(id, opts.Addr) //初始状态为unhealthy，engine一次refreshLoop成功后更改状态
-	if err != nil {
-		logger.ERROR("cluster add engine %s error:%s %s", id, opts.Addr, err.Error())
-		return false
-	}
+func (cluster *Cluster) SetGroup(groupid string, servers []string) {
 
 	cluster.Lock()
-	cluster.engines[id] = engine
+	defer cluster.Unlock()
+	var group *Group
+	if _, ret := cluster.groups[groupid]; !ret {
+		group = &Group{ID: groupid}
+	} else {
+		group = cluster.groups[groupid]
+	}
+
+	//reset group, unbind all engine.
+	group.Servers = make(map[string]string)
+	for _, server := range servers {
+		group.Servers[server] = ""
+	}
+
+	//bind engine to group.
+	for server, _ := range group.Servers {
+		if engine := cluster.GetEngineByIP(server); engine != nil {
+			group.Servers[server] = engine.ID
+		}
+	}
+}
+
+func (cluster *Cluster) RemoveGroup(groupid string) bool {
+
+	cluster.Lock()
+	defer cluster.Unlock()
+	group, ret := cluster.groups[groupid]
+	if !ret {
+		logger.WARN("[#cluster#] cluster remove group %s not found.", groupid)
+		return false
+	}
+	logger.INFO("[#cluster#] cluster remove group %s(%d)", groupid, len(group.Servers))
+	delete(cluster.groups, groupid)
+	return true
+}
+
+func (cluster *Cluster) addEngine(engineid string, opts *RegistClusterOptions) bool {
+
+	if engine := cluster.GetEngine(engineid); engine != nil {
+		logger.WARN("[#cluster#] cluster add engine %s conflict, engine %s is already.", engineid, opts.Addr)
+		return false
+	}
+
+	engine, err := NewEngine(engineid, opts.Addr) //初始状态为unhealthy，engine一次refreshLoop成功后更改状态
+	if err != nil {
+		logger.ERROR("[#cluster#] cluster add engine %s error:%s %s.", engineid, opts.Addr, err.Error())
+		return false
+	}
+
+	logger.INFO("[#cluster#] cluster add engine %s > %s", engineid, opts.Addr)
+	cluster.Lock()
+	cluster.engines[engineid] = engine
+	//bind engine to groups.
 	for _, group := range cluster.groups {
-		if _, ok := group.Servers[engine.IP]; ok {
-			group.Servers[engine.IP] = id
+		if _, ret := group.Servers[engine.IP]; ret {
+			group.Servers[engine.IP] = engineid
+			logger.INFO("[#cluster#] cluster engine %s %s bind to group %s > %s", engineid, opts.Addr, group.ID, engine.IP)
 		}
 	}
 	cluster.Unlock()
 	return true
 }
 
-func (cluster *Cluster) removeEngine(id string, opts *RegistClusterOptions) bool {
+func (cluster *Cluster) removeEngine(engineid string, opts *RegistClusterOptions) bool {
 
-	if engine := cluster.GetEngineByAddr(opts.Addr); engine != nil {
-		cluster.Lock()
-		for _, group := range cluster.groups {
-			if _, ok := group.Servers[engine.IP]; ok {
-				group.Servers[engine.IP] = ""
-			}
-		}
-		delete(cluster.engines, id)
-		cluster.Unlock()
-		engine.Close()
-		return true
+	engine := cluster.GetEngine(engineid)
+	if engine == nil {
+		logger.WARN("[#cluster#] cluster remove engine %s invalid, engine %s %s", engineid, opts.Addr, "not found.")
+		return false
 	}
-	return false
+
+	logger.INFO("[#cluster#] cluster remove engine %s > %s", engineid, opts.Addr)
+	cluster.Lock()
+	delete(cluster.engines, engineid)
+	//unbind engine to groups.
+	for _, group := range cluster.groups {
+		if _, ret := group.Servers[engine.IP]; ret {
+			group.Servers[engine.IP] = ""
+			logger.INFO("[#cluster#] cluster engine %s %s unbind to group %s > %s", engineid, opts.Addr, group.ID, engine.IP)
+		}
+	}
+	engine.Close()
+	cluster.Unlock()
+	return true
 }
 
 func (cluster *Cluster) watchHandleFunc(added backends.Entries, removed backends.Entries, err error) {
