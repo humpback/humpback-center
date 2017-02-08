@@ -1,12 +1,19 @@
 package models
 
-// group is exported
+// Group is exported
 type Group struct {
 	ID      string   `json:"id" bson:"ID"`
 	Servers []string `json:"servers" bson:"Servers"`
 }
 
-/*
+func NewGroup(id string) *Group {
+
+	return &Group{
+		ID:      id,
+		Servers: []string{},
+	}
+}
+
 func (group *Group) Contains(server string) bool {
 
 	if len(group.Servers) > 0 {
@@ -45,4 +52,3 @@ func (group *Group) Clear() {
 		group.Servers = group.Servers[0:0]
 	}
 }
-*/

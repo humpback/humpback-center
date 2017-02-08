@@ -1,7 +1,7 @@
 package api
 
 import "github.com/humpback/humpback-center/ctrl"
-import "github.com/humpback/gounits/system"
+import "github.com/humpback/gounits/rand"
 
 import (
 	"context"
@@ -85,7 +85,7 @@ func (r *Response) Status() int {
 func NewContext(w http.ResponseWriter, r *http.Request, controller *ctrl.Controller) *Context {
 
 	return &Context{
-		ID:         system.MakeKey(true),
+		ID:         rand.UUID(true),
 		request:    r,
 		response:   NewResponse(w),
 		store:      make(store),

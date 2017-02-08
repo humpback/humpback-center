@@ -37,14 +37,13 @@ func createCluster(configuration *etc.Configuration) (*cluster.Cluster, error) {
 
 func (c *Controller) initCluster() error {
 
-	c.Cluster.ClearGroups()
 	groups, err := c.DataStorage.GetGroups()
 	if err != nil {
-		return fmt.Errorf("init cluster error:%s", err.Error())
+		return fmt.Errorf("init cluster groups error:%s", err.Error())
 	}
 	logger.INFO("[#ctrl#] init cluster groups:%d", len(groups))
 	for _, group := range groups {
-		c.Cluster.CreateGroup(group.ID, group.Servers)
+		c.Cluster.SetGroup(group.ID, group.Servers)
 	}
 	return nil
 }
@@ -57,23 +56,41 @@ func (c *Controller) startCluster() error {
 
 func (c *Controller) stopCluster() {
 
-	logger.INFO("[#ctrl#] stop cluster.")
 	c.Cluster.Stop()
+	logger.INFO("[#ctrl#] stop cluster.")
 }
 
 func (c *Controller) SetCluster(cluster *cluster.Cluster) {
 
 	if cluster != nil {
+		logger.INFO("[#ctrl#] set cluster %p.", cluster)
 		c.Cluster = cluster
 	}
 }
 
 func (c *Controller) GetClusterGroups() []*models.Group {
 
-	return c.Cluster.GetGroups()
+	groups := []*models.Group{}
+	cgroups := c.Cluster.GetGroups()
+	for _, group := range cgroups {
+		it := models.NewGroup(group.ID)
+		for server := range group.Servers {
+			it.Insert(server)
+		}
+		groups = append(groups, it)
+	}
+	return groups
 }
 
 func (c *Controller) GetClusterGroup(groupid string) *models.Group {
 
-	return c.Cluster.GetGroup(groupid)
+	group := c.Cluster.GetGroup(groupid)
+	if group != nil {
+		it := models.NewGroup(group.ID)
+		for server := range group.Servers {
+			it.Insert(server)
+		}
+		return it
+	}
+	return nil
 }

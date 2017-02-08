@@ -113,24 +113,29 @@ func (cluster *Cluster) GetEngineByIP(ip string) *Engine {
 func (cluster *Cluster) SetGroup(groupid string, servers []string) {
 
 	cluster.Lock()
-	defer cluster.Unlock()
 	var group *Group
 	if _, ret := cluster.groups[groupid]; !ret {
 		group = &Group{ID: groupid}
+		cluster.groups[groupid] = group
 	} else {
 		group = cluster.groups[groupid]
 	}
 
-	//reset group, unbind all engine.
+	//reset group servers, unbind all engine.
 	group.Servers = make(map[string]string)
 	for _, server := range servers {
-		group.Servers[server] = ""
+		group.Servers[server] = "" //unbind
 	}
+	logger.INFO("[#cluster#] cluster set group %s(%d)", groupid, len(servers))
+	cluster.Unlock()
 
 	//bind engine to group.
-	for server, _ := range group.Servers {
+	for _, server := range servers {
 		if engine := cluster.GetEngineByIP(server); engine != nil {
+			logger.INFO("[#cluster#] cluster engine %s %s bind to group %s > %s", engine.ID, engine.Addr, group.ID, server)
+			cluster.Lock()
 			group.Servers[server] = engine.ID
+			cluster.Unlock()
 		}
 	}
 }
