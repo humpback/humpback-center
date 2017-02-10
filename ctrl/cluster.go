@@ -2,6 +2,7 @@ package ctrl
 
 import "github.com/humpback/discovery"
 import "github.com/humpback/gounits/logger"
+import "github.com/humpback/gounits/convert"
 import "github.com/humpback/humpback-center/api/request"
 import "github.com/humpback/humpback-center/cluster"
 import "github.com/humpback/humpback-center/etc"
@@ -85,13 +86,21 @@ func (c *Controller) GetClusterGroups() []*models.Group {
 
 func (c *Controller) GetClusterGroup(groupid string) *models.Group {
 
-	group := c.Cluster.GetGroup(groupid)
-	if group != nil {
+	if group := c.Cluster.GetGroup(groupid); group != nil {
 		it := models.NewGroup(group.ID)
 		for ipaddr, engineid := range group.Servers {
 			it.Insert(ipaddr, engineid)
 		}
 		return it
+	}
+	return nil
+}
+
+func (c *Controller) GetClusterEngine(engineid string) *models.Engine {
+
+	if engine := c.Cluster.GetEngine(engineid); engine != nil {
+		labels := convert.ConvertMapToKVStringSlice(engine.Labels)
+		return models.NewEngine(engine.ID, engine.Name, engine.IP, engine.Addr, engine.Version, labels)
 	}
 	return nil
 }

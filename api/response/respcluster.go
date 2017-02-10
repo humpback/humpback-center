@@ -35,6 +35,22 @@ func NewClusterGroupResponse(group *models.Group) *ClusterGroupResponse {
 }
 
 /*
+ClusterEngineResponse
+Method:  GET
+Route:   /v1/cluster/engines/{engineid}
+*/
+type ClusterEngineResponse struct {
+	Engine *models.Engine `json:"engine"`
+}
+
+func NewClusterEngineResponse(engine *models.Engine) *ClusterEngineResponse {
+
+	return &ClusterEngineResponse{
+		Engine: engine,
+	}
+}
+
+/*
 ClusterGroupEventResponse
 Method:  POST
 Route:   /v1/cluster/groups/event

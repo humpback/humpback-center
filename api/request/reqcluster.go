@@ -34,6 +34,29 @@ func ResolveClusterGroupRequest(r *http.Request) (*ClusterGroupRequest, error) {
 	}, nil
 }
 
+/*
+ResolveClusterEngineRequest
+Method:  GET
+Route:   /v1/cluster/engines/{engineid}
+EngineID: cluster engineid
+*/
+type ClusterEngineRequest struct {
+	EngineID string `json:"engineid"`
+}
+
+func ResolveClusterEngineRequest(r *http.Request) (*ClusterEngineRequest, error) {
+
+	vars := mux.Vars(r)
+	engineid := strings.TrimSpace(vars["engineid"])
+	if engineid == "" {
+		return nil, fmt.Errorf("request engineid invalid.")
+	}
+
+	return &ClusterEngineRequest{
+		EngineID: engineid,
+	}, nil
+}
+
 const (
 	GROUP_CREATE_EVENT = "create"
 	GROUP_REMOVE_EVENT = "remove"

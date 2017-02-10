@@ -45,6 +45,31 @@ func getClusterGroup(c *Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
+func getClusterEngine(c *Context) error {
+
+	result := response.ResponseResult{ResponseID: c.ID}
+	req, err := request.ResolveClusterEngineRequest(c.Request())
+	if err != nil {
+		logger.ERROR("[#api#] %s resolve get clusterengine request faild, %s", c.ID, err.Error())
+		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
+		return c.JSON(http.StatusBadRequest, result)
+	}
+
+	logger.INFO("[#api#] %s resolve get clusterengine request successed. %+v", c.ID, req)
+	engine := c.Controller.GetClusterEngine(req.EngineID)
+	if engine == nil {
+		logger.ERROR("[#api#] %s get clusterengine %s not found.", c.ID, req.EngineID)
+		result.SetError(request.RequestNotFound, request.ErrRequestNotFound, req.EngineID+" not found")
+		return c.JSON(http.StatusNotFound, result)
+	}
+
+	logger.INFO("[#api#] %s get clusterengine %p.", c.ID, engine)
+	resp := response.NewClusterEngineResponse(engine)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "response cluster engine")
+	result.SetResponse(resp)
+	return c.JSON(http.StatusOK, result)
+}
+
 func postClusterGroupEvent(c *Context) error {
 
 	result := &response.ResponseResult{ResponseID: c.ID}

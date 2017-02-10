@@ -161,7 +161,7 @@ func (cluster *Cluster) addEngine(engineid string, opts *RegistClusterOptions) b
 		return false
 	}
 
-	engine, err := NewEngine(engineid, opts.Addr) //初始状态为unhealthy，engine一次refreshLoop成功后更改状态
+	engine, err := NewEngine(engineid, opts) //初始状态为unhealthy，engine一次refreshLoop成功后更改状态
 	if err != nil {
 		logger.ERROR("[#cluster#] cluster add engine %s error:%s %s.", engineid, opts.Addr, err.Error())
 		return false
