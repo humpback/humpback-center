@@ -23,7 +23,7 @@ func NewEngine(id string, addr string) (*Engine, error) {
 		return nil, err
 	}
 
-	ipaddr, err := net.ResolveIPAddr("ip", host)
+	ipaddr, err := net.ResolveIPAddr("ip4", host)
 	if err != nil {
 		return nil, err
 	}
@@ -42,6 +42,10 @@ func (engine *Engine) String() string {
 }
 
 //func (e *Engine) refreshLoop() {
+//定期获取如下信息：
+//Cpus       int64
+//Memory     int64
+//Containers 容器列表信息
 //select {
 //	case <-e.stopCh:
 //		return

@@ -75,8 +75,8 @@ func (c *Controller) GetClusterGroups() []*models.Group {
 	cgroups := c.Cluster.GetGroups()
 	for _, group := range cgroups {
 		it := models.NewGroup(group.ID)
-		for server := range group.Servers {
-			it.Insert(server)
+		for ipaddr, engineid := range group.Servers {
+			it.Insert(ipaddr, engineid)
 		}
 		groups = append(groups, it)
 	}
@@ -88,8 +88,8 @@ func (c *Controller) GetClusterGroup(groupid string) *models.Group {
 	group := c.Cluster.GetGroup(groupid)
 	if group != nil {
 		it := models.NewGroup(group.ID)
-		for server := range group.Servers {
-			it.Insert(server)
+		for ipaddr, engineid := range group.Servers {
+			it.Insert(ipaddr, engineid)
 		}
 		return it
 	}
@@ -98,6 +98,7 @@ func (c *Controller) GetClusterGroup(groupid string) *models.Group {
 
 func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 
+	logger.ERROR("[#ctrl#] set cluster groupevent %s.", event)
 	switch event {
 	case request.GROUP_CREATE_EVENT, request.GROUP_CHANGE_EVENT:
 		{
