@@ -5,10 +5,11 @@ import (
 )
 
 // Server is exported
-// EngineID == "", docker engine is offline.
+// IP, cluster server ipaddr.
+// Status, cluster engine status.
 type Server struct {
-	IPAddr   string `json:"ipaddr"`
-	EngineID string `json:"engineid"`
+	IP     string `json:"ip"`
+	Status string `json:"status"`
 }
 
 // Group is exported
@@ -27,13 +28,13 @@ func NewGroup(id string) *Group {
 	}
 }
 
-func (group *Group) Contains(ipaddr string) bool {
+func (group *Group) Contains(ip string) bool {
 
 	group.RLock()
 	defer group.RUnlock()
 	if len(group.Servers) > 0 {
 		for _, server := range group.Servers {
-			if server.IPAddr == ipaddr {
+			if server.IP == ip {
 				return true
 			}
 		}
@@ -41,41 +42,41 @@ func (group *Group) Contains(ipaddr string) bool {
 	return false
 }
 
-func (group *Group) Set(ipaddr string, engineid string) bool {
+func (group *Group) Set(ip string, status string) bool {
 
 	group.Lock()
 	defer group.Unlock()
 	for i, server := range group.Servers {
-		if server.IPAddr == ipaddr {
-			group.Servers[i].EngineID = engineid
+		if server.IP == ip {
+			group.Servers[i].Status = status
 			return true
 		}
 	}
 	return false
 }
 
-func (group *Group) Insert(ipaddr string, engineid string) bool {
+func (group *Group) Insert(ip string, status string) bool {
 
-	ret := group.Contains(ipaddr)
+	ret := group.Contains(ip)
 	if ret {
 		return false
 	}
 
 	group.Lock()
 	group.Servers = append(group.Servers, Server{
-		IPAddr:   ipaddr,
-		EngineID: engineid,
+		IP:     ip,
+		Status: status,
 	})
 	group.Unlock()
 	return true
 }
 
-func (group *Group) Remove(ipaddr string) bool {
+func (group *Group) Remove(ip string) bool {
 
 	group.Lock()
 	defer group.Unlock()
 	for i, server := range group.Servers {
-		if server.IPAddr == ipaddr {
+		if server.IP == ip {
 			group.Servers = append(group.Servers[:i], group.Servers[i+1:]...)
 			return true
 		}

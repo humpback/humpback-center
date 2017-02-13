@@ -1,11 +1,12 @@
 package cluster
 
-import "github.com/humpback/gounits/http"
-import "github.com/humpback/gounits/convert"
-
 import (
 	"net"
 	"sync"
+
+	"github.com/humpback/gounits/convert"
+	"github.com/humpback/gounits/http"
+	"github.com/humpback/humpback-center/cluster/types"
 )
 
 // Engine state define
@@ -43,40 +44,36 @@ type Engine struct {
 	Version string
 	Labels  map[string]string
 
-	containers map[string]*Container
 	httpClient *http.HttpClient
 	stopCh     chan struct{}
 	state      engineState
 }
 
-func NewEngine(id string, opts *RegistClusterOptions) (*Engine, error) {
+func NewEngine(ip string) (*Engine, error) {
 
-	host, _, err := net.SplitHostPort(opts.Addr)
-	if err != nil {
-		return nil, err
-	}
-
-	ipaddr, err := net.ResolveIPAddr("ip4", host)
+	ipaddr, err := net.ResolveIPAddr("ip4", ip)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Engine{
-		ID:         id,
-		Name:       opts.Name,
-		IP:         ipaddr.IP.String(),
-		Addr:       opts.Addr,
-		Version:    opts.Version,
-		Labels:     convert.ConvertKVStringSliceToMap(opts.Labels),
-		containers: make(map[string]*Container),
-		stopCh:     make(chan struct{}),
-		state:      stateUnhealthy,
+		IP:     ipaddr.IP.String(),
+		Labels: make(map[string]string),
+		stopCh: make(chan struct{}),
+		state:  stateUnhealthy,
 	}, nil
 }
 
-func (engine *Engine) String() string {
+func (engine *Engine) SetRegistOptions(opts *types.ClusterRegistOptions) {
 
-	return engine.ID
+	engine.Lock()
+	engine.ID = opts.ID
+	engine.Name = opts.Name
+	engine.IP = opts.IP
+	engine.Addr = opts.Addr
+	engine.Version = opts.Version
+	engine.Labels = convert.ConvertKVStringSliceToMap(opts.Labels)
+	engine.Unlock()
 }
 
 func (engine *Engine) IsHealthy() bool {
@@ -86,7 +83,7 @@ func (engine *Engine) IsHealthy() bool {
 	return engine.state == stateHealthy
 }
 
-func (engine *Engine) setState(state engineState) {
+func (engine *Engine) SetState(state engineState) {
 
 	engine.Lock()
 	engine.state = state
@@ -100,6 +97,15 @@ func (engine *Engine) Status() string {
 	return stateText[engine.state]
 }
 
+func (engine *Engine) Close() {
+
+	if engine.httpClient != nil {
+		engine.httpClient.Close()
+	}
+	// close the chan, exit refreshLoop.
+	close(engine.stopCh)
+}
+
 //func (e *Engine) refreshLoop() {
 //定期获取如下信息：
 //Cpus       int64
@@ -110,12 +116,3 @@ func (engine *Engine) Status() string {
 //		return
 //	}
 //}
-
-func (engine *Engine) Close() {
-
-	if engine.httpClient != nil {
-		engine.httpClient.Close()
-	}
-	// close the chan, exit refreshLoop.
-	close(engine.stopCh)
-}

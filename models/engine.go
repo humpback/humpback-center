@@ -8,10 +8,11 @@ type Engine struct {
 	Addr    string   `json:"addr"`
 	Version string   `json:"version"`
 	Labels  []string `json:"labels"`
+	Status  string   `json:"status"`
 }
 
 // NewEngine is exported
-func NewEngine(id string, name string, ip string, addr string, version string, labels []string) *Engine {
+func NewEngine(id string, name string, ip string, addr string, version string, labels []string, status string) *Engine {
 
 	return &Engine{
 		ID:      id,
@@ -20,5 +21,6 @@ func NewEngine(id string, name string, ip string, addr string, version string, l
 		Addr:    addr,
 		Version: version,
 		Labels:  labels,
+		Status:  status,
 	}
 }

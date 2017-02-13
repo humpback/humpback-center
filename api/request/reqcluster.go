@@ -37,23 +37,23 @@ func ResolveClusterGroupRequest(r *http.Request) (*ClusterGroupRequest, error) {
 /*
 ResolveClusterEngineRequest
 Method:  GET
-Route:   /v1/cluster/engines/{engineid}
-EngineID: cluster engineid
+Route:   /v1/cluster/engines/{server}
+Server: cluster engine host address
 */
 type ClusterEngineRequest struct {
-	EngineID string `json:"engineid"`
+	Server string `json:"server"`
 }
 
 func ResolveClusterEngineRequest(r *http.Request) (*ClusterEngineRequest, error) {
 
 	vars := mux.Vars(r)
-	engineid := strings.TrimSpace(vars["engineid"])
-	if engineid == "" {
-		return nil, fmt.Errorf("request engineid invalid.")
+	server := strings.TrimSpace(vars["server"])
+	if server == "" {
+		return nil, fmt.Errorf("request engine server invalid.")
 	}
 
 	return &ClusterEngineRequest{
-		EngineID: engineid,
+		Server: server,
 	}, nil
 }
 
