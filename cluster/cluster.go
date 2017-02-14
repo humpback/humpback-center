@@ -141,16 +141,18 @@ func (cluster *Cluster) RemoveGroup(groupid string) bool {
 func (cluster *Cluster) watchHandleFunc(added backends.Entries, removed backends.Entries, err error) {
 
 	if err != nil {
-		logger.ERROR("[#cluster#] cluster discovery handlefunc error:%s", err.Error())
+		logger.ERROR("[#cluster#] cluster discovery watch error:%s", err.Error())
 		return
 	}
 
+	logger.INFO("[#cluster#] cluster discovery watch handler removed:%d added:%d.", len(removed), len(added))
 	opts := &types.ClusterRegistOptions{}
 	for _, entry := range removed {
 		if err := json.DeCodeBufferToObject(entry.Data, opts); err != nil {
 			logger.ERROR("[#cluster#] cluster discovery handlefunc error: removed, %s", err.Error())
 			continue
 		}
+		logger.INFO("[#cluster#] cluster discovery removed:%s.", entry.Key)
 		cluster.removeEngine(opts)
 	}
 
@@ -159,26 +161,28 @@ func (cluster *Cluster) watchHandleFunc(added backends.Entries, removed backends
 			logger.ERROR("[#cluster#] cluster discovery handlefunc error: added, %s", err.Error())
 			continue
 		}
+		logger.INFO("[#cluster#] cluster discovery added:%s.", entry.Key)
 		cluster.addEngine(opts)
 	}
 }
 
 func (cluster *Cluster) addEngine(opts *types.ClusterRegistOptions) bool {
 
-	cluster.Lock()
-	defer cluster.Unlock()
-	engine, ret := cluster.engines[opts.IP]
-	if !ret {
+	engine := cluster.GetEngine(opts.IP)
+	if engine == nil {
 		var err error
 		if engine, err = NewEngine(opts.IP); err != nil {
-			logger.ERROR("[#cluster#] cluster add engine %s error:%s\n", opts.IP, err.Error())
+			logger.ERROR("[#cluster#] cluster add engine %s error:%s", opts.IP, err.Error())
 			return false
 		}
+		cluster.Lock()
 		cluster.engines[opts.IP] = engine
-		logger.INFO("[#cluster#] cluster add engine %p:%s\n", engine, opts.IP)
+		cluster.Unlock()
+		logger.INFO("[#cluster#] cluster add engine %p:%s", engine, opts.IP)
 	}
 	engine.SetRegistOptions(opts)
 	engine.SetState(stateHealthy)
+	logger.INFO("[#cluster#] cluster set engine %p:%s %s", engine, opts.IP, engine.State())
 	return true
 }
 
@@ -186,31 +190,29 @@ func (cluster *Cluster) removeEngine(opts *types.ClusterRegistOptions) bool {
 
 	engine := cluster.GetEngine(opts.IP)
 	if engine == nil {
-		logger.WARN("[#cluster#] cluster remove engine not found:%s\n", opts.IP)
+		logger.WARN("[#cluster#] cluster remove engine, not found:%s", opts.IP)
 		return false
 	}
 
-	engine.Close() //close engine
 	found := false
 	groups := cluster.GetGroups()
 	for _, group := range groups {
 		for _, server := range group.Servers {
-			if engine.IP == server {
+			if server == engine.IP {
 				found = true
-				cluster.Lock()
 				engine.SetState(stateUnhealthy)
-				cluster.Unlock()
-				logger.INFO("[#cluster#] cluster engine state %p:%s %s\n", engine, opts.IP, engine.Status())
+				logger.INFO("[#cluster#] cluster set engine %p:%s %s", engine, opts.IP, engine.State())
 				break
 			}
 		}
 	}
 
 	if !found {
+		engine.Close() //close engine
 		cluster.Lock()
 		delete(cluster.engines, engine.IP)
 		cluster.Unlock()
-		logger.INFO("[#cluster#] cluster remove engine %p:%s\n", engine, opts.IP)
+		logger.INFO("[#cluster#] cluster remove engine %p:%s", engine, opts.IP)
 	}
 	return true
 }

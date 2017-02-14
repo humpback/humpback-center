@@ -1,12 +1,12 @@
 package cluster
 
+import "github.com/humpback/gounits/convert"
+import "github.com/humpback/gounits/http"
+import "github.com/humpback/humpback-center/cluster/types"
+
 import (
 	"net"
 	"sync"
-
-	"github.com/humpback/gounits/convert"
-	"github.com/humpback/gounits/http"
-	"github.com/humpback/humpback-center/cluster/types"
 )
 
 // Engine state define
@@ -66,14 +66,12 @@ func NewEngine(ip string) (*Engine, error) {
 
 func (engine *Engine) SetRegistOptions(opts *types.ClusterRegistOptions) {
 
-	engine.Lock()
 	engine.ID = opts.ID
 	engine.Name = opts.Name
 	engine.IP = opts.IP
 	engine.Addr = opts.Addr
 	engine.Version = opts.Version
 	engine.Labels = convert.ConvertKVStringSliceToMap(opts.Labels)
-	engine.Unlock()
 }
 
 func (engine *Engine) IsHealthy() bool {
@@ -90,7 +88,7 @@ func (engine *Engine) SetState(state engineState) {
 	engine.Unlock()
 }
 
-func (engine *Engine) Status() string {
+func (engine *Engine) State() string {
 
 	engine.Lock()
 	defer engine.Unlock()

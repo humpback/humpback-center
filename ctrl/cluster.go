@@ -62,13 +62,13 @@ func (c *Controller) stopCluster() {
 	logger.INFO("[#ctrl#] stop cluster.")
 }
 
-func (c *Controller) getEngineStatus(server string) string {
+func (c *Controller) getEngineState(server string) string {
 
-	status := ""
+	state := ""
 	if engine := c.Cluster.GetEngine(server); engine != nil {
-		status = engine.Status()
+		state = engine.State()
 	}
-	return status
+	return state
 }
 
 func (c *Controller) SetCluster(cluster *cluster.Cluster) {
@@ -86,7 +86,7 @@ func (c *Controller) GetClusterGroups() []*models.Group {
 	for _, group := range cgroups {
 		it := models.NewGroup(group.ID)
 		for _, server := range group.Servers {
-			status := c.getEngineStatus(server)
+			status := c.getEngineState(server)
 			it.Insert(server, status)
 		}
 		groups = append(groups, it)
@@ -99,7 +99,7 @@ func (c *Controller) GetClusterGroup(groupid string) *models.Group {
 	if group := c.Cluster.GetGroup(groupid); group != nil {
 		it := models.NewGroup(group.ID)
 		for _, server := range group.Servers {
-			status := c.getEngineStatus(server)
+			status := c.getEngineState(server)
 			it.Insert(server, status)
 		}
 		return it
@@ -110,9 +110,9 @@ func (c *Controller) GetClusterGroup(groupid string) *models.Group {
 func (c *Controller) GetClusterEngine(server string) *models.Engine {
 
 	if engine := c.Cluster.GetEngine(server); engine != nil {
-		status := engine.Status()
+		state := engine.State()
 		labels := convert.ConvertMapToKVStringSlice(engine.Labels)
-		return models.NewEngine(engine.ID, engine.Name, engine.IP, engine.Addr, engine.Version, labels, status)
+		return models.NewEngine(engine.ID, engine.Name, engine.IP, engine.Addr, engine.Version, labels, state)
 	}
 	return nil
 }
