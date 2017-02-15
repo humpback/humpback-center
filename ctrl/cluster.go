@@ -112,7 +112,7 @@ func (c *Controller) GetClusterEngine(server string) *models.Engine {
 	if engine := c.Cluster.GetEngine(server); engine != nil {
 		state := engine.State()
 		labels := convert.ConvertMapToKVStringSlice(engine.Labels)
-		return models.NewEngine(engine.ID, engine.Name, engine.IP, engine.Addr, engine.Version, labels, state)
+		return models.NewEngine(engine.ID, engine.IP, engine.APIAddr, labels, state)
 	}
 	return nil
 }

@@ -36,12 +36,10 @@ var stateText = map[engineState]string{
 type Engine struct {
 	sync.RWMutex
 	ID      string
-	Name    string
 	IP      string
-	Addr    string
+	APIAddr string
 	Cpus    int64
 	Memory  int64
-	Version string
 	Labels  map[string]string
 
 	httpClient *http.HttpClient
@@ -64,14 +62,17 @@ func NewEngine(ip string) (*Engine, error) {
 	}, nil
 }
 
-func (engine *Engine) SetRegistOptions(opts *types.ClusterRegistOptions) {
+func (engine *Engine) SetRegistOptions(id string, opts *types.ClusterRegistOptions) {
 
-	engine.ID = opts.ID
-	engine.Name = opts.Name
-	engine.IP = opts.IP
-	engine.Addr = opts.Addr
-	engine.Version = opts.Version
-	engine.Labels = convert.ConvertKVStringSliceToMap(opts.Labels)
+	if opts != nil {
+		engine.ID = id
+		engine.APIAddr = opts.APIAddr
+		engine.Labels = convert.ConvertKVStringSliceToMap(opts.Labels)
+	} else {
+		engine.ID = ""
+		engine.APIAddr = ""
+		engine.Labels = map[string]string{}
+	}
 }
 
 func (engine *Engine) IsHealthy() bool {

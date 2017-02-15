@@ -1,54 +1,44 @@
 package types
 
-import "github.com/humpback/gounits/rand"
 import "github.com/humpback/gounits/network"
 
 import (
-	"os"
-	"strings"
+	"net"
 )
 
 // ClusterRegistOptions is exported
 // regist to cluster options
-// ID: cluster node id.
-// Name: local hostname
-// IP: humpback website regist server ipaddr.
-// Addr: humpback node API addr.
-// Labels: humpback node custom values. example labels {"node=wh7", "kernelversion=4.4.0", "os=centos6.8"}
-// Version: docker or humpback node version
+// IP: humpback node host ipaddr.
+// APIAddr: humpback node API addr. (ip:port)
+// Labels: humpback node custom values.
+// example labels {"node=wh7", "kernelversion=4.4.0", "os=centos6.8"}
 type ClusterRegistOptions struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
 	IP      string   `json:"ip"`
-	Addr    string   `json:"addr"`
+	APIAddr string   `json:"apiaddr"`
 	Labels  []string `json:"labels"`
-	Version string   `json:"version"`
 }
 
 // NewClusterRegistOptions is exported
-func NewClusterRegistOptions(id string, name string, ip string, addr string, labels []string, version string) *ClusterRegistOptions {
+func NewClusterRegistOptions(apiaddr string, labels []string) (*ClusterRegistOptions, error) {
 
-	if strings.TrimSpace(id) == "" {
-		id = rand.UUID(true)
+	ip := network.GetDefaultIP()
+	host, port, err := net.SplitHostPort(apiaddr)
+	if err != nil {
+		return nil, err
 	}
 
-	if strings.TrimSpace(name) == "" {
-		hostname, err := os.Hostname()
-		if err == nil {
-			name = hostname
-		}
+	if len(host) == 0 {
+		host = ip //set default api ipaddr
+		apiaddr = host + ":" + port
 	}
 
-	if strings.TrimSpace(ip) == "" {
-		ip = network.GetDefaultIP()
+	if _, err := net.ResolveIPAddr("ip4", host); err != nil {
+		return nil, err
 	}
 
 	return &ClusterRegistOptions{
-		ID:      id,
-		Name:    name,
 		IP:      ip,
-		Addr:    addr,
+		APIAddr: apiaddr,
 		Labels:  labels,
-		Version: version,
-	}
+	}, nil
 }

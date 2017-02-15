@@ -100,28 +100,38 @@ func (cluster *Cluster) GetGroup(groupid string) *Group {
 func (cluster *Cluster) SetGroup(groupid string, servers []string) {
 
 	cluster.Lock()
+	removes := []string{}
 	group, ret := cluster.groups[groupid]
 	if !ret {
 		group = &Group{ID: groupid, Servers: servers}
 		cluster.groups[groupid] = group
 		logger.INFO("[#cluster#] cluster create group %s(%d)", groupid, len(servers))
 	} else {
+		origin := group.Servers
 		group.Servers = servers
+		for _, oldip := range origin {
+			found := false
+			for _, newip := range group.Servers {
+				if oldip == newip {
+					found = true
+					break
+				}
+			}
+			if !found {
+				removes = append(removes, oldip)
+			}
+		}
 		logger.INFO("[#cluster#] cluster set group %s(%d)", groupid, len(servers))
 	}
-
-	for _, server := range group.Servers {
-		if _, ret := cluster.engines[server]; !ret {
-			engine, err := NewEngine(server)
-			if err != nil {
-				logger.ERROR("[#cluster#] cluster add engine %s error:%s", server, err.Error())
-				continue
-			}
-			cluster.engines[server] = engine
-			logger.INFO("[#cluster#] cluster add engine %p:%s", engine, engine.IP)
-		}
-	}
 	cluster.Unlock()
+
+	for _, ip := range servers {
+		cluster.addEngine(ip)
+	}
+
+	for _, ip := range removes {
+		cluster.removeEngine(ip)
+	}
 }
 
 func (cluster *Cluster) RemoveGroup(groupid string) bool {
@@ -153,7 +163,11 @@ func (cluster *Cluster) watchHandleFunc(added backends.Entries, removed backends
 			continue
 		}
 		logger.INFO("[#cluster#] cluster discovery removed:%s.", entry.Key)
-		cluster.removeEngine(opts)
+		if engine := cluster.removeEngine(opts.IP); engine != nil {
+			engine.SetRegistOptions(entry.Key, nil)
+			engine.SetState(stateUnhealthy)
+			logger.INFO("[#cluster#] cluster set engine %p:%s %s", engine, engine.IP, engine.State())
+		}
 	}
 
 	for _, entry := range added {
@@ -162,47 +176,48 @@ func (cluster *Cluster) watchHandleFunc(added backends.Entries, removed backends
 			continue
 		}
 		logger.INFO("[#cluster#] cluster discovery added:%s.", entry.Key)
-		cluster.addEngine(opts)
+		if engine := cluster.addEngine(opts.IP); engine != nil {
+			engine.SetRegistOptions(entry.Key, opts)
+			engine.SetState(stateHealthy)
+			logger.INFO("[#cluster#] cluster set engine %p:%s %s", engine, engine.IP, engine.State())
+		}
 	}
 }
 
-func (cluster *Cluster) addEngine(opts *types.ClusterRegistOptions) bool {
+func (cluster *Cluster) addEngine(ip string) *Engine {
 
-	engine := cluster.GetEngine(opts.IP)
+	engine := cluster.GetEngine(ip)
 	if engine == nil {
 		var err error
-		if engine, err = NewEngine(opts.IP); err != nil {
-			logger.ERROR("[#cluster#] cluster add engine %s error:%s", opts.IP, err.Error())
-			return false
+		if engine, err = NewEngine(ip); err != nil {
+			logger.ERROR("[#cluster#] cluster add engine %s error:%s", ip, err.Error())
+			return nil
 		}
 		cluster.Lock()
-		cluster.engines[opts.IP] = engine
+		cluster.engines[ip] = engine
 		cluster.Unlock()
-		logger.INFO("[#cluster#] cluster add engine %p:%s", engine, opts.IP)
+		logger.INFO("[#cluster#] cluster add engine %p:%s", engine, ip)
 	}
-	engine.SetRegistOptions(opts)
-	engine.SetState(stateHealthy)
-	logger.INFO("[#cluster#] cluster set engine %p:%s %s", engine, opts.IP, engine.State())
-	return true
+	return engine
 }
 
-func (cluster *Cluster) removeEngine(opts *types.ClusterRegistOptions) bool {
+func (cluster *Cluster) removeEngine(ip string) *Engine {
 
-	engine := cluster.GetEngine(opts.IP)
+	engine := cluster.GetEngine(ip)
 	if engine == nil {
-		logger.WARN("[#cluster#] cluster remove engine, not found:%s", opts.IP)
-		return false
+		logger.WARN("[#cluster#] cluster remove engine, not found:%s", ip)
+		return nil
 	}
 
 	found := false
 	groups := cluster.GetGroups()
 	for _, group := range groups {
-		for _, server := range group.Servers {
-			if server == engine.IP {
-				found = true
-				engine.SetState(stateUnhealthy)
-				logger.INFO("[#cluster#] cluster set engine %p:%s %s", engine, opts.IP, engine.State())
-				break
+		if !found {
+			for _, ip := range group.Servers {
+				if ip == engine.IP {
+					found = true
+					break
+				}
 			}
 		}
 	}
@@ -212,7 +227,7 @@ func (cluster *Cluster) removeEngine(opts *types.ClusterRegistOptions) bool {
 		cluster.Lock()
 		delete(cluster.engines, engine.IP)
 		cluster.Unlock()
-		logger.INFO("[#cluster#] cluster remove engine %p:%s", engine, opts.IP)
+		logger.INFO("[#cluster#] cluster remove engine %p:%s", engine, engine.IP)
 	}
-	return true
+	return engine
 }
