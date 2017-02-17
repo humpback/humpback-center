@@ -1,11 +1,20 @@
 package cluster
 
+import "github.com/docker/engine-api/types"
 import "github.com/humpback/gounits/http"
-import "github.com/humpback/humpback-center/cluster/types"
 
 import (
 	"net"
+	"strings"
 	"sync"
+	"time"
+)
+
+const (
+	// timeout for request send out to the engine
+	requestTimeout = 10 * time.Second
+	// engine refresh loop interval
+	refreshInterval = 10 * time.Second
 )
 
 // Engine state define
@@ -60,21 +69,39 @@ func NewEngine(ip string) (*Engine, error) {
 	}
 
 	return &Engine{
-		IP:     ipaddr.IP.String(),
-		Labels: make(map[string]string),
-		stopCh: make(chan struct{}),
-		state:  StateUnhealthy,
+		IP:         ipaddr.IP.String(),
+		Labels:     make(map[string]string),
+		httpClient: http.NewWithTimeout(requestTimeout),
+		stopCh:     make(chan struct{}),
+		state:      StateDisconnected,
 	}, nil
 }
 
-func (engine *Engine) SetRegistOptions(opts *types.ClusterRegistOptions) *Engine {
+func (engine *Engine) Open(addr string) {
 
-	if opts != nil {
-		engine.Addr = opts.Addr
-	} else {
-		engine.Addr = ""
+	engine.Lock()
+	engine.Addr = addr
+	if engine.state != StateHealthy {
+		engine.state = StateHealthy
+		go func() {
+			engine.updateSpecs() //first update specs
+			engine.refreshLoop() //loop
+		}()
 	}
-	return engine
+	engine.Unlock()
+}
+
+func (engine *Engine) Close() {
+
+	engine.Lock()
+	defer engine.Unlock()
+	if engine.state == StateDisconnected {
+		return
+	}
+	close(engine.stopCh) //quit refreshLoop.
+	engine.httpClient.Close()
+	engine.state = StateDisconnected
+	engine.Addr = ""
 }
 
 func (engine *Engine) IsHealthy() bool {
@@ -98,22 +125,60 @@ func (engine *Engine) State() string {
 	return stateText[engine.state]
 }
 
-func (engine *Engine) Close() {
+func (engine *Engine) refreshLoop() {
 
-	if engine.httpClient != nil {
-		engine.httpClient.Close()
+	for {
+		tick := time.NewTicker(refreshInterval)
+		select {
+		case <-tick.C:
+			{
+				tick.Stop()
+				engine.updateSpecs()
+			}
+		case <-engine.stopCh:
+			{
+				tick.Stop()
+				return
+			}
+		}
 	}
-	// close the chan, exit refreshLoop.
-	close(engine.stopCh)
 }
 
-//func (e *Engine) refreshLoop() {
-//定期获取如下信息：
-//Cpus       int64
-//Memory     int64
-//Containers 容器列表信息
-//select {
-//	case <-e.stopCh:
-//		return
-//	}
-//}
+func (engine *Engine) updateSpecs() error {
+
+	resp, err := engine.httpClient.Get("http://"+engine.Addr+"/v1/dockerinfo", nil, nil)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Close()
+	info := &types.Info{}
+	if err := resp.JSON(info); err != nil {
+		return err
+	}
+
+	engine.ID = info.ID
+	engine.Name = info.Name
+	engine.Cpus = int64(info.NCPU)
+	engine.Memory = info.MemTotal
+	if info.Driver != "" {
+		engine.Labels["storagedirver"] = info.Driver
+	}
+
+	if info.KernelVersion != "" {
+		engine.Labels["kernelversion"] = info.KernelVersion
+	}
+
+	if info.OperatingSystem != "" {
+		engine.Labels["operatingsystem"] = info.OperatingSystem
+	}
+
+	for _, label := range info.Labels {
+		kv := strings.SplitN(label, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		engine.Labels[kv[0]] = kv[1]
+	}
+	return nil
+}

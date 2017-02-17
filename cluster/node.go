@@ -119,7 +119,7 @@ func Register(args *NodeArgs) error {
 func Close() {
 
 	if node != nil {
-		close(node.stopCh)
+		close(node.stopCh) //close register loop
 		<-node.quitCh
 		node = nil
 		log.Printf("register closed.\n")

@@ -77,6 +77,23 @@ func (cluster *Cluster) GetEngine(ip string) *Engine {
 	return nil
 }
 
+func (cluster *Cluster) GroupsContains(engine *Engine) bool {
+
+	ret := false
+	groups := cluster.GetGroups()
+	for _, group := range groups {
+		if !ret {
+			for _, ip := range group.Servers {
+				if ip == engine.IP {
+					ret = true
+					break
+				}
+			}
+		}
+	}
+	return ret
+}
+
 func (cluster *Cluster) GetGroups() []*Group {
 
 	groups := []*Group{}
@@ -170,8 +187,7 @@ func (cluster *Cluster) watchHandleFunc(added backends.Entries, removed backends
 		}
 		logger.INFO("[#cluster#] cluster discovery removed:%s %s.", entry.Key, opts.Addr)
 		if engine := cluster.removeEngine(ip); engine != nil {
-			engine.SetRegistOptions(nil)
-			engine.SetState(StateUnhealthy)
+			engine.Close()
 			logger.INFO("[#cluster#] cluster set engine %p:%s %s", engine, engine.IP, engine.State())
 		}
 	}
@@ -188,8 +204,7 @@ func (cluster *Cluster) watchHandleFunc(added backends.Entries, removed backends
 		}
 		logger.INFO("[#cluster#] cluster discovery added:%s.", entry.Key)
 		if engine := cluster.addEngine(ip); engine != nil {
-			engine.SetRegistOptions(opts)
-			engine.SetState(StatePending)
+			engine.Open(opts.Addr)
 			logger.INFO("[#cluster#] cluster set engine %p:%s %s", engine, engine.IP, engine.State())
 		}
 	}
@@ -220,21 +235,7 @@ func (cluster *Cluster) removeEngine(ip string) *Engine {
 		return nil
 	}
 
-	found := false
-	groups := cluster.GetGroups()
-	for _, group := range groups {
-		if !found {
-			for _, ip := range group.Servers {
-				if ip == engine.IP {
-					found = true
-					break
-				}
-			}
-		}
-	}
-
-	if !found {
-		engine.Close() //close engine
+	if ret := cluster.GroupsContains(engine); !ret {
 		cluster.Lock()
 		delete(cluster.engines, engine.IP)
 		cluster.Unlock()

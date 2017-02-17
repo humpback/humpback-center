@@ -64,7 +64,7 @@ func (c *Controller) stopCluster() {
 
 func (c *Controller) getEngineState(server string) string {
 
-	state := cluster.GetStateText(cluster.StateUnhealthy)
+	state := cluster.GetStateText(cluster.StateDisconnected)
 	if engine := c.Cluster.GetEngine(server); engine != nil {
 		state = engine.State()
 	}
