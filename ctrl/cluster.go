@@ -64,7 +64,7 @@ func (c *Controller) stopCluster() {
 
 func (c *Controller) getEngineState(server string) string {
 
-	state := ""
+	state := cluster.GetStateText(cluster.StateUnhealthy)
 	if engine := c.Cluster.GetEngine(server); engine != nil {
 		state = engine.State()
 	}
@@ -112,14 +112,14 @@ func (c *Controller) GetClusterEngine(server string) *models.Engine {
 	if engine := c.Cluster.GetEngine(server); engine != nil {
 		state := engine.State()
 		labels := convert.ConvertMapToKVStringSlice(engine.Labels)
-		return models.NewEngine(engine.ID, engine.IP, engine.APIAddr, labels, state)
+		return models.NewEngine(engine.ID, engine.Name, engine.IP, engine.Addr, labels, state)
 	}
 	return nil
 }
 
 func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 
-	logger.ERROR("[#ctrl#] set cluster groupevent %s.", event)
+	logger.INFO("[#ctrl#] set cluster groupevent %s.", event)
 	switch event {
 	case request.GROUP_CREATE_EVENT, request.GROUP_CHANGE_EVENT:
 		{

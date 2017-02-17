@@ -57,9 +57,10 @@ func (service *CenterService) Startup() error {
 	if err := service.Controller.Initialize(); err != nil {
 		return err
 	}
-	logger.INFO("[#service#] process %d", service.PIDFile.PID)
+	logger.INFO("[#service#] center process %d", service.PIDFile.PID)
 	//apiserver start.
 	go func() {
+		logger.INFO("[#service#] center API listen: %s", service.APIServer.ListenHosts())
 		if err := service.APIServer.Startup(); err != nil {
 			logger.ERROR("[#service#] service API start error:%s", err.Error())
 		}

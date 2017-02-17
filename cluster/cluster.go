@@ -8,6 +8,7 @@ import "github.com/humpback/humpback-center/cluster/types"
 
 import (
 	"errors"
+	"net"
 	"sync"
 )
 
@@ -159,26 +160,36 @@ func (cluster *Cluster) watchHandleFunc(added backends.Entries, removed backends
 	opts := &types.ClusterRegistOptions{}
 	for _, entry := range removed {
 		if err := json.DeCodeBufferToObject(entry.Data, opts); err != nil {
-			logger.ERROR("[#cluster#] cluster discovery handlefunc error: removed, %s", err.Error())
+			logger.ERROR("[#cluster#] cluster discovery handlefunc removed decode error: %s", err.Error())
 			continue
 		}
-		logger.INFO("[#cluster#] cluster discovery removed:%s.", entry.Key)
-		if engine := cluster.removeEngine(opts.IP); engine != nil {
-			engine.SetRegistOptions(entry.Key, nil)
-			engine.SetState(stateUnhealthy)
+		ip, _, err := net.SplitHostPort(opts.Addr)
+		if err != nil {
+			logger.ERROR("[#cluster#] cluster discovery handlefunc removed resolve addr error: %s", err.Error())
+			continue
+		}
+		logger.INFO("[#cluster#] cluster discovery removed:%s %s.", entry.Key, opts.Addr)
+		if engine := cluster.removeEngine(ip); engine != nil {
+			engine.SetRegistOptions(nil)
+			engine.SetState(StateUnhealthy)
 			logger.INFO("[#cluster#] cluster set engine %p:%s %s", engine, engine.IP, engine.State())
 		}
 	}
 
 	for _, entry := range added {
 		if err := json.DeCodeBufferToObject(entry.Data, opts); err != nil {
-			logger.ERROR("[#cluster#] cluster discovery handlefunc error: added, %s", err.Error())
+			logger.ERROR("[#cluster#] cluster discovery handlefunc added decode error: %s", err.Error())
+			continue
+		}
+		ip, _, err := net.SplitHostPort(opts.Addr)
+		if err != nil {
+			logger.ERROR("[#cluster#] cluster discovery handlefunc added resolve addr error: %s", err.Error())
 			continue
 		}
 		logger.INFO("[#cluster#] cluster discovery added:%s.", entry.Key)
-		if engine := cluster.addEngine(opts.IP); engine != nil {
-			engine.SetRegistOptions(entry.Key, opts)
-			engine.SetState(stateHealthy)
+		if engine := cluster.addEngine(ip); engine != nil {
+			engine.SetRegistOptions(opts)
+			engine.SetState(StatePending)
 			logger.INFO("[#cluster#] cluster set engine %p:%s %s", engine, engine.IP, engine.State())
 		}
 	}

@@ -48,6 +48,11 @@ func NewServer(hosts []string, tlsConfig *tls.Config, controller *ctrl.Controlle
 	}
 }
 
+func (server *Server) ListenHosts() []string {
+
+	return server.hosts
+}
+
 func (server *Server) SetHandler(handler http.Handler) {
 
 	server.dispatcher.SetHandler(handler)

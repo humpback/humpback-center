@@ -1,6 +1,5 @@
 package cluster
 
-import "github.com/humpback/gounits/convert"
 import "github.com/humpback/gounits/http"
 import "github.com/humpback/humpback-center/cluster/types"
 
@@ -12,35 +11,41 @@ import (
 // Engine state define
 type engineState int
 
+// State enum value
 const (
 	//pending: engine added to cluster, but not been validated.
-	statePending engineState = iota
+	StatePending engineState = iota
 	//unhealthy: engine is unreachable.
-	stateUnhealthy
+	StateUnhealthy
 	//healthy: engine is ready reachable.
-	stateHealthy
+	StateHealthy
 	//disconnected: engine is removed from discovery
-	stateDisconnected
+	StateDisconnected
 )
 
 // Engine state mapping
 var stateText = map[engineState]string{
-	statePending:      "Pending",
-	stateUnhealthy:    "Unhealthy",
-	stateHealthy:      "Healthy",
-	stateDisconnected: "Disconnected",
+	StatePending:      "Pending",
+	StateUnhealthy:    "Unhealthy",
+	StateHealthy:      "Healthy",
+	StateDisconnected: "Disconnected",
+}
+
+// GetStateText is exported return a state typed text.
+func GetStateText(state engineState) string {
+	return stateText[state]
 }
 
 // Engine is exported
-//Labels, engine labels values {"node","wh7", "kernelversion":"4.4.0", "os":"centos6.8"}
 type Engine struct {
 	sync.RWMutex
-	ID      string
-	IP      string
-	APIAddr string
-	Cpus    int64
-	Memory  int64
-	Labels  map[string]string
+	ID     string
+	Name   string
+	IP     string
+	Addr   string
+	Cpus   int64
+	Memory int64
+	Labels map[string]string //docker daemon labels
 
 	httpClient *http.HttpClient
 	stopCh     chan struct{}
@@ -58,28 +63,25 @@ func NewEngine(ip string) (*Engine, error) {
 		IP:     ipaddr.IP.String(),
 		Labels: make(map[string]string),
 		stopCh: make(chan struct{}),
-		state:  stateUnhealthy,
+		state:  StateUnhealthy,
 	}, nil
 }
 
-func (engine *Engine) SetRegistOptions(id string, opts *types.ClusterRegistOptions) {
+func (engine *Engine) SetRegistOptions(opts *types.ClusterRegistOptions) *Engine {
 
 	if opts != nil {
-		engine.ID = id
-		engine.APIAddr = opts.APIAddr
-		engine.Labels = convert.ConvertKVStringSliceToMap(opts.Labels)
+		engine.Addr = opts.Addr
 	} else {
-		engine.ID = ""
-		engine.APIAddr = ""
-		engine.Labels = map[string]string{}
+		engine.Addr = ""
 	}
+	return engine
 }
 
 func (engine *Engine) IsHealthy() bool {
 
 	engine.Lock()
 	defer engine.Unlock()
-	return engine.state == stateHealthy
+	return engine.state == StateHealthy
 }
 
 func (engine *Engine) SetState(state engineState) {

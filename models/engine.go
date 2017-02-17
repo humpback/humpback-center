@@ -2,21 +2,23 @@ package models
 
 // Engine is exported
 type Engine struct {
-	ID      string   `json:"id"`
-	IP      string   `json:"ip"`
-	APIAddr string   `json:"apiaddr"`
-	Labels  []string `json:"labels"`
-	State   string   `json:"state"`
+	ID     string   `json:"id"`
+	Name   string   `json:"name"`
+	IP     string   `json:"ip"`
+	Addr   string   `json:"addr"`
+	Labels []string `json:"labels"`
+	State  string   `json:"state"`
 }
 
 // NewEngine is exported
-func NewEngine(id string, ip string, apiaddr string, labels []string, state string) *Engine {
+func NewEngine(id string, name string, ip string, addr string, labels []string, state string) *Engine {
 
 	return &Engine{
-		ID:      id,
-		IP:      ip,
-		APIAddr: apiaddr,
-		Labels:  labels,
-		State:   state,
+		ID:     id,
+		Name:   name,
+		IP:     ip,
+		Addr:   addr,
+		Labels: labels,
+		State:  state,
 	}
 }
