@@ -1,6 +1,7 @@
 package request
 
 import "github.com/gorilla/mux"
+import "github.com/humpback/humpback-agent/models"
 
 import (
 	"bytes"
@@ -30,6 +31,29 @@ func ResolveClusterGroupRequest(r *http.Request) (*ClusterGroupRequest, error) {
 	}
 
 	return &ClusterGroupRequest{
+		GroupID: groupid,
+	}, nil
+}
+
+/*
+ResolveClusterGroupEnginesRequest
+Method:  GET
+Route:   /v1/cluster/groups/{groupid}/engines
+GroupID: cluster groupid
+*/
+type ClusterGroupEnginesRequest struct {
+	GroupID string `json:"groupid"`
+}
+
+func ResolveClusterGroupEnginesRequest(r *http.Request) (*ClusterGroupEnginesRequest, error) {
+
+	vars := mux.Vars(r)
+	groupid := strings.TrimSpace(vars["groupid"])
+	if groupid == "" {
+		return nil, fmt.Errorf("request groupid invalid.")
+	}
+
+	return &ClusterGroupEnginesRequest{
 		GroupID: groupid,
 	}, nil
 }
@@ -93,6 +117,29 @@ func ResolveClusterGroupEventRequest(r *http.Request) (*ClusterGroupEventRequest
 		request.Event != GROUP_REMOVE_EVENT &&
 		request.Event != GROUP_CHANGE_EVENT {
 		return nil, fmt.Errorf("request group event invalid.")
+	}
+	return request, nil
+}
+
+/*
+ResolveClusterCreateContainerRequest
+Method:  POST
+Route:   /v1/cluster/containers
+*/
+type ClusterCreateContainerRequest struct {
+	models.Container
+}
+
+func ResolveClusterCreateContainerRequest(r *http.Request) (*ClusterCreateContainerRequest, error) {
+
+	buf, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	request := &ClusterCreateContainerRequest{}
+	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
+		return nil, err
 	}
 	return request, nil
 }

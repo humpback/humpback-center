@@ -67,17 +67,7 @@ func (cluster *Cluster) Stop() {
 	logger.INFO("[#cluster#] cluster discovery closed.")
 }
 
-func (cluster *Cluster) GetEngine(ip string) *Engine {
-
-	cluster.RLock()
-	defer cluster.RUnlock()
-	if engine, ret := cluster.engines[ip]; ret {
-		return engine
-	}
-	return nil
-}
-
-func (cluster *Cluster) GroupsContains(engine *Engine) bool {
+func (cluster *Cluster) GroupsEngineContains(engine *Engine) bool {
 
 	ret := false
 	groups := cluster.GetGroups()
@@ -92,6 +82,33 @@ func (cluster *Cluster) GroupsContains(engine *Engine) bool {
 		}
 	}
 	return ret
+}
+
+func (cluster *Cluster) GetEngine(ip string) *Engine {
+
+	cluster.RLock()
+	defer cluster.RUnlock()
+	if engine, ret := cluster.engines[ip]; ret {
+		return engine
+	}
+	return nil
+}
+
+func (cluster *Cluster) GetGroupEngines(groupid string) []*Engine {
+
+	cluster.RLock()
+	defer cluster.RUnlock()
+	engines := []*Engine{}
+	group, ret := cluster.groups[groupid]
+	if !ret {
+		return nil
+	}
+	for _, ip := range group.Servers {
+		if engine, ret := cluster.engines[ip]; ret {
+			engines = append(engines, engine)
+		}
+	}
+	return engines
 }
 
 func (cluster *Cluster) GetGroups() []*Group {
@@ -235,7 +252,7 @@ func (cluster *Cluster) removeEngine(ip string) *Engine {
 		return nil
 	}
 
-	if ret := cluster.GroupsContains(engine); !ret {
+	if ret := cluster.GroupsEngineContains(engine); !ret {
 		cluster.Lock()
 		delete(cluster.engines, engine.IP)
 		cluster.Unlock()

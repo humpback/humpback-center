@@ -56,6 +56,7 @@ type Engine struct {
 	Memory int64
 	Labels map[string]string //docker daemon labels
 
+	containers map[string]*Container
 	httpClient *http.HttpClient
 	stopCh     chan struct{}
 	state      engineState
@@ -71,6 +72,7 @@ func NewEngine(ip string) (*Engine, error) {
 	return &Engine{
 		IP:         ipaddr.IP.String(),
 		Labels:     make(map[string]string),
+		containers: make(map[string]*Container),
 		httpClient: http.NewWithTimeout(requestTimeout),
 		stopCh:     make(chan struct{}),
 		state:      StateDisconnected,

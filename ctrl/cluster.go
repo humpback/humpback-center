@@ -107,12 +107,27 @@ func (c *Controller) GetClusterGroup(groupid string) *models.Group {
 	return nil
 }
 
+func (c *Controller) GetClusterGroupEngines(groupid string) []*models.Engine {
+
+	engines := c.Cluster.GetGroupEngines(groupid)
+	if engines == nil {
+		return nil
+	}
+
+	result := []*models.Engine{}
+	for _, engine := range engines {
+		labels := convert.ConvertMapToKVStringSlice(engine.Labels)
+		it := models.NewEngine(engine.ID, engine.Name, engine.IP, engine.Addr, labels, engine.State())
+		result = append(result, it)
+	}
+	return result
+}
+
 func (c *Controller) GetClusterEngine(server string) *models.Engine {
 
 	if engine := c.Cluster.GetEngine(server); engine != nil {
-		state := engine.State()
 		labels := convert.ConvertMapToKVStringSlice(engine.Labels)
-		return models.NewEngine(engine.ID, engine.Name, engine.IP, engine.Addr, labels, state)
+		return models.NewEngine(engine.ID, engine.Name, engine.IP, engine.Addr, labels, engine.State())
 	}
 	return nil
 }

@@ -45,6 +45,31 @@ func getClusterGroup(c *Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
+func getClusterGroupEngines(c *Context) error {
+
+	result := &response.ResponseResult{ResponseID: c.ID}
+	req, err := request.ResolveClusterGroupEnginesRequest(c.Request())
+	if err != nil {
+		logger.ERROR("[#api#] %s resolve get cluster group engines request faild, %s", c.ID, err.Error())
+		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
+		return c.JSON(http.StatusBadRequest, result)
+	}
+
+	logger.INFO("[#api#] %s resolve get cluster group engines request successed. %+v", c.ID, req)
+	engines := c.Controller.GetClusterGroupEngines(req.GroupID)
+	if engines == nil {
+		logger.ERROR("[#api#] %s get cluster group engines %s not found.", c.ID, req.GroupID)
+		result.SetError(request.RequestNotFound, request.ErrRequestNotFound, req.GroupID+" not found")
+		return c.JSON(http.StatusNotFound, result)
+	}
+
+	logger.INFO("[#api#] %s get cluster group engines %p.", c.ID, engines)
+	resp := response.NewClusterGroupEnginesResponse(engines)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "response cluster group engines")
+	result.SetResponse(resp)
+	return c.JSON(http.StatusOK, result)
+}
+
 func getClusterEngine(c *Context) error {
 
 	result := response.ResponseResult{ResponseID: c.ID}
@@ -85,5 +110,20 @@ func postClusterGroupEvent(c *Context) error {
 	resp := response.NewClusterGroupEventResponse("accepted.")
 	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "response cluster group event")
 	result.SetResponse(resp)
+	return c.JSON(http.StatusAccepted, result)
+}
+
+func postClusterCreateContainer(c *Context) error {
+
+	result := response.ResponseResult{ResponseID: c.ID}
+	req, err := request.ResolveClusterCreateContainerRequest(c.Request())
+	if err != nil {
+		logger.ERROR("[#api#] %s resolve post cluster create container request faild, %s", c.ID, err.Error())
+		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
+		return c.JSON(http.StatusBadRequest, result)
+	}
+
+	logger.INFO("[#api#] %s resolve post cluster create container request successed. %+v", c.ID, req)
+	result.SetResponse(nil)
 	return c.JSON(http.StatusAccepted, result)
 }
