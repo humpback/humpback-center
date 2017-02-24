@@ -1,7 +1,9 @@
 package cluster
 
-import "github.com/docker/engine-api/types"
+import "github.com/docker/docker/api/types"
 import "github.com/humpback/gounits/http"
+import "github.com/humpback/gounits/logger"
+import "github.com/humpback/humpback-agent/models"
 
 import (
 	"net"
@@ -14,7 +16,9 @@ const (
 	// timeout for request send out to the engine
 	requestTimeout = 10 * time.Second
 	// engine refresh loop interval
-	refreshInterval = 10 * time.Second
+	refreshInterval = 20 * time.Second
+	// threshold of delta duration between humpback-center and humpback-agent's systime
+	thresholdTime = 2 * time.Second
 )
 
 // Engine state define
@@ -48,13 +52,14 @@ func GetStateText(state engineState) string {
 // Engine is exported
 type Engine struct {
 	sync.RWMutex
-	ID     string
-	Name   string
-	IP     string
-	Addr   string
-	Cpus   int64
-	Memory int64
-	Labels map[string]string //docker daemon labels
+	ID            string
+	Name          string
+	IP            string
+	Addr          string
+	Cpus          int64
+	Memory        int64
+	Labels        map[string]string //docker daemon labels
+	DeltaDuration time.Duration     //humpback-center's systime - humpback-agent's systime
 
 	containers map[string]*Container
 	httpClient *http.HttpClient
@@ -64,17 +69,16 @@ type Engine struct {
 
 func NewEngine(ip string) (*Engine, error) {
 
-	ipaddr, err := net.ResolveIPAddr("ip4", ip)
+	ipAddr, err := net.ResolveIPAddr("ip4", ip)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Engine{
-		IP:         ipaddr.IP.String(),
+		IP:         ipAddr.IP.String(),
 		Labels:     make(map[string]string),
 		containers: make(map[string]*Container),
 		httpClient: http.NewWithTimeout(requestTimeout),
-		stopCh:     make(chan struct{}),
 		state:      StateDisconnected,
 	}, nil
 }
@@ -85,9 +89,12 @@ func (engine *Engine) Open(addr string) {
 	engine.Addr = addr
 	if engine.state != StateHealthy {
 		engine.state = StateHealthy
+		engine.stopCh = make(chan struct{})
+		logger.INFO("[#cluster#] engine %s open.", engine.IP)
 		go func() {
-			engine.updateSpecs() //first update specs
-			engine.refreshLoop() //loop
+			engine.updateSpecs()
+			engine.RefreshContainers()
+			engine.refreshLoop()
 		}()
 	}
 	engine.Unlock()
@@ -95,6 +102,7 @@ func (engine *Engine) Open(addr string) {
 
 func (engine *Engine) Close() {
 
+	engine.cleanupContainers()
 	engine.Lock()
 	defer engine.Unlock()
 	if engine.state == StateDisconnected {
@@ -102,8 +110,12 @@ func (engine *Engine) Close() {
 	}
 	close(engine.stopCh) //quit refreshLoop.
 	engine.httpClient.Close()
-	engine.state = StateDisconnected
+	engine.ID = ""
+	engine.Name = ""
 	engine.Addr = ""
+	engine.Labels = make(map[string]string)
+	engine.state = StateDisconnected
+	logger.INFO("[#cluster#] engine %s closed.", engine.IP)
 }
 
 func (engine *Engine) IsHealthy() bool {
@@ -127,19 +139,68 @@ func (engine *Engine) State() string {
 	return stateText[engine.state]
 }
 
+func (engine *Engine) RefreshContainers() error {
+
+	logger.INFO("[#cluster#] engine %s refresh containers.", engine.Addr)
+	respContainers, err := engine.httpClient.Get("http://"+engine.Addr+"/v1/containers", nil, nil)
+	if err != nil {
+		return err
+	}
+
+	defer respContainers.Close()
+	dockerContainers := []types.Container{}
+	if err := respContainers.JSON(&dockerContainers); err != nil {
+		return err
+	}
+
+	merged := make(map[string]*Container)
+	for _, c := range dockerContainers {
+		mergedUpdate, err := engine.updateContainer(c, merged)
+		if err != nil {
+			logger.ERROR("[#cluster#] engine %s update container error:%s", engine.Addr, err.Error())
+		} else {
+			merged = mergedUpdate
+		}
+	}
+
+	engine.Lock()
+	engine.containers = merged
+	engine.Unlock()
+	return nil
+}
+
+func (engine *Engine) cleanupContainers() {
+
+	engine.Lock()
+	engine.containers = make(map[string]*Container)
+	engine.Unlock()
+}
+
 func (engine *Engine) refreshLoop() {
 
+	const specsUpdateInterval = 5 * time.Minute
+	lastSpecsUpdateAt := time.Now()
 	for {
-		tick := time.NewTicker(refreshInterval)
+		runTicker := time.NewTicker(refreshInterval)
 		select {
-		case <-tick.C:
+		case <-runTicker.C:
 			{
-				tick.Stop()
-				engine.updateSpecs()
+				runTicker.Stop()
+				isHealthy := engine.IsHealthy()
+				if !isHealthy || time.Since(lastSpecsUpdateAt) > specsUpdateInterval {
+					if err := engine.updateSpecs(); err != nil {
+						logger.ERROR("[#cluster#] engine %s update specs error:%s", engine.Addr, err.Error())
+						continue
+					}
+					lastSpecsUpdateAt = time.Now()
+				}
+				if err := engine.RefreshContainers(); err != nil {
+					logger.ERROR("[#cluster#] engine %s refresh containers error:%s", engine.Addr, err.Error())
+				}
 			}
 		case <-engine.stopCh:
 			{
-				tick.Stop()
+				runTicker.Stop()
 				return
 			}
 		}
@@ -148,34 +209,57 @@ func (engine *Engine) refreshLoop() {
 
 func (engine *Engine) updateSpecs() error {
 
-	resp, err := engine.httpClient.Get("http://"+engine.Addr+"/v1/dockerinfo", nil, nil)
+	logger.INFO("[#cluster#] engine %s update specs.", engine.Addr)
+	respSpecs, err := engine.httpClient.Get("http://"+engine.Addr+"/v1/dockerinfo", nil, nil)
 	if err != nil {
 		return err
 	}
 
-	defer resp.Close()
-	info := &types.Info{}
-	if err := resp.JSON(info); err != nil {
+	defer respSpecs.Close()
+	dockerInfo := &types.Info{}
+	if err := respSpecs.JSON(dockerInfo); err != nil {
 		return err
 	}
 
-	engine.ID = info.ID
-	engine.Name = info.Name
-	engine.Cpus = int64(info.NCPU)
-	engine.Memory = info.MemTotal
-	if info.Driver != "" {
-		engine.Labels["storagedirver"] = info.Driver
+	engine.Lock()
+	defer engine.Unlock()
+	engine.ID = dockerInfo.ID
+	engine.Name = dockerInfo.Name
+	engine.Cpus = int64(dockerInfo.NCPU)
+	engine.Memory = dockerInfo.MemTotal
+
+	var delta time.Duration
+	if dockerInfo.SystemTime != "" {
+		engineSystime, _ := time.Parse(time.RFC3339Nano, dockerInfo.SystemTime)
+		delta = time.Now().UTC().Sub(engineSystime)
+	} else {
+		delta = time.Duration(0)
 	}
 
-	if info.KernelVersion != "" {
-		engine.Labels["kernelversion"] = info.KernelVersion
+	absDelta := delta
+	if delta.Seconds() < 0 {
+		absDelta = time.Duration(-1*delta.Seconds()) * time.Second
 	}
 
-	if info.OperatingSystem != "" {
-		engine.Labels["operatingsystem"] = info.OperatingSystem
+	if absDelta < thresholdTime {
+		engine.DeltaDuration = 0
+	} else {
+		engine.DeltaDuration = delta
 	}
 
-	for _, label := range info.Labels {
+	if dockerInfo.Driver != "" {
+		engine.Labels["storagedirver"] = dockerInfo.Driver
+	}
+
+	if dockerInfo.KernelVersion != "" {
+		engine.Labels["kernelversion"] = dockerInfo.KernelVersion
+	}
+
+	if dockerInfo.OperatingSystem != "" {
+		engine.Labels["operatingsystem"] = dockerInfo.OperatingSystem
+	}
+
+	for _, label := range dockerInfo.Labels {
 		kv := strings.SplitN(label, "=", 2)
 		if len(kv) != 2 {
 			continue
@@ -183,4 +267,47 @@ func (engine *Engine) updateSpecs() error {
 		engine.Labels[kv[0]] = kv[1]
 	}
 	return nil
+}
+
+func (engine *Engine) updateContainer(c types.Container, containers map[string]*Container) (map[string]*Container, error) {
+
+	var container *Container
+	engine.RLock()
+	if current, ret := engine.containers[c.ID]; ret {
+		container = current
+	} else {
+		container = &Container{
+			Engine: engine,
+		}
+	}
+	engine.RUnlock()
+
+	c.Created = time.Unix(c.Created, 0).Add(engine.DeltaDuration).Unix()
+	respContainer, err := engine.httpClient.Get("http://"+engine.Addr+"/v1/containers/"+c.ID+"?originaldata=true", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	defer respContainer.Close()
+	containerJSON := &types.ContainerJSON{}
+	if err := respContainer.JSON(containerJSON); err != nil {
+		return nil, err
+	}
+
+	config := &models.Container{}
+	config.Parse(containerJSON)
+	container.Config = &ContainerConfig{
+		Container: *config,
+	}
+
+	startAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.StartedAt)
+	finishedAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.FinishedAt)
+	containerJSON.State.StartedAt = startAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
+	containerJSON.State.FinishedAt = finishedAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
+	container.Info = *containerJSON
+	engine.Lock()
+	container.Container = c
+	containers[container.ID] = container
+	engine.Unlock()
+	return containers, nil
 }
