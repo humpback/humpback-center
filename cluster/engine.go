@@ -6,6 +6,7 @@ import "github.com/humpback/gounits/logger"
 import "github.com/humpback/humpback-agent/models"
 
 import (
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -78,7 +79,6 @@ func NewEngine(ip string) (*Engine, error) {
 		IP:         ipAddr.IP.String(),
 		Labels:     make(map[string]string),
 		containers: make(map[string]*Container),
-		httpClient: http.NewWithTimeout(requestTimeout),
 		state:      StateDisconnected,
 	}, nil
 }
@@ -89,6 +89,7 @@ func (engine *Engine) Open(addr string) {
 	engine.Addr = addr
 	if engine.state != StateHealthy {
 		engine.state = StateHealthy
+		engine.httpClient = http.NewWithTimeout(requestTimeout)
 		engine.stopCh = make(chan struct{})
 		logger.INFO("[#cluster#] engine %s open.", engine.IP)
 		go func() {
@@ -141,18 +142,23 @@ func (engine *Engine) State() string {
 
 func (engine *Engine) RefreshContainers() error {
 
-	logger.INFO("[#cluster#] engine %s refresh containers.", engine.Addr)
-	respContainers, err := engine.httpClient.Get("http://"+engine.Addr+"/v1/containers", nil, nil)
+	query := map[string][]string{"all": []string{"true"}}
+	respContainers, err := engine.httpClient.Get("http://"+engine.Addr+"/v1/containers", query, nil)
 	if err != nil {
 		return err
 	}
 
 	defer respContainers.Close()
+	if respContainers.StatusCode() != 200 {
+		return fmt.Errorf("GET(%d) %s", respContainers.StatusCode(), respContainers.RawURL())
+	}
+
 	dockerContainers := []types.Container{}
 	if err := respContainers.JSON(&dockerContainers); err != nil {
 		return err
 	}
 
+	logger.INFO("[#cluster#] engine %s refresh containers.", engine.Addr)
 	merged := make(map[string]*Container)
 	for _, c := range dockerContainers {
 		mergedUpdate, err := engine.updateContainer(c, merged)
@@ -209,18 +215,22 @@ func (engine *Engine) refreshLoop() {
 
 func (engine *Engine) updateSpecs() error {
 
-	logger.INFO("[#cluster#] engine %s update specs.", engine.Addr)
 	respSpecs, err := engine.httpClient.Get("http://"+engine.Addr+"/v1/dockerinfo", nil, nil)
 	if err != nil {
 		return err
 	}
 
 	defer respSpecs.Close()
+	if respSpecs.StatusCode() != 200 {
+		return fmt.Errorf("GET(%d) %s", respSpecs.StatusCode(), respSpecs.RawURL())
+	}
+
 	dockerInfo := &types.Info{}
 	if err := respSpecs.JSON(dockerInfo); err != nil {
 		return err
 	}
 
+	logger.INFO("[#cluster#] engine %s update specs.", engine.Addr)
 	engine.Lock()
 	defer engine.Unlock()
 	engine.ID = dockerInfo.ID
@@ -282,13 +292,17 @@ func (engine *Engine) updateContainer(c types.Container, containers map[string]*
 	}
 	engine.RUnlock()
 
-	c.Created = time.Unix(c.Created, 0).Add(engine.DeltaDuration).Unix()
-	respContainer, err := engine.httpClient.Get("http://"+engine.Addr+"/v1/containers/"+c.ID+"?originaldata=true", nil, nil)
+	query := map[string][]string{"originaldata": []string{"true"}}
+	respContainer, err := engine.httpClient.Get("http://"+engine.Addr+"/v1/containers/"+c.ID, query, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	defer respContainer.Close()
+	if respContainer.StatusCode() != 200 {
+		return nil, fmt.Errorf("GET(%d) %s", respContainer.StatusCode(), respContainer.RawURL())
+	}
+
 	containerJSON := &types.ContainerJSON{}
 	if err := respContainer.JSON(containerJSON); err != nil {
 		return nil, err
@@ -296,17 +310,20 @@ func (engine *Engine) updateContainer(c types.Container, containers map[string]*
 
 	config := &models.Container{}
 	config.Parse(containerJSON)
-	container.Config = &ContainerConfig{
+	containerConfig := &ContainerConfig{
 		Container: *config,
 	}
 
+	c.Created = time.Unix(c.Created, 0).Add(engine.DeltaDuration).Unix()
 	startAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.StartedAt)
 	finishedAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.FinishedAt)
 	containerJSON.State.StartedAt = startAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
 	containerJSON.State.FinishedAt = finishedAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
-	container.Info = *containerJSON
+
 	engine.Lock()
 	container.Container = c
+	container.Config = containerConfig
+	container.Info = *containerJSON
 	containers[container.ID] = container
 	engine.Unlock()
 	return containers, nil
