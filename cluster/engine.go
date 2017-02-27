@@ -121,8 +121,8 @@ func (engine *Engine) Close() {
 
 func (engine *Engine) IsHealthy() bool {
 
-	engine.Lock()
-	defer engine.Unlock()
+	engine.RLock()
+	defer engine.RUnlock()
 	return engine.state == StateHealthy
 }
 
@@ -135,9 +135,20 @@ func (engine *Engine) SetState(state engineState) {
 
 func (engine *Engine) State() string {
 
-	engine.Lock()
-	defer engine.Unlock()
+	engine.RLock()
+	defer engine.RUnlock()
 	return stateText[engine.state]
+}
+
+func (engine *Engine) Containers() Containers {
+
+	engine.RLock()
+	containers := Containers{}
+	for _, container := range engine.containers {
+		containers = append(containers, container)
+	}
+	engine.RUnlock()
+	return containers
 }
 
 func (engine *Engine) RefreshContainers() error {

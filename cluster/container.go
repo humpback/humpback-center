@@ -3,9 +3,11 @@ package cluster
 import "github.com/docker/docker/api/types"
 import units "github.com/docker/go-units"
 import "github.com/humpback/humpback-agent/models"
+import "github.com/humpback/gounits/rand"
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -22,6 +24,10 @@ type Container struct {
 	Engine *Engine
 }
 
+// Containers represents a list of containers
+type Containers []*Container
+
+// StateString returns a single string to describe state
 func StateString(state *types.ContainerState) string {
 
 	startedAt, _ := time.Parse(time.RFC3339Nano, state.StartedAt)
@@ -45,6 +51,7 @@ func StateString(state *types.ContainerState) string {
 	return "Exited"
 }
 
+// FullStateString returns readable description of the state
 func FullStateString(state *types.ContainerState) string {
 
 	startedAt, _ := time.Parse(time.RFC3339Nano, state.StartedAt)
@@ -84,4 +91,49 @@ func FullStateString(state *types.ContainerState) string {
 	}
 
 	return fmt.Sprintf("Exited (%d) %s ago", state.ExitCode, units.HumanDuration(time.Now().UTC().Sub(finishedAt)))
+}
+
+// Get returns a container using its ID or Name
+func (containers Containers) Get(IDOrName string) *Container {
+
+	if len(strings.TrimSpace(IDOrName)) == 0 {
+		return nil
+	}
+
+	for _, container := range containers {
+		if container.ID == IDOrName || rand.TruncateID(container.ID) == IDOrName {
+			return container
+		}
+	}
+
+	candidates := []*Container{}
+	for _, container := range containers {
+		found := false
+		for _, name := range container.Names {
+			if name == IDOrName || name == "/"+IDOrName || container.Engine.ID+name == IDOrName || container.Engine.Name+name == IDOrName {
+				found = true
+				break
+			}
+		}
+		if found {
+			candidates = append(candidates, container)
+		}
+	}
+
+	if size := len(candidates); size == 1 {
+		return candidates[0]
+	} else if size > 1 {
+		return nil
+	}
+
+	for _, container := range containers {
+		if strings.HasPrefix(container.ID, IDOrName) {
+			candidates = append(candidates, container)
+		}
+	}
+
+	if len(candidates) == 1 {
+		return candidates[0]
+	}
+	return nil
 }
