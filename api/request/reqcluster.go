@@ -127,6 +127,9 @@ Method:  POST
 Route:   /v1/cluster/containers
 */
 type ClusterCreateContainerRequest struct {
+	GroupID      string `json:"groupid"`
+	AllowMigrate bool   `json:"allowmigrate"`
+	Count        int    `json:"count"`
 	models.Container
 }
 

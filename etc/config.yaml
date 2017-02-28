@@ -1,9 +1,11 @@
 version: 1.0.0
 pidfile: ./humpback-center.pid
-discovery:
-    uris: zk://192.168.2.80:2181,192.168.2.81:2181,192.168.2.82:2181
-    cluster: humpback/center
-    heartbeat: 5s
+cluster:
+    opts: ["overcommit=0.10", "createretry=1"]
+    discovery:
+        uris: zk://192.168.2.80:2181,192.168.2.81:2181,192.168.2.82:2181
+        cluster: humpback/center
+        heartbeat: 5s
 storage:
     mongodb:
         uris: mongodb://192.168.2.80:27017,192.168.2.81:27017,192.168.2.82:27017/humpback?replicaSet=mgoCluster&maxPoolSize=10

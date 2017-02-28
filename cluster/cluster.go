@@ -4,6 +4,7 @@ import "github.com/humpback/discovery"
 import "github.com/humpback/discovery/backends"
 import "github.com/humpback/gounits/json"
 import "github.com/humpback/gounits/logger"
+import "github.com/humpback/gounits/system"
 import "github.com/humpback/humpback-center/cluster/types"
 
 import (
@@ -26,28 +27,57 @@ type Group struct {
 }
 
 // Cluster is exported
+// Discovery: discovery service
+// overcommitRatio: engine overcommit ratio, cpus & momery resources.
+// createRetry: create container retry count.
 // engines: map[ip]*Engine
 // groups:  map[groupid]*Group
 type Cluster struct {
 	sync.RWMutex
 	Discovery *discovery.Discovery
-	engines   map[string]*Engine
-	groups    map[string]*Group
-	stopCh    chan struct{}
+
+	overcommitRatio float64
+	createRetry     int64
+	engines         map[string]*Engine
+	groups          map[string]*Group
+	stopCh          chan struct{}
 }
 
 // NewCluster is exported
-func NewCluster(discovery *discovery.Discovery) (*Cluster, error) {
+func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*Cluster, error) {
 
 	if discovery == nil {
 		return nil, ErrClusterDiscoveryInvalid
 	}
 
+	overcommitratio := 0.05
+	if val, ret := driverOpts.Float("overcommit", ""); ret {
+		if val <= float64(-1) {
+			logger.WARN("[#cluster#] cluster overcommit should be larger than -1, %f is invalid.", val)
+		} else if val < float64(0) {
+			logger.WARN("[#cluster#] cluster -1 < overcommit < 0 will make center take less resource than docker engine offers. ")
+			overcommitratio = val
+		} else {
+			overcommitratio = val
+		}
+	}
+
+	createretry := int64(0)
+	if val, ret := driverOpts.Int("createretry", ""); ret {
+		if val < 0 {
+			logger.WARN("[#cluster#] cluster createretry should be larger than or equal to 0, %d is invalid.", val)
+		} else {
+			createretry = val
+		}
+	}
+
 	return &Cluster{
-		Discovery: discovery,
-		engines:   make(map[string]*Engine),
-		groups:    make(map[string]*Group),
-		stopCh:    make(chan struct{}),
+		Discovery:       discovery,
+		overcommitRatio: overcommitratio,
+		createRetry:     createretry,
+		engines:         make(map[string]*Engine),
+		groups:          make(map[string]*Group),
+		stopCh:          make(chan struct{}),
 	}, nil
 }
 
@@ -232,7 +262,7 @@ func (cluster *Cluster) addEngine(ip string) *Engine {
 	engine := cluster.GetEngine(ip)
 	if engine == nil {
 		var err error
-		if engine, err = NewEngine(ip); err != nil {
+		if engine, err = NewEngine(ip, cluster.overcommitRatio); err != nil {
 			logger.ERROR("[#cluster#] cluster add engine %s error:%s", ip, err.Error())
 			return nil
 		}

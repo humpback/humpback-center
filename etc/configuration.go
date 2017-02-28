@@ -13,12 +13,17 @@ type Configuration struct {
 	//base options
 	Version string `yaml:"version"`
 	PIDFile string `yaml:"pidfile"`
-	//service discovery options
-	Discovery struct {
-		URIs      string `yaml:"uris"`
-		Cluster   string `yaml:"cluster"`
-		Heartbeat string `yaml:"heartbeat"`
-	} `yaml:"discovery"`
+
+	Cluster struct {
+		//driver opts
+		DriverOpts []string `yaml:"opts"`
+		//service discovery opts
+		Discovery struct {
+			URIs      string `yaml:"uris"`
+			Cluster   string `yaml:"cluster"`
+			Heartbeat string `yaml:"heartbeat"`
+		} `yaml:"discovery"`
+	} `yaml:"cluster"`
 
 	//storage options
 	Storage struct {

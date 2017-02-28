@@ -62,13 +62,14 @@ type Engine struct {
 	Labels        map[string]string //docker daemon labels
 	DeltaDuration time.Duration     //humpback-center's systime - humpback-agent's systime
 
-	containers map[string]*Container
-	httpClient *http.HttpClient
-	stopCh     chan struct{}
-	state      engineState
+	overcommitRatio int64
+	containers      map[string]*Container
+	httpClient      *http.HttpClient
+	stopCh          chan struct{}
+	state           engineState
 }
 
-func NewEngine(ip string) (*Engine, error) {
+func NewEngine(ip string, overcommitRatio float64) (*Engine, error) {
 
 	ipAddr, err := net.ResolveIPAddr("ip4", ip)
 	if err != nil {
@@ -76,10 +77,11 @@ func NewEngine(ip string) (*Engine, error) {
 	}
 
 	return &Engine{
-		IP:         ipAddr.IP.String(),
-		Labels:     make(map[string]string),
-		containers: make(map[string]*Container),
-		state:      StateDisconnected,
+		IP:              ipAddr.IP.String(),
+		overcommitRatio: int64(overcommitRatio * 100),
+		Labels:          make(map[string]string),
+		containers:      make(map[string]*Container),
+		state:           StateDisconnected,
 	}, nil
 }
 
@@ -149,6 +151,42 @@ func (engine *Engine) Containers() Containers {
 	}
 	engine.RUnlock()
 	return containers
+}
+
+func (engine *Engine) UsedMemory() int64 {
+
+	var used int64
+	engine.RLock()
+	for _, c := range engine.containers {
+		used += c.Info.HostConfig.Memory
+	}
+	engine.RUnlock()
+	return used
+}
+
+func (engine *Engine) UsedCpus() int64 {
+
+	var used int64
+	engine.RLock()
+	for _, c := range engine.containers {
+		used += c.Info.HostConfig.CPUShares
+	}
+	engine.RUnlock()
+	return used
+}
+
+func (engine *Engine) TotalMemory() int64 {
+
+	engine.RLock()
+	defer engine.RUnlock()
+	return engine.Memory + (engine.Memory * engine.overcommitRatio / 100)
+}
+
+func (engine *Engine) TotalCpus() int64 {
+
+	engine.RLock()
+	defer engine.RUnlock()
+	return engine.Cpus + (engine.Cpus * engine.overcommitRatio / 100)
 }
 
 func (engine *Engine) RefreshContainers() error {
