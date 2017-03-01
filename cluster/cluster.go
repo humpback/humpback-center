@@ -6,18 +6,21 @@ import "github.com/humpback/gounits/json"
 import "github.com/humpback/gounits/logger"
 import "github.com/humpback/gounits/system"
 import "github.com/humpback/humpback-center/cluster/types"
+import "github.com/humpback/humpback-agent/models"
 
 import (
-	"errors"
+	"fmt"
 	"net"
 	"sync"
 )
 
-// Cluster errors define
-var (
-	//ErrClusterDiscoveryInvalid, discovery is nil.
-	ErrClusterDiscoveryInvalid = errors.New("cluster discovery invalid.")
-)
+// pendingContainer is exported
+type pendingContainer struct {
+	Name      string
+	Config    *models.Container
+	Instances int
+	Rollback  bool
+}
 
 // Group is exported
 // Servers: cluster server ips, correspond engines's key.
@@ -36,11 +39,12 @@ type Cluster struct {
 	sync.RWMutex
 	Discovery *discovery.Discovery
 
-	overcommitRatio float64
-	createRetry     int64
-	engines         map[string]*Engine
-	groups          map[string]*Group
-	stopCh          chan struct{}
+	overcommitRatio   float64
+	createRetry       int64
+	pendingContainers map[string]*pendingContainer
+	engines           map[string]*Engine
+	groups            map[string]*Group
+	stopCh            chan struct{}
 }
 
 // NewCluster is exported
@@ -72,12 +76,13 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 	}
 
 	return &Cluster{
-		Discovery:       discovery,
-		overcommitRatio: overcommitratio,
-		createRetry:     createretry,
-		engines:         make(map[string]*Engine),
-		groups:          make(map[string]*Group),
-		stopCh:          make(chan struct{}),
+		Discovery:         discovery,
+		overcommitRatio:   overcommitratio,
+		createRetry:       createretry,
+		pendingContainers: make(map[string]*pendingContainer),
+		engines:           make(map[string]*Engine),
+		groups:            make(map[string]*Group),
+		stopCh:            make(chan struct{}),
 	}, nil
 }
 
@@ -85,7 +90,7 @@ func (cluster *Cluster) Start() error {
 
 	logger.INFO("[#cluster#] cluster discovery watching...")
 	if cluster.Discovery != nil {
-		cluster.Discovery.Watch(cluster.stopCh, cluster.watchHandleFunc)
+		cluster.Discovery.Watch(cluster.stopCh, cluster.watchDiscoveryHandleFunc)
 		return nil
 	}
 	return ErrClusterDiscoveryInvalid
@@ -213,7 +218,7 @@ func (cluster *Cluster) RemoveGroup(groupid string) bool {
 	return true
 }
 
-func (cluster *Cluster) watchHandleFunc(added backends.Entries, removed backends.Entries, err error) {
+func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed backends.Entries, err error) {
 
 	if err != nil {
 		logger.ERROR("[#cluster#] cluster discovery watch error:%s", err.Error())
@@ -289,4 +294,40 @@ func (cluster *Cluster) removeEngine(ip string) *Engine {
 		logger.INFO("[#cluster#] cluster remove engine %p:%s", engine, engine.IP)
 	}
 	return engine
+}
+
+func (cluster *Cluster) CreateContainer(groupid string, instances int, config models.Container) (map[string]string, error) {
+
+	fmt.Println("##### " + groupid)
+	group := cluster.GetGroup(groupid)
+	if group == nil {
+		return nil, ErrClusterGroupNotFound
+	}
+
+	//check container name
+
+	return nil, nil
+
+	/*
+		//un check config container name
+		//instances create
+		//for{
+		//}
+
+		containerids := map[string]string{
+			"192.168.2.80": "a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4",
+			"192.168.2.81": "87f146ca6fcf591aaa888431f3ec0144f11ea9cc6c63c3ad9e3bf8cb507ebd6d",
+			"192.168.2.82": "a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4",
+		}
+		return containerids, nil
+	*/
+}
+
+func (cluster *Cluster) createContainer() {
+
+}
+
+func (cluster *Cluster) cehckContainerNameUniqueness(name string) bool {
+
+	return false
 }

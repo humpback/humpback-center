@@ -82,3 +82,36 @@ func NewClusterGroupEventResponse(message string) *ClusterGroupEventResponse {
 		Message: message,
 	}
 }
+
+/*
+ClusterCreateContainerResponse
+Method:  POST
+Route:   /v1/cluster/containers
+GroupID: cluster groupid
+Pairs:   create container for engine ip pair
+*/
+type CreatePair struct {
+	IP          string `json:"ip"`
+	ContainerID string `json:"containerid"`
+}
+
+type ClusterCreateContainerResponse struct {
+	GroupID string       `json:"groupid"`
+	Pairs   []CreatePair `json:"created"`
+}
+
+func NewClusterCreateContainerResponse(groupid string, pairs map[string]string) *ClusterCreateContainerResponse {
+
+	createpairs := []CreatePair{}
+	for ip, containerid := range pairs {
+		createpairs = append(createpairs, CreatePair{
+			IP:          ip,
+			ContainerID: containerid,
+		})
+	}
+
+	return &ClusterCreateContainerResponse{
+		GroupID: groupid,
+		Pairs:   createpairs,
+	}
+}

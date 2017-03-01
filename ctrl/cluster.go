@@ -7,6 +7,7 @@ import "github.com/humpback/humpback-center/api/request"
 import "github.com/humpback/humpback-center/cluster"
 import "github.com/humpback/humpback-center/etc"
 import "github.com/humpback/humpback-center/models"
+import agentmodels "github.com/humpback/humpback-agent/models"
 
 import (
 	"fmt"
@@ -151,4 +152,9 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 			c.Cluster.RemoveGroup(groupid)
 		}
 	}
+}
+
+func (c *Controller) CreateContainer(groupid string, instances int, config agentmodels.Container) (map[string]string, error) {
+
+	return c.Cluster.CreateContainer(groupid, instances, config)
 }

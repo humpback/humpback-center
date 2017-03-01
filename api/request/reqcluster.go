@@ -26,8 +26,8 @@ func ResolveClusterGroupRequest(r *http.Request) (*ClusterGroupRequest, error) {
 
 	vars := mux.Vars(r)
 	groupid := strings.TrimSpace(vars["groupid"])
-	if groupid == "" {
-		return nil, fmt.Errorf("request groupid invalid.")
+	if len(strings.TrimSpace(groupid)) == 0 {
+		return nil, fmt.Errorf("groupid invalid, can not be empty")
 	}
 
 	return &ClusterGroupRequest{
@@ -49,8 +49,8 @@ func ResolveClusterGroupEnginesRequest(r *http.Request) (*ClusterGroupEnginesReq
 
 	vars := mux.Vars(r)
 	groupid := strings.TrimSpace(vars["groupid"])
-	if groupid == "" {
-		return nil, fmt.Errorf("request groupid invalid.")
+	if len(strings.TrimSpace(groupid)) == 0 {
+		return nil, fmt.Errorf("groupid invalid, can not be empty")
 	}
 
 	return &ClusterGroupEnginesRequest{
@@ -72,8 +72,8 @@ func ResolveClusterEngineRequest(r *http.Request) (*ClusterEngineRequest, error)
 
 	vars := mux.Vars(r)
 	server := strings.TrimSpace(vars["server"])
-	if server == "" {
-		return nil, fmt.Errorf("request engine server invalid.")
+	if len(strings.TrimSpace(server)) == 0 {
+		return nil, fmt.Errorf("engine server invalid, can not be empty")
 	}
 
 	return &ClusterEngineRequest{
@@ -116,7 +116,7 @@ func ResolveClusterGroupEventRequest(r *http.Request) (*ClusterGroupEventRequest
 	if request.Event != GROUP_CREATE_EVENT &&
 		request.Event != GROUP_REMOVE_EVENT &&
 		request.Event != GROUP_CHANGE_EVENT {
-		return nil, fmt.Errorf("request group event invalid.")
+		return nil, fmt.Errorf("event type invalid.")
 	}
 	return request, nil
 }
@@ -125,12 +125,14 @@ func ResolveClusterGroupEventRequest(r *http.Request) (*ClusterGroupEventRequest
 ResolveClusterCreateContainerRequest
 Method:  POST
 Route:   /v1/cluster/containers
+GroupID:   cluster groupid
+Instances: create container instance count
+Config:    container config
 */
 type ClusterCreateContainerRequest struct {
-	GroupID      string `json:"groupid"`
-	AllowMigrate bool   `json:"allowmigrate"`
-	Count        int    `json:"count"`
-	models.Container
+	GroupID   string           `json:"groupid"`
+	Instances int              `json:"instances"`
+	Config    models.Container `json:"config"`
 }
 
 func ResolveClusterCreateContainerRequest(r *http.Request) (*ClusterCreateContainerRequest, error) {
@@ -144,5 +146,18 @@ func ResolveClusterCreateContainerRequest(r *http.Request) (*ClusterCreateContai
 	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
 		return nil, err
 	}
+
+	if len(strings.TrimSpace(request.GroupID)) == 0 {
+		return nil, fmt.Errorf("create container groupid invalid, can not be empty")
+	}
+
+	if request.Instances < 0 {
+		return nil, fmt.Errorf("create container instances invalid, should be larger than 0")
+	}
+
+	if len(strings.TrimSpace(request.Config.Name)) == 0 {
+		return nil, fmt.Errorf("create container name can not be empty")
+	}
+
 	return request, nil
 }
