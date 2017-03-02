@@ -156,5 +156,6 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 
 func (c *Controller) CreateContainer(groupid string, instances int, config agentmodels.Container) (map[string]string, error) {
 
-	return c.Cluster.CreateContainer(groupid, instances, config)
+	originalName := config.Name
+	return c.Cluster.CreateContainer(groupid, instances, originalName, config)
 }

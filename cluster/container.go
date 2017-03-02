@@ -11,6 +11,16 @@ import (
 	"time"
 )
 
+// Container name prefix
+const ContaierPrefix = "HumpbackC-"
+
+// CreateContainerResponse is exported
+type CreateContainerResponse struct {
+	ID       string   `json:"Id"`
+	Name     string   `json:"Name"`
+	Warnings []string `json:"Warnings"`
+}
+
 // ContainerConfig is exported
 type ContainerConfig struct {
 	models.Container

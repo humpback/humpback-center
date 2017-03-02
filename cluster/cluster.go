@@ -5,21 +5,21 @@ import "github.com/humpback/discovery/backends"
 import "github.com/humpback/gounits/json"
 import "github.com/humpback/gounits/logger"
 import "github.com/humpback/gounits/system"
-import "github.com/humpback/humpback-center/cluster/types"
 import "github.com/humpback/humpback-agent/models"
+import "github.com/humpback/humpback-center/cluster/types"
 
 import (
-	"fmt"
 	"net"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 )
 
 // pendingContainer is exported
 type pendingContainer struct {
-	Name      string
-	Config    *models.Container
-	Instances int
-	Rollback  bool
+	Name   string
+	Config models.Container
 }
 
 // Group is exported
@@ -57,9 +57,9 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 	overcommitratio := 0.05
 	if val, ret := driverOpts.Float("overcommit", ""); ret {
 		if val <= float64(-1) {
-			logger.WARN("[#cluster#] cluster overcommit should be larger than -1, %f is invalid.", val)
+			logger.WARN("[#cluster#] set overcommit should be larger than -1, %f is invalid.", val)
 		} else if val < float64(0) {
-			logger.WARN("[#cluster#] cluster -1 < overcommit < 0 will make center take less resource than docker engine offers. ")
+			logger.WARN("[#cluster#] opts, -1 < overcommit < 0 will make center take less resource than docker engine offers.")
 			overcommitratio = val
 		} else {
 			overcommitratio = val
@@ -69,7 +69,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 	createretry := int64(0)
 	if val, ret := driverOpts.Int("createretry", ""); ret {
 		if val < 0 {
-			logger.WARN("[#cluster#] cluster createretry should be larger than or equal to 0, %d is invalid.", val)
+			logger.WARN("[#cluster#] set createretry should be larger than or equal to 0, %d is invalid.", val)
 		} else {
 			createretry = val
 		}
@@ -88,7 +88,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 
 func (cluster *Cluster) Start() error {
 
-	logger.INFO("[#cluster#] cluster discovery watching...")
+	logger.INFO("[#cluster#] discovery service watching...")
 	if cluster.Discovery != nil {
 		cluster.Discovery.Watch(cluster.stopCh, cluster.watchDiscoveryHandleFunc)
 		return nil
@@ -99,7 +99,7 @@ func (cluster *Cluster) Start() error {
 func (cluster *Cluster) Stop() {
 
 	close(cluster.stopCh)
-	logger.INFO("[#cluster#] cluster discovery closed.")
+	logger.INFO("[#cluster#] discovery service closed.")
 }
 
 func (cluster *Cluster) GroupsEngineContains(engine *Engine) bool {
@@ -175,7 +175,7 @@ func (cluster *Cluster) SetGroup(groupid string, servers []string) {
 	if !ret {
 		group = &Group{ID: groupid, Servers: servers}
 		cluster.groups[groupid] = group
-		logger.INFO("[#cluster#] cluster create group %s(%d)", groupid, len(servers))
+		logger.INFO("[#cluster#] created group %s(%d)", groupid, len(servers))
 	} else {
 		origin := group.Servers
 		group.Servers = servers
@@ -191,7 +191,7 @@ func (cluster *Cluster) SetGroup(groupid string, servers []string) {
 				removes = append(removes, oldip)
 			}
 		}
-		logger.INFO("[#cluster#] cluster set group %s(%d)", groupid, len(servers))
+		logger.INFO("[#cluster#] changed group %s(%d)", groupid, len(servers))
 	}
 	cluster.Unlock()
 
@@ -210,10 +210,10 @@ func (cluster *Cluster) RemoveGroup(groupid string) bool {
 	defer cluster.Unlock()
 	group, ret := cluster.groups[groupid]
 	if !ret {
-		logger.WARN("[#cluster#] cluster remove group %s not found.", groupid)
+		logger.WARN("[#cluster#] remove group %s not found.", groupid)
 		return false
 	}
-	logger.INFO("[#cluster#] cluster remove group %s(%d)", groupid, len(group.Servers))
+	logger.INFO("[#cluster#] removed group %s(%d)", groupid, len(group.Servers))
 	delete(cluster.groups, groupid)
 	return true
 }
@@ -221,43 +221,43 @@ func (cluster *Cluster) RemoveGroup(groupid string) bool {
 func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed backends.Entries, err error) {
 
 	if err != nil {
-		logger.ERROR("[#cluster#] cluster discovery watch error:%s", err.Error())
+		logger.ERROR("[#cluster#] discovery service watch error:%s", err.Error())
 		return
 	}
 
-	logger.INFO("[#cluster#] cluster discovery watch handler removed:%d added:%d.", len(removed), len(added))
+	logger.INFO("[#cluster#] discovery service handlefunc removed:%d added:%d.", len(removed), len(added))
 	opts := &types.ClusterRegistOptions{}
 	for _, entry := range removed {
 		if err := json.DeCodeBufferToObject(entry.Data, opts); err != nil {
-			logger.ERROR("[#cluster#] cluster discovery handlefunc removed decode error: %s", err.Error())
+			logger.ERROR("[#cluster#] discovery service handlefunc removed decode error: %s", err.Error())
 			continue
 		}
 		ip, _, err := net.SplitHostPort(opts.Addr)
 		if err != nil {
-			logger.ERROR("[#cluster#] cluster discovery handlefunc removed resolve addr error: %s", err.Error())
+			logger.ERROR("[#cluster#] discovery service handlefunc removed resolve addr error: %s", err.Error())
 			continue
 		}
-		logger.INFO("[#cluster#] cluster discovery removed:%s %s.", entry.Key, opts.Addr)
+		logger.INFO("[#cluster#] discovery service removed:%s %s.", entry.Key, opts.Addr)
 		if engine := cluster.removeEngine(ip); engine != nil {
 			engine.Close()
-			logger.INFO("[#cluster#] cluster set engine %p:%s %s", engine, engine.IP, engine.State())
+			logger.INFO("[#cluster#] set engine %p:%s %s", engine, engine.IP, engine.State())
 		}
 	}
 
 	for _, entry := range added {
 		if err := json.DeCodeBufferToObject(entry.Data, opts); err != nil {
-			logger.ERROR("[#cluster#] cluster discovery handlefunc added decode error: %s", err.Error())
+			logger.ERROR("[#cluster#] discovery service handlefunc added decode error: %s", err.Error())
 			continue
 		}
 		ip, _, err := net.SplitHostPort(opts.Addr)
 		if err != nil {
-			logger.ERROR("[#cluster#] cluster discovery handlefunc added resolve addr error: %s", err.Error())
+			logger.ERROR("[#cluster#] discovery service handlefunc added resolve addr error: %s", err.Error())
 			continue
 		}
-		logger.INFO("[#cluster#] cluster discovery added:%s.", entry.Key)
+		logger.INFO("[#cluster#] discovery service added:%s.", entry.Key)
 		if engine := cluster.addEngine(ip); engine != nil {
 			engine.Open(opts.Addr)
-			logger.INFO("[#cluster#] cluster set engine %p:%s %s", engine, engine.IP, engine.State())
+			logger.INFO("[#cluster#] set engine %p:%s %s", engine, engine.IP, engine.State())
 		}
 	}
 }
@@ -268,13 +268,13 @@ func (cluster *Cluster) addEngine(ip string) *Engine {
 	if engine == nil {
 		var err error
 		if engine, err = NewEngine(ip, cluster.overcommitRatio); err != nil {
-			logger.ERROR("[#cluster#] cluster add engine %s error:%s", ip, err.Error())
+			logger.ERROR("[#cluster#] add engine %s error:%s", ip, err.Error())
 			return nil
 		}
 		cluster.Lock()
 		cluster.engines[ip] = engine
 		cluster.Unlock()
-		logger.INFO("[#cluster#] cluster add engine %p:%s", engine, ip)
+		logger.INFO("[#cluster#] add engine %p:%s", engine, ip)
 	}
 	return engine
 }
@@ -283,7 +283,7 @@ func (cluster *Cluster) removeEngine(ip string) *Engine {
 
 	engine := cluster.GetEngine(ip)
 	if engine == nil {
-		logger.WARN("[#cluster#] cluster remove engine, not found:%s", ip)
+		logger.WARN("[#cluster#] remove engine, not found:%s", ip)
 		return nil
 	}
 
@@ -291,43 +291,129 @@ func (cluster *Cluster) removeEngine(ip string) *Engine {
 		cluster.Lock()
 		delete(cluster.engines, engine.IP)
 		cluster.Unlock()
-		logger.INFO("[#cluster#] cluster remove engine %p:%s", engine, engine.IP)
+		logger.INFO("[#cluster#] remove engine %p:%s", engine, engine.IP)
 	}
 	return engine
 }
 
-func (cluster *Cluster) CreateContainer(groupid string, instances int, config models.Container) (map[string]string, error) {
+func (cluster *Cluster) CreateContainer(groupid string, instances int, name string, config models.Container) (map[string]string, error) {
 
-	fmt.Println("##### " + groupid)
-	group := cluster.GetGroup(groupid)
-	if group == nil {
+	engines := cluster.GetGroupEngines(groupid)
+	if engines == nil {
+		logger.ERROR("[#cluster#] create container error %s : %s", groupid, ErrClusterGroupNotFound)
 		return nil, ErrClusterGroupNotFound
 	}
 
-	//check container name
+	if len(engines) == 0 {
+		logger.ERROR("[#cluster#] create container error %s : %s", groupid, ErrClusterNoEngineAvailable)
+		return nil, ErrClusterNoEngineAvailable
+	}
 
-	return nil, nil
+	if ret := cluster.cehckContainerNameUniqueness(groupid, name); !ret { //ensure the name is available
+		logger.ERROR("[#cluster#] create container error %s : %s", groupid, ErrClusterCreateContainerNameConflict)
+		return nil, ErrClusterCreateContainerNameConflict
+	}
 
-	/*
-		//un check config container name
-		//instances create
-		//for{
-		//}
+	cluster.Lock()
+	cluster.pendingContainers[name] = &pendingContainer{
+		Name:   name,
+		Config: config,
+	}
+	cluster.Unlock()
 
-		containerids := map[string]string{
-			"192.168.2.80": "a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4",
-			"192.168.2.81": "87f146ca6fcf591aaa888431f3ec0144f11ea9cc6c63c3ad9e3bf8cb507ebd6d",
-			"192.168.2.82": "a3ed95caeb02ffe68cdd9fd84406680ae93d633cb16422d00e8a7c22955b46d4",
+	containerPairs := map[string]string{}
+	for i := 0; i < instances; i++ {
+		containerConfig := config
+		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_GROUP="+groupid)
+		containerConfig.Name = ContaierPrefix + name
+		if instances > 1 {
+			containerConfig.Name += "-" + strconv.Itoa(i+1)
 		}
-		return containerids, nil
-	*/
+		engine, container, err := cluster.createContainer(engines, containerConfig)
+		if err != nil {
+			logger.ERROR("[#cluster#] create container %s %s, error:%s", groupid, containerConfig.Name, err.Error())
+			if err == ErrClusterNoEngineAvailable {
+				//无法计算有效engine
+				continue
+			}
+			var retries int64
+			//考虑如果容器创建失败情况（409:名称冲突，考虑更换再试，500：尝试换一个目标engine）
+			for ; retries < cluster.createRetry && err != nil; retries++ {
+				engine, container, err = cluster.createContainer(engines, containerConfig)
+			}
+			if err != nil {
+				//考虑部分成功情况
+				continue
+			}
+		}
+		containerPairs[engine.IP] = container.ID
+	}
+
+	cluster.Lock()
+	delete(cluster.pendingContainers, name)
+	cluster.Unlock()
+	return containerPairs, nil
 }
 
-func (cluster *Cluster) createContainer() {
+func (cluster *Cluster) createContainer(engines []*Engine, config models.Container) (*Engine, *Container, error) {
 
+	selectEngines := cluster.selectEngines(engines, config)
+	if len(selectEngines) == 0 {
+		return nil, nil, ErrClusterNoEngineAvailable
+	}
+
+	engine := selectEngines[0]
+	container, err := engine.CreateContainer(config)
+	if err != nil {
+		return engine, nil, err
+	}
+	return engine, container, nil
 }
 
-func (cluster *Cluster) cehckContainerNameUniqueness(name string) bool {
+func (cluster *Cluster) selectEngines(engines []*Engine, config models.Container) []*Engine {
 
-	return false
+	selectEngines := []*Engine{}
+	for _, engine := range engines {
+		if engine.IsHealthy() {
+			selectEngines = append(selectEngines, engine)
+		}
+	}
+
+	if len(selectEngines) == 0 {
+		return selectEngines //return empty engines
+	}
+
+	weightedEngines := weightEngines(selectEngines, config)
+	if len(weightedEngines) > 0 {
+		sort.Sort(weightedEngines)
+		selectEngines = weightedEngines.Engines()
+	}
+	return selectEngines
+}
+
+func (cluster *Cluster) cehckContainerNameUniqueness(groupid string, name string) bool {
+
+	cluster.RLock()
+	defer cluster.RUnlock()
+	//check engines containers.
+	prefix := ContaierPrefix + name
+	engines := cluster.GetGroupEngines(groupid)
+	for _, engine := range engines {
+		containers := engine.Containers()
+		for _, container := range containers {
+			for _, cname := range container.Names {
+				if strings.HasPrefix(cname, prefix) || strings.HasPrefix(cname, "/"+prefix) {
+					return false
+				}
+			}
+		}
+	}
+
+	//check pending containers
+	for _, container := range cluster.pendingContainers {
+		if container.Name == name {
+			return false
+		}
+	}
+	return true
 }

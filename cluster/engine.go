@@ -6,7 +6,10 @@ import "github.com/humpback/gounits/logger"
 import "github.com/humpback/humpback-agent/models"
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"strings"
 	"sync"
@@ -105,7 +108,6 @@ func (engine *Engine) Open(addr string) {
 
 func (engine *Engine) Close() {
 
-	engine.cleanupContainers()
 	engine.Lock()
 	defer engine.Unlock()
 	if engine.state == StateDisconnected {
@@ -187,6 +189,46 @@ func (engine *Engine) TotalCpus() int64 {
 	engine.RLock()
 	defer engine.RUnlock()
 	return engine.Cpus + (engine.Cpus * engine.overcommitRatio / 100)
+}
+
+func (engine *Engine) CreateContainer(config models.Container) (*Container, error) {
+
+	buf := bytes.NewBuffer([]byte{})
+	if err := json.NewEncoder(buf).Encode(config); err != nil {
+		return nil, err
+	}
+
+	logger.INFO("[#cluster#] engine %s create container %s", engine.IP, config.Name)
+	header := map[string][]string{"Content-Type": []string{"application/json"}}
+	respCreated, err := engine.httpClient.Post("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	if err != nil {
+		return nil, err
+	}
+
+	defer respCreated.Close()
+	if respCreated.StatusCode() != 200 {
+		//409 Conflict
+		//500 Agent Create error
+		logger.ERROR("[#cluster#] engine %s create container %s error:%d", engine.IP, config.Name, respCreated.StatusCode())
+		return nil, fmt.Errorf("create container failure")
+	}
+
+	createContainerResponse := &CreateContainerResponse{}
+	if err := respCreated.JSON(createContainerResponse); err != nil {
+		return nil, err
+	}
+
+	if err := engine.RefreshContainers(); err != nil {
+		return nil, err
+	}
+
+	engine.RLock()
+	defer engine.RUnlock()
+	container, ret := engine.containers[createContainerResponse.ID]
+	if !ret {
+		return nil, fmt.Errorf("create container info not found")
+	}
+	return container, nil
 }
 
 func (engine *Engine) RefreshContainers() error {
@@ -285,7 +327,7 @@ func (engine *Engine) updateSpecs() error {
 	engine.ID = dockerInfo.ID
 	engine.Name = dockerInfo.Name
 	engine.Cpus = int64(dockerInfo.NCPU)
-	engine.Memory = dockerInfo.MemTotal
+	engine.Memory = int64(math.Ceil(float64(dockerInfo.MemTotal) / 1024.0 / 1024.0))
 
 	var delta time.Duration
 	if dockerInfo.SystemTime != "" {
@@ -363,6 +405,7 @@ func (engine *Engine) updateContainer(c types.Container, containers map[string]*
 		Container: *config,
 	}
 
+	containerJSON.HostConfig.CPUShares = containerJSON.HostConfig.CPUShares * engine.Cpus / 1024.0
 	c.Created = time.Unix(c.Created, 0).Add(engine.DeltaDuration).Unix()
 	startAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.StartedAt)
 	finishedAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.FinishedAt)
