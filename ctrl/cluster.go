@@ -154,8 +154,19 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 	}
 }
 
-func (c *Controller) CreateContainer(groupid string, instances int, config agentmodels.Container) (map[string]string, error) {
+func (c *Controller) CreateContainer(groupid string, instances int, config agentmodels.Container) ([]*models.CreateContainerPair, error) {
 
 	originalName := config.Name
-	return c.Cluster.CreateContainer(groupid, instances, originalName, config)
+	createContainers := []*models.CreateContainerPair{}
+	createdParis, err := c.Cluster.CreateContainer(groupid, instances, originalName, config)
+	if err != nil {
+		return nil, err
+	}
+	for containerid, ip := range createdParis {
+		createContainers = append(createContainers, &models.CreateContainerPair{
+			IP:          ip,
+			ContainerID: containerid,
+		})
+	}
+	return createContainers, nil
 }

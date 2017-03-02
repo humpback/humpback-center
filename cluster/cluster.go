@@ -321,7 +321,7 @@ func (cluster *Cluster) CreateContainer(groupid string, instances int, name stri
 	}
 	cluster.Unlock()
 
-	containerPairs := map[string]string{}
+	createdParis := map[string]string{}
 	for i := 0; i < instances; i++ {
 		containerConfig := config
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_GROUP="+groupid)
@@ -346,13 +346,16 @@ func (cluster *Cluster) CreateContainer(groupid string, instances int, name stri
 				continue
 			}
 		}
-		containerPairs[engine.IP] = container.ID
+		createdParis[container.ID] = engine.IP
 	}
 
 	cluster.Lock()
 	delete(cluster.pendingContainers, name)
 	cluster.Unlock()
-	return containerPairs, nil
+	if instances > 0 && len(createdParis) == 0 {
+		return nil, ErrClusterCreateContainerFailure
+	}
+	return createdParis, nil
 }
 
 func (cluster *Cluster) createContainer(engines []*Engine, config models.Container) (*Engine, *Container, error) {

@@ -90,28 +90,22 @@ Route:   /v1/cluster/containers
 GroupID: cluster groupid
 Pairs:   create container for engine ip pair
 */
-type CreatePair struct {
-	IP          string `json:"ip"`
-	ContainerID string `json:"containerid"`
-}
-
 type ClusterCreateContainerResponse struct {
-	GroupID string       `json:"groupid"`
-	Pairs   []CreatePair `json:"created"`
+	GroupID      string                        `json:"groupid"`
+	CreateResult string                        `json:"createresult"`
+	CreatePairs  []*models.CreateContainerPair `json:"createpairs"`
 }
 
-func NewClusterCreateContainerResponse(groupid string, pairs map[string]string) *ClusterCreateContainerResponse {
+func NewClusterCreateContainerResponse(groupid string, instances int, createparis []*models.CreateContainerPair) *ClusterCreateContainerResponse {
 
-	createpairs := []CreatePair{}
-	for ip, containerid := range pairs {
-		createpairs = append(createpairs, CreatePair{
-			IP:          ip,
-			ContainerID: containerid,
-		})
+	createresult := "created all"
+	if instances > len(createparis) {
+		createresult = "created partial"
 	}
 
 	return &ClusterCreateContainerResponse{
-		GroupID: groupid,
-		Pairs:   createpairs,
+		GroupID:      groupid,
+		CreateResult: createresult,
+		CreatePairs:  createparis,
 	}
 }
