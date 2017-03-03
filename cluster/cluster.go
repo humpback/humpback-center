@@ -80,14 +80,12 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 	if val, ret := driverOpts.String("cacheroot", ""); ret {
 		cacheRoot = val
 	}
-	configCache := NewContainerConfigCache(cacheRoot)
-	configCache.Init()
 
 	return &Cluster{
 		Discovery:         discovery,
-		configCache:       configCache,
 		overcommitRatio:   overcommitratio,
 		createRetry:       createretry,
+		configCache:       NewContainerConfigCache(cacheRoot),
 		pendingContainers: make(map[string]*pendingContainer),
 		engines:           make(map[string]*Engine),
 		groups:            make(map[string]*Group),
@@ -97,6 +95,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 
 func (cluster *Cluster) Start() error {
 
+	cluster.configCache.Init()
 	logger.INFO("[#cluster#] discovery service watching...")
 	if cluster.Discovery != nil {
 		cluster.Discovery.Watch(cluster.stopCh, cluster.watchDiscoveryHandleFunc)

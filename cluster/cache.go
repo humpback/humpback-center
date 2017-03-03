@@ -43,6 +43,10 @@ func NewContainerConfigCache(root string) *ContainerConfigCache {
 
 func (cache *ContainerConfigCache) Init() {
 
+	if len(cache.Pairs) > 0 {
+		cache.Pairs = make(map[string]*ContainerBaseConfig)
+	}
+
 	fis, err := ioutil.ReadDir(cache.Root)
 	if err != nil {
 		return
