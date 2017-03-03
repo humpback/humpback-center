@@ -330,28 +330,38 @@ func (cluster *Cluster) CreateContainer(groupid string, instances int, name stri
 	cluster.Unlock()
 
 	createdParis := map[string]string{}
+	ipList := []string{}
+	index := 1
 	for i := 0; i < instances; i++ {
 		containerConfig := config
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_GROUP="+groupid)
 		containerConfig.Name = ContaierPrefix + name
 		if instances > 1 {
-			containerConfig.Name += "-" + strconv.Itoa(i+1)
+			containerConfig.Name += "-" + strconv.Itoa(index)
 		}
-		engine, container, err := cluster.createContainer(engines, containerConfig)
+		engine, container, err := cluster.createContainer(engines, ipList, containerConfig)
 		if err != nil {
 			logger.ERROR("[#cluster#] create container %s %s, error:%s", groupid, containerConfig.Name, err.Error())
 			if err == ErrClusterNoEngineAvailable { //无法计算有效engine
 				continue
 			}
+			if engine != nil {
+				ipList = append(ipList, engine.IP)
+			}
 			var retries int64
 			//考虑如果容器创建失败情况（409:名称冲突，考虑更换再试，500：尝试换一个目标engine）
 			for ; retries < cluster.createRetry && err != nil; retries++ {
-				engine, container, err = cluster.createContainer(engines, containerConfig)
+				engine, container, err = cluster.createContainer(engines, ipList, containerConfig)
+				if engine != nil {
+					ipList = append(ipList, engine.IP)
+				}
 			}
 			if err != nil { //重试后创建失败，创建部分成功
 				continue
 			}
 		}
+		index++
+		ipList = append(ipList, engine.IP)
 		createdParis[container.ID] = engine.IP
 		cluster.configCache.Write(container.ID, groupid, name, &containerConfig) //add to cache
 	}
@@ -365,9 +375,9 @@ func (cluster *Cluster) CreateContainer(groupid string, instances int, name stri
 	return createdParis, nil
 }
 
-func (cluster *Cluster) createContainer(engines []*Engine, config models.Container) (*Engine, *Container, error) {
+func (cluster *Cluster) createContainer(engines []*Engine, ipList []string, config models.Container) (*Engine, *Container, error) {
 
-	selectEngines := cluster.selectEngines(engines, config)
+	selectEngines := cluster.selectEngines(engines, ipList, config)
 	if len(selectEngines) == 0 {
 		return nil, nil, ErrClusterNoEngineAvailable
 	}
@@ -380,7 +390,7 @@ func (cluster *Cluster) createContainer(engines []*Engine, config models.Contain
 	return engine, container, nil
 }
 
-func (cluster *Cluster) selectEngines(engines []*Engine, config models.Container) []*Engine {
+func (cluster *Cluster) selectEngines(engines []*Engine, ipList []string, config models.Container) []*Engine {
 
 	selectEngines := []*Engine{}
 	for _, engine := range engines {
@@ -397,6 +407,13 @@ func (cluster *Cluster) selectEngines(engines []*Engine, config models.Container
 	if len(weightedEngines) > 0 {
 		sort.Sort(weightedEngines)
 		selectEngines = weightedEngines.Engines()
+	}
+
+	if len(selectEngines) > 0 && len(ipList) > 0 {
+		filterEngines := filterEnginesIPList(selectEngines, ipList)
+		if len(filterEngines) >= 0 {
+			selectEngines = filterEngines
+		}
 	}
 	return selectEngines
 }
