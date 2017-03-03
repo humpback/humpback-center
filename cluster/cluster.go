@@ -9,11 +9,13 @@ import "github.com/humpback/humpback-agent/models"
 import "github.com/humpback/humpback-center/cluster/types"
 
 import (
+	"math/rand"
 	"net"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // pendingContainer is exported
@@ -41,6 +43,7 @@ type Cluster struct {
 
 	overcommitRatio   float64
 	createRetry       int64
+	randSeed          *rand.Rand
 	configCache       *ContainerConfigCache
 	pendingContainers map[string]*pendingContainer
 	engines           map[string]*Engine
@@ -85,6 +88,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		Discovery:         discovery,
 		overcommitRatio:   overcommitratio,
 		createRetry:       createretry,
+		randSeed:          rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
 		configCache:       NewContainerConfigCache(cacheRoot),
 		pendingContainers: make(map[string]*pendingContainer),
 		engines:           make(map[string]*Engine),
@@ -410,9 +414,14 @@ func (cluster *Cluster) selectEngines(engines []*Engine, ipList []string, config
 	}
 
 	if len(selectEngines) > 0 && len(ipList) > 0 {
-		filterEngines := filterEnginesIPList(selectEngines, ipList)
-		if len(filterEngines) >= 0 {
-			selectEngines = filterEngines
+		filterEngines := filterIPList(selectEngines, ipList)
+		if len(filterEngines) > 0 {
+			return filterEngines
+		} else {
+			for i := len(selectEngines) - 1; i > 0; i-- {
+				j := cluster.randSeed.Intn(i + 1)
+				selectEngines[i], selectEngines[j] = selectEngines[j], selectEngines[i]
+			}
 		}
 	}
 	return selectEngines

@@ -1,18 +1,23 @@
 package cluster
 
-func filterEnginesIPList(engines []*Engine, ipList []string) []*Engine {
+func filterIPList(engines []*Engine, ipList []string) []*Engine {
 
 	if len(ipList) == 0 {
 		return engines
 	}
 
-	for _, ip := range ipList {
-		for i, engine := range engines {
-			if ip == engine.IP {
-				engines = append(engines[:i], engines[i+1:]...)
+	p := []*Engine{}
+	for _, engine := range engines {
+		found := false
+		for _, ip := range ipList {
+			if engine.IP == ip {
+				found = true
 				break
 			}
 		}
+		if !found {
+			p = append(p, engine)
+		}
 	}
-	return engines
+	return p
 }

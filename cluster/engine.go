@@ -211,7 +211,7 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 	if respCreated.StatusCode() != 200 {
 		//409 Conflict
 		//500 Agent Create error
-		logger.ERROR("[#cluster#] engine %s create container %s error:%d", engine.IP, config.Name, respCreated.StatusCode())
+		logger.ERROR("[#cluster#] engine %s create container %s error:%d %s", engine.IP, config.Name, respCreated.StatusCode(), respCreated.String())
 		return nil, fmt.Errorf("create container failure")
 	}
 
