@@ -41,6 +41,7 @@ type Cluster struct {
 
 	overcommitRatio   float64
 	createRetry       int64
+	configCache       *ContainerConfigCache
 	pendingContainers map[string]*pendingContainer
 	engines           map[string]*Engine
 	groups            map[string]*Group
@@ -75,8 +76,16 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		}
 	}
 
+	cacheRoot := ""
+	if val, ret := driverOpts.String("cacheroot", ""); ret {
+		cacheRoot = val
+	}
+	configCache := NewContainerConfigCache(cacheRoot)
+	configCache.Init()
+
 	return &Cluster{
 		Discovery:         discovery,
+		configCache:       configCache,
 		overcommitRatio:   overcommitratio,
 		createRetry:       createretry,
 		pendingContainers: make(map[string]*pendingContainer),
@@ -240,7 +249,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		logger.INFO("[#cluster#] discovery service removed:%s %s.", entry.Key, opts.Addr)
 		if engine := cluster.removeEngine(ip); engine != nil {
 			engine.Close()
-			logger.INFO("[#cluster#] set engine %p:%s %s", engine, engine.IP, engine.State())
+			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
 		}
 	}
 
@@ -257,7 +266,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		logger.INFO("[#cluster#] discovery service added:%s.", entry.Key)
 		if engine := cluster.addEngine(ip); engine != nil {
 			engine.Open(opts.Addr)
-			logger.INFO("[#cluster#] set engine %p:%s %s", engine, engine.IP, engine.State())
+			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
 		}
 	}
 }
@@ -267,14 +276,14 @@ func (cluster *Cluster) addEngine(ip string) *Engine {
 	engine := cluster.GetEngine(ip)
 	if engine == nil {
 		var err error
-		if engine, err = NewEngine(ip, cluster.overcommitRatio); err != nil {
+		if engine, err = NewEngine(ip, cluster.overcommitRatio, cluster.configCache); err != nil {
 			logger.ERROR("[#cluster#] add engine %s error:%s", ip, err.Error())
 			return nil
 		}
 		cluster.Lock()
 		cluster.engines[ip] = engine
 		cluster.Unlock()
-		logger.INFO("[#cluster#] add engine %p:%s", engine, ip)
+		logger.INFO("[#cluster#] add engine %s", ip)
 	}
 	return engine
 }
@@ -291,7 +300,7 @@ func (cluster *Cluster) removeEngine(ip string) *Engine {
 		cluster.Lock()
 		delete(cluster.engines, engine.IP)
 		cluster.Unlock()
-		logger.INFO("[#cluster#] remove engine %p:%s", engine, engine.IP)
+		logger.INFO("[#cluster#] remove engine %s", engine.IP)
 	}
 	return engine
 }
@@ -332,8 +341,7 @@ func (cluster *Cluster) CreateContainer(groupid string, instances int, name stri
 		engine, container, err := cluster.createContainer(engines, containerConfig)
 		if err != nil {
 			logger.ERROR("[#cluster#] create container %s %s, error:%s", groupid, containerConfig.Name, err.Error())
-			if err == ErrClusterNoEngineAvailable {
-				//无法计算有效engine
+			if err == ErrClusterNoEngineAvailable { //无法计算有效engine
 				continue
 			}
 			var retries int64
@@ -341,12 +349,12 @@ func (cluster *Cluster) CreateContainer(groupid string, instances int, name stri
 			for ; retries < cluster.createRetry && err != nil; retries++ {
 				engine, container, err = cluster.createContainer(engines, containerConfig)
 			}
-			if err != nil {
-				//考虑部分成功情况
+			if err != nil { //重试后创建失败，创建部分成功
 				continue
 			}
 		}
 		createdParis[container.ID] = engine.IP
+		cluster.configCache.Write(container.ID, groupid, name, &containerConfig) //add to cache
 	}
 
 	cluster.Lock()

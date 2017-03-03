@@ -66,13 +66,14 @@ type Engine struct {
 	DeltaDuration time.Duration     //humpback-center's systime - humpback-agent's systime
 
 	overcommitRatio int64
+	configCache     *ContainerConfigCache
 	containers      map[string]*Container
 	httpClient      *http.HttpClient
 	stopCh          chan struct{}
 	state           engineState
 }
 
-func NewEngine(ip string, overcommitRatio float64) (*Engine, error) {
+func NewEngine(ip string, overcommitRatio float64, configCache *ContainerConfigCache) (*Engine, error) {
 
 	ipAddr, err := net.ResolveIPAddr("ip4", ip)
 	if err != nil {
@@ -84,6 +85,7 @@ func NewEngine(ip string, overcommitRatio float64) (*Engine, error) {
 		overcommitRatio: int64(overcommitRatio * 100),
 		Labels:          make(map[string]string),
 		containers:      make(map[string]*Container),
+		configCache:     configCache,
 		state:           StateDisconnected,
 	}, nil
 }
@@ -413,6 +415,7 @@ func (engine *Engine) updateContainer(c types.Container, containers map[string]*
 	containerJSON.State.FinishedAt = finishedAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
 
 	engine.Lock()
+	container.BaseConfig = engine.configCache.Get(c.ID)
 	container.Container = c
 	container.Config = containerConfig
 	container.Info = *containerJSON

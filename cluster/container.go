@@ -29,9 +29,10 @@ type ContainerConfig struct {
 // Container is exported
 type Container struct {
 	types.Container
-	Config *ContainerConfig
-	Info   types.ContainerJSON
-	Engine *Engine
+	BaseConfig *ContainerBaseConfig
+	Config     *ContainerConfig
+	Info       types.ContainerJSON
+	Engine     *Engine
 }
 
 // Containers represents a list of containers
