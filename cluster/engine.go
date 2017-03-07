@@ -18,7 +18,7 @@ import (
 
 const (
 	// timeout for request send out to the engine
-	requestTimeout = 10 * time.Second
+	requestTimeout = 15 * time.Second
 	// engine refresh loop interval
 	refreshInterval = 20 * time.Second
 	// threshold of delta duration between humpback-center and humpback-agent's systime
@@ -110,6 +110,7 @@ func (engine *Engine) Open(addr string) {
 
 func (engine *Engine) Close() {
 
+	engine.cleanupContainers()
 	engine.Lock()
 	defer engine.Unlock()
 	if engine.state == StateDisconnected {
@@ -233,6 +234,49 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 	return container, nil
 }
 
+/*
+func (engine *Engine) RemoveContainer(containerid string, name string) error {
+
+	p := struct {
+		Action    string `json:"Action"`
+		Container string `json:"Container"`
+	}{
+		Action:    "stop",
+		Container: name,
+	}
+
+	buf := bytes.NewBuffer([]byte{})
+	if err := json.NewEncoder(buf).Encode(p); err != nil {
+		return err
+	}
+	header := map[string][]string{"Content-Type": []string{"application/json"}}
+	respStop, err := engine.httpClient.Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	if err != nil {
+		return err
+	}
+	defer respStop.Close()
+	if respStop.StatusCode() != 200 {
+		logger.ERROR("[#cluster#] engine %s stop container %s error:%d %s", engine.IP, name, respStop.StatusCode(), respStop.String())
+		return fmt.Errorf("stop container failure")
+	}
+
+	respRemoved, err := engine.httpClient.Delete("http://"+engine.Addr+"/v1/containers/"+containerid, nil, nil)
+	if err != nil {
+		return err
+	}
+
+	defer respRemoved.Close()
+	if respRemoved.StatusCode() != 200 {
+		logger.ERROR("[#cluster#] engine %s remove container %s error:%d %s", engine.IP, containerid, respRemoved.StatusCode(), respRemoved.String())
+		return fmt.Errorf("remove container failure")
+	}
+
+	engine.Lock()
+	delete(engine.containers, containerid)
+	engine.Unlock()
+	return nil
+}
+*/
 func (engine *Engine) RefreshContainers() error {
 
 	query := map[string][]string{"all": []string{"true"}}
@@ -251,7 +295,7 @@ func (engine *Engine) RefreshContainers() error {
 		return err
 	}
 
-	logger.INFO("[#cluster#] engine %s refresh containers.", engine.Addr)
+	//logger.INFO("[#cluster#] engine %s refresh containers.", engine.Addr)
 	merged := make(map[string]*Container)
 	for _, c := range dockerContainers {
 		mergedUpdate, err := engine.updateContainer(c, merged)
@@ -323,7 +367,7 @@ func (engine *Engine) updateSpecs() error {
 		return err
 	}
 
-	logger.INFO("[#cluster#] engine %s update specs.", engine.Addr)
+	//logger.INFO("[#cluster#] engine %s update specs.", engine.Addr)
 	engine.Lock()
 	defer engine.Unlock()
 	engine.ID = dockerInfo.ID

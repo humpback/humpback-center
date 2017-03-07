@@ -19,6 +19,7 @@ type ContainerBaseConfig struct {
 	ID      string            `json:"id"`
 	Name    string            `json:"name"`
 	GroupID string            `json:"groupid"`
+	IP      string            `json:"ip"`
 	Config  *models.Container `json:"config"`
 }
 
@@ -81,7 +82,7 @@ func (cache *ContainerConfigCache) Get(containerid string) *ContainerBaseConfig 
 	return baseConfig
 }
 
-func (cache *ContainerConfigCache) Write(containerid string, groupid string, name string, config *models.Container) error {
+func (cache *ContainerConfigCache) Set(containerid string, groupid string, ip string, name string, config *models.Container) error {
 
 	cache.Lock()
 	defer cache.Unlock()
@@ -100,6 +101,7 @@ func (cache *ContainerConfigCache) Write(containerid string, groupid string, nam
 		ID:      containerid,
 		Name:    name,
 		GroupID: groupid,
+		IP:      ip,
 		Config:  config,
 	}
 

@@ -251,7 +251,9 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		}
 		logger.INFO("[#cluster#] discovery service removed:%s %s.", entry.Key, opts.Addr)
 		if engine := cluster.removeEngine(ip); engine != nil {
+			//containers := engine.Containers()
 			engine.Close()
+			//cluster.migrateContainers(engine, containers)
 			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
 		}
 	}
@@ -269,6 +271,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		logger.INFO("[#cluster#] discovery service added:%s.", entry.Key)
 		if engine := cluster.addEngine(ip); engine != nil {
 			engine.Open(opts.Addr)
+			//cluster.recoverContainers(engine)
 			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
 		}
 	}
@@ -367,7 +370,7 @@ func (cluster *Cluster) CreateContainer(groupid string, instances int, name stri
 		index++
 		ipList = append(ipList, engine.IP)
 		createdParis[container.ID] = engine.IP
-		cluster.configCache.Write(container.ID, groupid, name, &containerConfig) //add to cache
+		cluster.configCache.Set(container.ID, groupid, engine.IP, name, &containerConfig) //add to cache
 	}
 
 	cluster.Lock()
@@ -453,3 +456,71 @@ func (cluster *Cluster) cehckContainerNameUniqueness(groupid string, name string
 	}
 	return true
 }
+
+/*
+func (cluster *Cluster) migrateContainers(engine *Engine, containers Containers) {
+
+	//分配的原始engine记录在baseConfig中，当原始engine启动后，需删除上次迁移成功的engine上的容器.
+	//非原始engine启动，需要还原？或不做迁移,防止抖动.
+	//迁移流程会触发多协程并发掉线情况，可考虑做一个迁移任务池，逐步处理迁移工作.
+	// add to container pool, 迁移池考虑按groupid分组.
+	// go migrate containers.
+	// 掉线节点考虑将容器加入池中，上线节点先启动本地，然后若池中存在则删除，放弃迁移.
+	logger.INFO("[#cluster#] migrate containers %s", engine.IP)
+	for _, container := range containers {
+		if container.BaseConfig == nil {
+			continue
+		}
+		groupid := container.BaseConfig.GroupID
+		engines := cluster.GetGroupEngines(groupid)
+		if engines == nil || len(engines) == 0 {
+			continue
+		}
+		ipList := []string{}
+		_, c, err := cluster.createContainer(engines, ipList, *container.BaseConfig.Config)
+		if err != nil {
+			continue
+		}
+		if err := cluster.configCache.Set(c.ID, groupid, container.BaseConfig.IP, container.BaseConfig.Name, container.BaseConfig.Config); err != nil {
+			logger.INFO("[#cluster#] config cache error:%s", err.Error())
+		}
+		logger.INFO("[#cluster#] migrate successed.")
+	}
+}
+
+func (cluster *Cluster) recoverContainers(engine *Engine) {
+
+	logger.INFO("[#cluster#] recover containers %s", engine.IP)
+	time.Sleep(time.Second * 3)
+	containers := engine.Containers()
+	for _, container := range containers {
+		if container.BaseConfig == nil {
+			continue
+		}
+
+		engines := cluster.GetGroupEngines(container.BaseConfig.GroupID)
+		if engines == nil || len(engines) == 0 {
+			continue
+		}
+
+		for _, e := range engines {
+			if e.IP != engine.IP {
+				cs := e.Containers()
+				for _, c := range cs {
+					if c.BaseConfig != nil && c.BaseConfig.Config.Name == container.BaseConfig.Config.Name {
+						if container.BaseConfig.IP == engine.IP {
+							e.RemoveContainer(c.BaseConfig.ID, c.BaseConfig.Config.Name)
+							cluster.configCache.Remove(c.BaseConfig.ID)
+						} else {
+							engine.RemoveContainer(container.BaseConfig.ID, container.BaseConfig.Name)
+							cluster.configCache.Remove(container.BaseConfig.ID)
+						}
+
+					}
+				}
+			}
+		}
+	}
+	logger.INFO("[#cluster#] recover containers successed")
+}
+*/
