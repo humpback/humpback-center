@@ -21,7 +21,7 @@ var routes = map[string]map[string]handler{
 	},
 	"POST": {
 		"/v1/cluster/groups/event":      postClusterGroupEvent,
-		"/v1/cluster/containers":        postClusterCreateContainer,
+		"/v1/cluster/containers":        postClusterCreateContainers,
 		"/v1/repository/images/migrate": postRepositoryImagesMigrate,
 	},
 	"DELETE": {

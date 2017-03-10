@@ -114,7 +114,7 @@ func postClusterGroupEvent(c *Context) error {
 	return c.JSON(http.StatusAccepted, result)
 }
 
-func postClusterCreateContainer(c *Context) error {
+func postClusterCreateContainers(c *Context) error {
 
 	result := response.ResponseResult{ResponseID: c.ID}
 	req, err := request.ResolveClusterCreateContainerRequest(c.Request())
@@ -125,7 +125,7 @@ func postClusterCreateContainer(c *Context) error {
 	}
 
 	logger.INFO("[#api#] %s resolve createcontainer request successed. %+v", c.ID, req)
-	createdParis, err := c.Controller.CreateContainer(req.GroupID, req.Instances, req.Config)
+	createdParis, err := c.Controller.CreateClusterContainers(req.GroupID, req.Instances, req.Config)
 	if err != nil {
 		logger.ERROR("[#api#] %s createcontainer to group %s error: %s", c.ID, req.GroupID, err.Error())
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())

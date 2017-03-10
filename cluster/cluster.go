@@ -13,15 +13,15 @@ import (
 	"net"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
 
 // pendingContainer is exported
 type pendingContainer struct {
-	Name   string
-	Config models.Container
+	GroupID string
+	Name    string
+	Config  models.Container
 }
 
 // Group is exported
@@ -35,6 +35,8 @@ type Group struct {
 // Discovery: discovery service
 // overcommitRatio: engine overcommit ratio, cpus & momery resources.
 // createRetry: create container retry count.
+// configCache: container config metadata cache.
+// pendingContainers: createing containers.
 // engines: map[ip]*Engine
 // groups:  map[groupid]*Group
 type Cluster struct {
@@ -44,7 +46,7 @@ type Cluster struct {
 	overcommitRatio   float64
 	createRetry       int64
 	randSeed          *rand.Rand
-	configCache       *ContainerConfigCache
+	configCache       *ContainersConfigCache
 	pendingContainers map[string]*pendingContainer
 	engines           map[string]*Engine
 	groups            map[string]*Group
@@ -84,12 +86,17 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		cacheRoot = val
 	}
 
+	configCache, err := NewContainersConfigCache(cacheRoot)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Cluster{
 		Discovery:         discovery,
 		overcommitRatio:   overcommitratio,
 		createRetry:       createretry,
 		randSeed:          rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
-		configCache:       NewContainerConfigCache(cacheRoot),
+		configCache:       configCache,
 		pendingContainers: make(map[string]*pendingContainer),
 		engines:           make(map[string]*Engine),
 		groups:            make(map[string]*Group),
@@ -311,7 +318,13 @@ func (cluster *Cluster) removeEngine(ip string) *Engine {
 	return engine
 }
 
-func (cluster *Cluster) CreateContainer(groupid string, instances int, name string, config models.Container) (map[string]string, error) {
+// SetContainers is exported
+func (cluster *Cluster) SetContainers(groupid string, metaid string, instances int) {
+	//在现有metaid上调整实例数(增加或删除实例), metaid不会变，配置不会变
+}
+
+// CreateContainers is exported
+func (cluster *Cluster) CreateContainers(groupid string, instances int, config models.Container) (map[string]string, error) {
 
 	engines := cluster.GetGroupEngines(groupid)
 	if engines == nil {
@@ -324,57 +337,54 @@ func (cluster *Cluster) CreateContainer(groupid string, instances int, name stri
 		return nil, ErrClusterNoEngineAvailable
 	}
 
-	if ret := cluster.cehckContainerNameUniqueness(groupid, name); !ret { //ensure the name is available
+	if ret := cluster.cehckContainerNameUniqueness(groupid, config.Name); !ret {
 		logger.ERROR("[#cluster#] create container error %s : %s", groupid, ErrClusterCreateContainerNameConflict)
 		return nil, ErrClusterCreateContainerNameConflict
 	}
 
 	cluster.Lock()
-	cluster.pendingContainers[name] = &pendingContainer{
-		Name:   name,
-		Config: config,
+	cluster.pendingContainers[config.Name] = &pendingContainer{
+		GroupID: groupid,
+		Name:    config.Name,
+		Config:  config,
 	}
 	cluster.Unlock()
 
+	metaid := cluster.configCache.MakeUniqueMetaID()
 	createdParis := map[string]string{}
 	ipList := []string{}
 	index := 1
-	for i := 0; i < instances; i++ {
+	for ; instances > 0; instances-- {
 		containerConfig := config
-		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_GROUP="+groupid)
-		containerConfig.Name = ContaierPrefix + name
-		if instances > 1 {
-			containerConfig.Name += "-" + strconv.Itoa(index)
-		}
+		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_GROUPID="+groupid, "HUMPBACK_CLUSTER_METAID="+metaid)
+		containerConfig.Name = groupid[:8] + "-" + containerConfig.Name + "-" + strconv.Itoa(index)
 		engine, container, err := cluster.createContainer(engines, ipList, containerConfig)
 		if err != nil {
 			logger.ERROR("[#cluster#] create container %s %s, error:%s", groupid, containerConfig.Name, err.Error())
-			if err == ErrClusterNoEngineAvailable { //无法计算有效engine
+			if err == ErrClusterNoEngineAvailable {
 				continue
 			}
-			if engine != nil {
-				ipList = append(ipList, engine.IP)
-			}
+			ipList = filterAppendIPList(engine, ipList)
 			var retries int64
-			//考虑如果容器创建失败情况（409:名称冲突，考虑更换再试，500：尝试换一个目标engine）
 			for ; retries < cluster.createRetry && err != nil; retries++ {
 				engine, container, err = cluster.createContainer(engines, ipList, containerConfig)
-				if engine != nil {
-					ipList = append(ipList, engine.IP)
-				}
+				ipList = filterAppendIPList(engine, ipList)
 			}
-			if err != nil { //重试后创建失败，创建部分成功
+			if err != nil {
 				continue
 			}
 		}
 		index++
+		ipList = filterAppendIPList(engine, ipList)
 		ipList = append(ipList, engine.IP)
-		createdParis[container.ID] = engine.IP
-		cluster.configCache.Set(container.ID, groupid, engine.IP, name, &containerConfig) //add to cache
+		createdParis[container.Info.ID] = engine.IP
+		containerConfig.ID = container.Info.ID
+		baseConfig := &ContainerBaseConfig{Container: containerConfig}
+		cluster.configCache.SetContainerBaseConfig(metaid, groupid, config.Name, baseConfig)
 	}
 
 	cluster.Lock()
-	delete(cluster.pendingContainers, name)
+	delete(cluster.pendingContainers, config.Name)
 	cluster.Unlock()
 	if instances > 0 && len(createdParis) == 0 {
 		return nil, ErrClusterCreateContainerFailure
@@ -434,25 +444,14 @@ func (cluster *Cluster) cehckContainerNameUniqueness(groupid string, name string
 
 	cluster.RLock()
 	defer cluster.RUnlock()
-	//check engines containers.
-	prefix := ContaierPrefix + name
-	engines := cluster.GetGroupEngines(groupid)
-	for _, engine := range engines {
-		containers := engine.Containers()
-		for _, container := range containers {
-			for _, cname := range container.Names {
-				if strings.HasPrefix(cname, prefix) || strings.HasPrefix(cname, "/"+prefix) {
-					return false
-				}
-			}
-		}
-	}
-
-	//check pending containers
-	for _, container := range cluster.pendingContainers {
-		if container.Name == name {
+	for _, pendingContainer := range cluster.pendingContainers {
+		if pendingContainer.GroupID == groupid && pendingContainer.Name == name {
 			return false
 		}
+	}
+	metaData := cluster.configCache.GetMetaDataOfName(name)
+	if metaData != nil && metaData.GroupID == groupid {
+		return false
 	}
 	return true
 }

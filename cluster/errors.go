@@ -11,7 +11,7 @@ var (
 	//cluster group no docker engine available
 	ErrClusterNoEngineAvailable = errors.New("cluster no docker-engine available")
 	//create container name conflict
-	ErrClusterCreateContainerNameConflict = errors.New("create container name conflict, this name already exists")
+	ErrClusterCreateContainerNameConflict = errors.New("cluster create container name conflict, this cluster already exists")
 	//create container all failure
-	ErrClusterCreateContainerFailure = errors.New("create container failure")
+	ErrClusterCreateContainerFailure = errors.New("cluster create container failure")
 )

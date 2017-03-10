@@ -3,6 +3,7 @@ package cluster
 import "github.com/docker/docker/api/types"
 import units "github.com/docker/go-units"
 import "github.com/humpback/humpback-agent/models"
+import "github.com/humpback/gounits/convert"
 import "github.com/humpback/gounits/rand"
 
 import (
@@ -28,11 +29,54 @@ type ContainerConfig struct {
 
 // Container is exported
 type Container struct {
-	types.Container
+	GroupID    string
+	MetaID     string
 	BaseConfig *ContainerBaseConfig
 	Config     *ContainerConfig
 	Info       types.ContainerJSON
 	Engine     *Engine
+}
+
+// update is exported
+// update container info and config
+func (c *Container) update(engine *Engine, containerJSON *types.ContainerJSON) {
+
+	config := &models.Container{}
+	config.Parse(containerJSON)
+	containerConfig := &ContainerConfig{
+		Container: *config,
+	}
+	c.Config = containerConfig
+
+	containerJSON.HostConfig.CPUShares = containerJSON.HostConfig.CPUShares * engine.Cpus / 1024.0
+	startAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.StartedAt)
+	finishedAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.FinishedAt)
+	containerJSON.State.StartedAt = startAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
+	containerJSON.State.FinishedAt = finishedAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
+	c.Info = *containerJSON
+
+	baseConfig := readConainerBaseConfig(containerJSON.ID, engine.configCache, containerJSON.Config.Env)
+	if baseConfig != nil {
+		c.GroupID = baseConfig.MetaData.GroupID
+		c.MetaID = baseConfig.MetaData.MetaID
+		c.BaseConfig = baseConfig
+	}
+}
+
+// readConainerBaseConfig is exported
+// read container metadata baseConfig
+func readConainerBaseConfig(containerid string, configCache *ContainersConfigCache, configEnv []string) *ContainerBaseConfig {
+
+	configEnvMap := convert.ConvertKVStringSliceToMap(configEnv)
+	groupID := configEnvMap["HUMPBACK_CLUSTER_GROUPID"]
+	metaID := configEnvMap["HUMPBACK_CLUSTER_METAID"]
+	if len(groupID) > 0 && len(metaID) > 0 {
+		baseConfig := configCache.GetContainerBaseConfig(metaID, containerid)
+		if baseConfig != nil && baseConfig.MetaData.GroupID == groupID && baseConfig.MetaData.MetaID == metaID {
+			return baseConfig
+		}
+	}
+	return nil
 }
 
 // Containers represents a list of containers
@@ -112,21 +156,15 @@ func (containers Containers) Get(IDOrName string) *Container {
 	}
 
 	for _, container := range containers {
-		if container.ID == IDOrName || rand.TruncateID(container.ID) == IDOrName {
+		if container.Info.ID == IDOrName || rand.TruncateID(container.Info.ID) == IDOrName {
 			return container
 		}
 	}
 
 	candidates := []*Container{}
 	for _, container := range containers {
-		found := false
-		for _, name := range container.Names {
-			if name == IDOrName || name == "/"+IDOrName || container.Engine.ID+name == IDOrName || container.Engine.Name+name == IDOrName {
-				found = true
-				break
-			}
-		}
-		if found {
+		name := container.Info.Name
+		if name == IDOrName || name == "/"+IDOrName || container.Engine.ID+name == IDOrName || container.Engine.Name+name == IDOrName {
 			candidates = append(candidates, container)
 		}
 	}
@@ -138,7 +176,7 @@ func (containers Containers) Get(IDOrName string) *Container {
 	}
 
 	for _, container := range containers {
-		if strings.HasPrefix(container.ID, IDOrName) {
+		if strings.HasPrefix(container.Info.ID, IDOrName) {
 			candidates = append(candidates, container)
 		}
 	}

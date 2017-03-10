@@ -154,11 +154,10 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 	}
 }
 
-func (c *Controller) CreateContainer(groupid string, instances int, config agentmodels.Container) ([]*models.CreateContainerPair, error) {
+func (c *Controller) CreateClusterContainers(groupid string, instances int, config agentmodels.Container) ([]*models.CreateContainerPair, error) {
 
-	originalName := config.Name
 	createContainers := []*models.CreateContainerPair{}
-	createdParis, err := c.Cluster.CreateContainer(groupid, instances, originalName, config)
+	createdParis, err := c.Cluster.CreateContainers(groupid, instances, config)
 	if err != nil {
 		return nil, err
 	}
