@@ -5,6 +5,7 @@ import "github.com/humpback/gounits/convert"
 import "github.com/humpback/gounits/logger"
 import "github.com/humpback/humpback-center/api/request"
 import "github.com/humpback/humpback-center/cluster"
+import "github.com/humpback/humpback-center/cluster/types"
 import "github.com/humpback/humpback-center/etc"
 import "github.com/humpback/humpback-center/models"
 import agentmodels "github.com/humpback/humpback-agent/models"
@@ -154,18 +155,11 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 	}
 }
 
-func (c *Controller) CreateClusterContainers(groupid string, instances int, config agentmodels.Container) ([]*models.CreateContainerPair, error) {
+func (c *Controller) CreateClusterContainers(groupid string, instances int, config agentmodels.Container) (string, *types.CreatedContainers, error) {
 
-	createContainers := []*models.CreateContainerPair{}
-	createdParis, err := c.Cluster.CreateContainers(groupid, instances, config)
+	metaid, createdContainers, err := c.Cluster.CreateContainers(groupid, instances, config)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
-	for containerid, ip := range createdParis {
-		createContainers = append(createContainers, &models.CreateContainerPair{
-			IP:          ip,
-			ContainerID: containerid,
-		})
-	}
-	return createContainers, nil
+	return metaid, createdContainers, nil
 }

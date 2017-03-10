@@ -324,22 +324,22 @@ func (cluster *Cluster) SetContainers(groupid string, metaid string, instances i
 }
 
 // CreateContainers is exported
-func (cluster *Cluster) CreateContainers(groupid string, instances int, config models.Container) (map[string]string, error) {
+func (cluster *Cluster) CreateContainers(groupid string, instances int, config models.Container) (string, *types.CreatedContainers, error) {
 
 	engines := cluster.GetGroupEngines(groupid)
 	if engines == nil {
 		logger.ERROR("[#cluster#] create container error %s : %s", groupid, ErrClusterGroupNotFound)
-		return nil, ErrClusterGroupNotFound
+		return "", nil, ErrClusterGroupNotFound
 	}
 
 	if len(engines) == 0 {
 		logger.ERROR("[#cluster#] create container error %s : %s", groupid, ErrClusterNoEngineAvailable)
-		return nil, ErrClusterNoEngineAvailable
+		return "", nil, ErrClusterNoEngineAvailable
 	}
 
 	if ret := cluster.cehckContainerNameUniqueness(groupid, config.Name); !ret {
 		logger.ERROR("[#cluster#] create container error %s : %s", groupid, ErrClusterCreateContainerNameConflict)
-		return nil, ErrClusterCreateContainerNameConflict
+		return "", nil, ErrClusterCreateContainerNameConflict
 	}
 
 	cluster.Lock()
@@ -351,7 +351,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, config m
 	cluster.Unlock()
 
 	metaid := cluster.configCache.MakeUniqueMetaID()
-	createdParis := map[string]string{}
+	createdContainers := types.CreatedContainers{}
 	ipList := []string{}
 	index := 1
 	for ; instances > 0; instances-- {
@@ -376,8 +376,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, config m
 		}
 		index++
 		ipList = filterAppendIPList(engine, ipList)
-		ipList = append(ipList, engine.IP)
-		createdParis[container.Info.ID] = engine.IP
+		createdContainers = createdContainers.SetContainer(engine.IP, container.Config.Container)
 		containerConfig.ID = container.Info.ID
 		baseConfig := &ContainerBaseConfig{Container: containerConfig}
 		cluster.configCache.SetContainerBaseConfig(metaid, groupid, config.Name, baseConfig)
@@ -386,10 +385,11 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, config m
 	cluster.Lock()
 	delete(cluster.pendingContainers, config.Name)
 	cluster.Unlock()
-	if instances > 0 && len(createdParis) == 0 {
-		return nil, ErrClusterCreateContainerFailure
+	metaData := cluster.configCache.GetMetaData(metaid)
+	if instances > 0 && len(metaData.BaseConfigs) == 0 {
+		return "", nil, ErrClusterCreateContainerFailure
 	}
-	return createdParis, nil
+	return metaid, &createdContainers, nil
 }
 
 func (cluster *Cluster) createContainer(engines []*Engine, ipList []string, config models.Container) (*Engine, *Container, error) {

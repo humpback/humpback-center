@@ -12,9 +12,6 @@ import (
 	"time"
 )
 
-// Container name prefix
-const ContaierPrefix = "HumpbackC-"
-
 // CreateContainerResponse is exported
 type CreateContainerResponse struct {
 	ID       string   `json:"Id"`

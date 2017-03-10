@@ -1,5 +1,6 @@
 package response
 
+import "github.com/humpback/humpback-center/cluster/types"
 import "github.com/humpback/humpback-center/models"
 
 /*
@@ -88,24 +89,28 @@ ClusterCreateContainerResponse
 Method:  POST
 Route:   /v1/cluster/containers
 GroupID: cluster groupid
-Pairs:   create container for engine ip pair
+MetaID:  cluster containers metaid
+Created: create result message.
+Containers: created containers array.
 */
 type ClusterCreateContainerResponse struct {
-	GroupID      string                        `json:"groupid"`
-	CreateResult string                        `json:"createresult"`
-	CreatePairs  []*models.CreateContainerPair `json:"createpairs"`
+	GroupID    string                   `json:"groupid"`
+	MetaID     string                   `json:"metaid"`
+	Created    string                   `json:"created"`
+	Containers *types.CreatedContainers `json:"containers"`
 }
 
-func NewClusterCreateContainerResponse(groupid string, instances int, createparis []*models.CreateContainerPair) *ClusterCreateContainerResponse {
+func NewClusterCreateContainerResponse(groupid string, metaid string, instances int, containers *types.CreatedContainers) *ClusterCreateContainerResponse {
 
-	createresult := "created all"
-	if instances > len(createparis) {
-		createresult = "created partial"
+	created := "created all"
+	if instances > len(*containers) {
+		created = "created partial"
 	}
 
 	return &ClusterCreateContainerResponse{
-		GroupID:      groupid,
-		CreateResult: createresult,
-		CreatePairs:  createparis,
+		GroupID:    groupid,
+		MetaID:     metaid,
+		Created:    created,
+		Containers: containers,
 	}
 }
