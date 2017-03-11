@@ -2,6 +2,13 @@ package types
 
 import "github.com/humpback/humpback-agent/models"
 
+// CreateContainerResponse is exported
+type CreateContainerResponse struct {
+	ID       string   `json:"Id"`
+	Name     string   `json:"Name"`
+	Warnings []string `json:"Warnings"`
+}
+
 // CreatedContainer is exported
 type CreatedContainer struct {
 	IP string `json:"IP"`

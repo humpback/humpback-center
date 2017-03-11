@@ -4,6 +4,7 @@ import "github.com/docker/docker/api/types"
 import "github.com/humpback/gounits/http"
 import "github.com/humpback/gounits/logger"
 import "github.com/humpback/humpback-agent/models"
+import ctypes "github.com/humpback/humpback-center/cluster/types"
 
 import (
 	"bytes"
@@ -214,7 +215,7 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 		return nil, fmt.Errorf("create container failure")
 	}
 
-	createContainerResponse := &CreateContainerResponse{}
+	createContainerResponse := &ctypes.CreateContainerResponse{}
 	if err := respCreated.JSON(createContainerResponse); err != nil {
 		return nil, err
 	}
