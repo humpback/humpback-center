@@ -4,7 +4,7 @@ import "github.com/humpback/humpback-agent/models"
 
 // CreatedContainer is exported
 type CreatedContainer struct {
-	EngineIP string `json:"EngineIP"`
+	IP string `json:"IP"`
 	models.Container
 }
 
@@ -12,10 +12,10 @@ type CreatedContainer struct {
 type CreatedContainers []*CreatedContainer
 
 // SetContainer is exported
-func (created CreatedContainers) SetContainer(engineIP string, container models.Container) CreatedContainers {
+func (created CreatedContainers) SetCreatedPair(ip string, container models.Container) CreatedContainers {
 
 	createdContainer := &CreatedContainer{
-		EngineIP:  engineIP,
+		IP:        ip,
 		Container: container,
 	}
 	created = append(created, createdContainer)

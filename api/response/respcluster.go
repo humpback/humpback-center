@@ -91,7 +91,7 @@ Route:   /v1/cluster/containers
 GroupID: cluster groupid
 MetaID:  cluster containers metaid
 Created: create result message.
-Containers: created containers array.
+Containers: created containers pairs.
 */
 type ClusterCreateContainerResponse struct {
 	GroupID    string                   `json:"groupid"`
@@ -111,6 +111,49 @@ func NewClusterCreateContainerResponse(groupid string, metaid string, instances 
 		GroupID:    groupid,
 		MetaID:     metaid,
 		Created:    created,
+		Containers: containers,
+	}
+}
+
+/*
+ClusterOperateContainerResponse
+Method:  PUT
+Route:   /v1/cluster/containers
+MetaID:    containers metaid
+Action:    operate action (start|stop|restart|kill|pause|unpause|upgrade)
+Containers: operated containers pairs.
+*/
+type ClusterOperateContainerResponse struct {
+	MetaID     string                    `json:"metaid"`
+	Action     string                    `json:"action"`
+	Containers *types.OperatedContainers `json:"containers"`
+}
+
+func NewClusterOperateContainerResponse(metaid string, action string, containers *types.OperatedContainers) *ClusterOperateContainerResponse {
+
+	return &ClusterOperateContainerResponse{
+		MetaID:     metaid,
+		Action:     action,
+		Containers: containers,
+	}
+}
+
+/*
+ClusterRemoveContainerResponse
+Method:  PUT
+Route:   /v1/cluster/containers
+MetaID:    containers metaid
+Containers: removed containers pairs.
+*/
+type ClusterRemoveContainerResponse struct {
+	MetaID     string                   `json:"metaid"`
+	Containers *types.RemovedContainers `json:"containers"`
+}
+
+func NewClusterRemoveContainerResponse(metaid string, containers *types.RemovedContainers) *ClusterRemoveContainerResponse {
+
+	return &ClusterRemoveContainerResponse{
+		MetaID:     metaid,
 		Containers: containers,
 	}
 }

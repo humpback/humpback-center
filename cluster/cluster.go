@@ -318,9 +318,83 @@ func (cluster *Cluster) removeEngine(ip string) *Engine {
 	return engine
 }
 
+// OperateContainers is exported
+func (cluster *Cluster) OperateContainers(metaid string, action string) (*types.OperatedContainers, error) {
+
+	metaData := cluster.configCache.GetMetaData(metaid)
+	if metaData == nil {
+		logger.ERROR("[#cluster#] operate container error %s %s", ErrClusterMetaDataNotFound, metaid)
+		return nil, ErrClusterMetaDataNotFound
+	}
+
+	engines := cluster.GetGroupEngines(metaData.GroupID)
+	if engines == nil {
+		logger.ERROR("[#cluster#] operate container error %s %s", ErrClusterGroupNotFound, metaData.GroupID)
+		return nil, ErrClusterGroupNotFound
+	}
+
+	operatedContainers := types.OperatedContainers{}
+	for _, engine := range engines {
+		if engine.IsHealthy() {
+			containers := engine.Containers()
+			for _, container := range containers {
+				if container.GroupID == metaData.GroupID && container.MetaID == metaid {
+					err := engine.OperateContainer(container.Info.ID, models.ContainerOperate{Action: action, Container: container.Info.ID})
+					if err != nil {
+						logger.ERROR("[#cluster#] engine %s operate container error:%s", engine.IP, err.Error())
+					}
+					operatedContainers = operatedContainers.SetOperatedPair(engine.IP, container.Info.ID, err)
+				}
+			}
+		}
+	}
+	return &operatedContainers, nil
+}
+
 // SetContainers is exported
-func (cluster *Cluster) SetContainers(groupid string, metaid string, instances int) {
+func (cluster *Cluster) SetContainers(metaid string, instances int) {
 	//在现有metaid上调整实例数(增加或删除实例), metaid不会变，配置不会变
+}
+
+// RemoveContainers is exported
+func (cluster *Cluster) RemoveContainers(metaid string) (*types.RemovedContainers, error) {
+
+	metaData := cluster.configCache.GetMetaData(metaid)
+	if metaData == nil {
+		logger.ERROR("[#cluster#] remove container error %s %s", ErrClusterMetaDataNotFound, metaid)
+		return nil, ErrClusterMetaDataNotFound
+	}
+
+	engines := cluster.GetGroupEngines(metaData.GroupID)
+	if engines == nil {
+		logger.ERROR("[#cluster#] remove container error %s %s", ErrClusterGroupNotFound, metaData.GroupID)
+		return nil, ErrClusterGroupNotFound
+	}
+
+	removedContainers := types.RemovedContainers{}
+	for _, engine := range engines {
+		if engine.IsHealthy() {
+			containers := engine.Containers()
+			for _, container := range containers {
+				if container.GroupID == metaData.GroupID && container.MetaID == metaid {
+					err := engine.RemoveContainer(container.Info.ID)
+					if err != nil {
+						logger.ERROR("[#cluster#] engine %s remove container error:%s", engine.IP, err.Error())
+					} else {
+						cluster.configCache.RemoveContainerBaseConfig(metaid, container.Info.ID)
+					}
+					removedContainers = removedContainers.SetRemovedPair(engine.IP, container.Info.ID, err)
+				}
+			}
+		}
+	}
+
+	if metaData := cluster.configCache.GetMetaData(metaid); metaData != nil {
+		if len(metaData.BaseConfigs) == 0 {
+			cluster.configCache.RemoveMetaData(metaid)
+		}
+	}
+	return &removedContainers, nil
 }
 
 // CreateContainers is exported
@@ -376,7 +450,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, config m
 		}
 		index++
 		ipList = filterAppendIPList(engine, ipList)
-		createdContainers = createdContainers.SetContainer(engine.IP, container.Config.Container)
+		createdContainers = createdContainers.SetCreatedPair(engine.IP, container.Config.Container)
 		containerConfig.ID = container.Info.ID
 		baseConfig := &ContainerBaseConfig{Container: containerConfig}
 		cluster.configCache.SetContainerBaseConfig(metaid, groupid, config.Name, baseConfig)

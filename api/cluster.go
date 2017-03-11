@@ -142,3 +142,55 @@ func postClusterCreateContainers(c *Context) error {
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
 }
+
+func putClusterOperateContainers(c *Context) error {
+
+	result := response.ResponseResult{ResponseID: c.ID}
+	req, err := request.ResolveClusterOperateContainerRequest(c.Request())
+	if err != nil {
+		logger.ERROR("[#api#] %s resolve operatecontainer request faild, %s", c.ID, err.Error())
+		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
+		return c.JSON(http.StatusBadRequest, result)
+	}
+
+	logger.INFO("[#api#] %s resolve operatecontainer request successed. %+v", c.ID, req)
+	operatedContainers, err := c.Controller.OperateContainers(req.MetaID, req.Action)
+	if err != nil {
+		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())
+		if err == cluster.ErrClusterMetaDataNotFound || err == cluster.ErrClusterGroupNotFound {
+			return c.JSON(http.StatusNotFound, result)
+		}
+		return c.JSON(http.StatusInternalServerError, result)
+	}
+
+	resp := response.NewClusterOperateContainerResponse(req.MetaID, req.Action, operatedContainers)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster operate containers response")
+	result.SetResponse(resp)
+	return c.JSON(http.StatusOK, result)
+}
+
+func deleteClusterRemoveContainers(c *Context) error {
+
+	result := response.ResponseResult{ResponseID: c.ID}
+	req, err := request.ResolveClusterRemoveContainerRequest(c.Request())
+	if err != nil {
+		logger.ERROR("[#api#] %s resolve removecontainer request faild, %s", c.ID, err.Error())
+		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
+		return c.JSON(http.StatusBadRequest, result)
+	}
+
+	logger.INFO("[#api#] %s resolve removecontainer request successed. %+v", c.ID, req)
+	removedContainers, err := c.Controller.RemoveContainers(req.MetaID)
+	if err != nil {
+		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())
+		if err == cluster.ErrClusterMetaDataNotFound || err == cluster.ErrClusterGroupNotFound {
+			return c.JSON(http.StatusNotFound, result)
+		}
+		return c.JSON(http.StatusInternalServerError, result)
+	}
+
+	resp := response.NewClusterRemoveContainerResponse(req.MetaID, removedContainers)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster remove containers response")
+	result.SetResponse(resp)
+	return c.JSON(http.StatusOK, result)
+}

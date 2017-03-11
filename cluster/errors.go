@@ -6,7 +6,9 @@ import "errors"
 var (
 	//cluster discovery is nil.
 	ErrClusterDiscoveryInvalid = errors.New("cluster discovery invalid")
-	//cluster group notfound
+	//cluster meta not found
+	ErrClusterMetaDataNotFound = errors.New("cluster metadata not found")
+	//cluster group not found
 	ErrClusterGroupNotFound = errors.New("cluster group not found")
 	//cluster group no docker engine available
 	ErrClusterNoEngineAvailable = errors.New("cluster no docker-engine available")

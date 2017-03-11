@@ -234,6 +234,53 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 	return container, nil
 }
 
+func (engine *Engine) RemoveContainer(containerid string) error {
+
+	query := map[string][]string{"force": []string{"true"}}
+	respRemoved, err := engine.httpClient.Delete("http://"+engine.Addr+"/v1/containers/"+containerid, query, nil)
+	if err != nil {
+		return err
+	}
+
+	defer respRemoved.Close()
+	if respRemoved.StatusCode() != 200 {
+		return fmt.Errorf("remove container %s failure, %s", containerid, respRemoved.String())
+	}
+
+	logger.INFO("[#cluster#] engine %s remove container %s", engine.IP, containerid)
+	engine.Lock()
+	delete(engine.containers, containerid)
+	engine.Unlock()
+	return nil
+}
+
+func (engine *Engine) OperateContainer(containerid string, operate models.ContainerOperate) error {
+
+	buf := bytes.NewBuffer([]byte{})
+	if err := json.NewEncoder(buf).Encode(operate); err != nil {
+		return err
+	}
+
+	header := map[string][]string{"Content-Type": []string{"application/json"}}
+	respOperated, err := engine.httpClient.Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	if err != nil {
+		return err
+	}
+
+	defer respOperated.Close()
+	if respOperated.StatusCode() != 200 {
+		return fmt.Errorf("container %s failure, %s", operate.Container, operate.Action, respOperated.String())
+	}
+
+	logger.INFO("[#cluster#] engine %s %s container %s", engine.IP, operate.Action, operate.Container)
+	if containers, err := engine.updateContainer(containerid, engine.containers); err == nil {
+		engine.Lock()
+		engine.containers = containers
+		engine.Unlock()
+	}
+	return nil
+}
+
 func (engine *Engine) RefreshContainers() error {
 
 	query := map[string][]string{"all": []string{"true"}}

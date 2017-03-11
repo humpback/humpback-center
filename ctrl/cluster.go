@@ -157,9 +157,15 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 
 func (c *Controller) CreateClusterContainers(groupid string, instances int, config agentmodels.Container) (string, *types.CreatedContainers, error) {
 
-	metaid, createdContainers, err := c.Cluster.CreateContainers(groupid, instances, config)
-	if err != nil {
-		return "", nil, err
-	}
-	return metaid, createdContainers, nil
+	return c.Cluster.CreateContainers(groupid, instances, config)
+}
+
+func (c *Controller) OperateContainers(metaid string, action string) (*types.OperatedContainers, error) {
+
+	return c.Cluster.OperateContainers(metaid, action)
+}
+
+func (c *Controller) RemoveContainers(metaid string) (*types.RemovedContainers, error) {
+
+	return c.Cluster.RemoveContainers(metaid)
 }

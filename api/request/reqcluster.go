@@ -148,16 +148,68 @@ func ResolveClusterCreateContainerRequest(r *http.Request) (*ClusterCreateContai
 	}
 
 	if len(strings.TrimSpace(request.GroupID)) == 0 {
-		return nil, fmt.Errorf("create container groupid invalid, can not be empty")
+		return nil, fmt.Errorf("create containers cluster groupid invalid, can not be empty")
 	}
 
 	if request.Instances < 0 {
-		return nil, fmt.Errorf("create container instances invalid, should be larger than 0")
+		return nil, fmt.Errorf("create containers instances invalid, should be larger than 0")
 	}
 
 	if len(strings.TrimSpace(request.Config.Name)) == 0 {
-		return nil, fmt.Errorf("create container name can not be empty")
+		return nil, fmt.Errorf("create containers name can not be empty")
+	}
+	return request, nil
+}
+
+/*
+ResolveClusterOperateContainerRequest
+Method:  PUT
+Route:   /v1/cluster/containers
+MetaID:    containers metaid
+Action:    operate action (start|stop|restart|kill|pause|unpause|upgrade)
+*/
+type ClusterOperateContainerRequest struct {
+	MetaID string `json:"metaid"`
+	Action string `json:"action"`
+}
+
+func ResolveClusterOperateContainerRequest(r *http.Request) (*ClusterOperateContainerRequest, error) {
+
+	buf, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
 	}
 
+	request := &ClusterOperateContainerRequest{}
+	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
+		return nil, err
+	}
+
+	if len(strings.TrimSpace(request.MetaID)) == 0 {
+		return nil, fmt.Errorf("operate containers metaid invalid, can not be empty")
+	}
+	return request, nil
+}
+
+/*
+ResolveClusterRemoveContainerRequest
+Method:  DELETE
+Route:   /v1/cluster/containers/{metaid}
+MetaID:    containers metaid
+*/
+type ClusterRemoveContainerRequest struct {
+	MetaID string `json:"metaid"`
+}
+
+func ResolveClusterRemoveContainerRequest(r *http.Request) (*ClusterRemoveContainerRequest, error) {
+
+	vars := mux.Vars(r)
+	metaid := strings.TrimSpace(vars["metaid"])
+	if len(strings.TrimSpace(metaid)) == 0 {
+		return nil, fmt.Errorf("remove containers metaid invalid, can not be empty")
+	}
+	request := &ClusterRemoveContainerRequest{
+		MetaID: metaid,
+	}
 	return request, nil
 }
