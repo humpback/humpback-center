@@ -48,7 +48,7 @@ func (c *Controller) initCluster() error {
 	}
 	logger.INFO("[#ctrl#] init cluster groups:%d", len(groups))
 	for _, group := range groups {
-		c.Cluster.SetGroup(group.ID, group.Servers)
+		c.Cluster.SetGroup(group.ID, group.Servers, group.Owners)
 	}
 	return nil
 }
@@ -146,7 +146,7 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 				logger.ERROR("[#ctrl#] set cluster groupevent %s %s, error:%s", groupid, event, err.Error())
 				return
 			}
-			c.Cluster.SetGroup(group.ID, group.Servers)
+			c.Cluster.SetGroup(group.ID, group.Servers, group.Owners)
 		}
 	case request.GROUP_REMOVE_EVENT:
 		{

@@ -26,9 +26,11 @@ type pendingContainer struct {
 
 // Group is exported
 // Servers: cluster server ips, correspond engines's key.
+// Owners: cluster group owners name.
 type Group struct {
 	ID      string
 	Servers []string
+	Owners  []string
 }
 
 // Cluster is exported
@@ -186,18 +188,19 @@ func (cluster *Cluster) GetGroup(groupid string) *Group {
 	return nil
 }
 
-func (cluster *Cluster) SetGroup(groupid string, servers []string) {
+func (cluster *Cluster) SetGroup(groupid string, servers []string, owners []string) {
 
 	cluster.Lock()
 	removes := []string{}
 	group, ret := cluster.groups[groupid]
 	if !ret {
-		group = &Group{ID: groupid, Servers: servers}
+		group = &Group{ID: groupid, Servers: servers, Owners: owners}
 		cluster.groups[groupid] = group
 		logger.INFO("[#cluster#] created group %s(%d)", groupid, len(servers))
 	} else {
 		origin := group.Servers
 		group.Servers = servers
+		group.Owners = owners
 		for _, oldip := range origin {
 			found := false
 			for _, newip := range group.Servers {
