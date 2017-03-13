@@ -74,6 +74,8 @@ type Engine struct {
 	state           engineState
 }
 
+// NewEngine is exported
+// Make new engine object
 func NewEngine(ip string, overcommitRatio float64, configCache *ContainersConfigCache) (*Engine, error) {
 
 	ipAddr, err := net.ResolveIPAddr("ip4", ip)
@@ -91,6 +93,8 @@ func NewEngine(ip string, overcommitRatio float64, configCache *ContainersConfig
 	}, nil
 }
 
+// Open is exported
+// Open a engine refresh loop, update engine and refresh containers.
 func (engine *Engine) Open(addr string) {
 
 	engine.Lock()
@@ -109,6 +113,8 @@ func (engine *Engine) Open(addr string) {
 	engine.Unlock()
 }
 
+// Close is exported
+// Close a engine, reset engine info.
 func (engine *Engine) Close() {
 
 	engine.cleanupContainers()
@@ -127,6 +133,8 @@ func (engine *Engine) Close() {
 	logger.INFO("[#cluster#] engine %s closed.", engine.IP)
 }
 
+// IsHealthy is exported
+// Return a engine ishealthy status bool result.
 func (engine *Engine) IsHealthy() bool {
 
 	engine.RLock()
@@ -134,6 +142,8 @@ func (engine *Engine) IsHealthy() bool {
 	return engine.state == StateHealthy
 }
 
+// SetState is exported
+// Set a engine status.
 func (engine *Engine) SetState(state engineState) {
 
 	engine.Lock()
@@ -141,6 +151,8 @@ func (engine *Engine) SetState(state engineState) {
 	engine.Unlock()
 }
 
+// State is exported
+// Return a engine status string result.
 func (engine *Engine) State() string {
 
 	engine.RLock()
@@ -148,6 +160,8 @@ func (engine *Engine) State() string {
 	return stateText[engine.state]
 }
 
+// Containers is exported
+// Return a engine all containers.
 func (engine *Engine) Containers() Containers {
 
 	engine.RLock()
@@ -159,6 +173,8 @@ func (engine *Engine) Containers() Containers {
 	return containers
 }
 
+// UsedMemory is exported
+// Return a engine all containers used memory size.
 func (engine *Engine) UsedMemory() int64 {
 
 	var used int64
@@ -170,6 +186,8 @@ func (engine *Engine) UsedMemory() int64 {
 	return used
 }
 
+// UsedCpus is exported
+// Return a engine all containers used cpus size.
 func (engine *Engine) UsedCpus() int64 {
 
 	var used int64
@@ -181,6 +199,8 @@ func (engine *Engine) UsedCpus() int64 {
 	return used
 }
 
+// TotalMemory is exported
+// Return a engine total memory size.
 func (engine *Engine) TotalMemory() int64 {
 
 	engine.RLock()
@@ -188,6 +208,8 @@ func (engine *Engine) TotalMemory() int64 {
 	return engine.Memory + (engine.Memory * engine.overcommitRatio / 100)
 }
 
+// TotalCpus is exported
+// Return a engine total cpus size.
 func (engine *Engine) TotalCpus() int64 {
 
 	engine.RLock()
@@ -195,6 +217,8 @@ func (engine *Engine) TotalCpus() int64 {
 	return engine.Cpus + (engine.Cpus * engine.overcommitRatio / 100)
 }
 
+// CreateContainer is exported
+// Engine create a container.
 func (engine *Engine) CreateContainer(config models.Container) (*Container, error) {
 
 	buf := bytes.NewBuffer([]byte{})
@@ -202,17 +226,15 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 		return nil, err
 	}
 
-	logger.INFO("[#cluster#] engine %s create container %s", engine.IP, config.Name)
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
 	respCreated, err := engine.httpClient.Post("http://"+engine.Addr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return nil, err
 	}
 
-	defer respCreated.Close()
+	defer respCreated.Close(0)
 	if respCreated.StatusCode() != 200 {
-		logger.ERROR("[#cluster#] engine %s create container %s error:%d %s", engine.IP, config.Name, respCreated.StatusCode(), respCreated.String())
-		return nil, fmt.Errorf("create container failure")
+		return nil, fmt.Errorf("engine %s, create container %s failure %d", engine.IP, config.Name, respCreated.StatusCode())
 	}
 
 	createContainerResponse := &ctypes.CreateContainerResponse{}
@@ -220,6 +242,7 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 		return nil, err
 	}
 
+	logger.INFO("[#cluster#] engine %s, create container %s:%s", engine.IP, createContainerResponse.ID, config.Name)
 	containers, err := engine.updateContainer(createContainerResponse.ID, engine.containers)
 	if err != nil {
 		return nil, err
@@ -230,11 +253,13 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 	engine.containers = containers
 	container, ret := engine.containers[createContainerResponse.ID]
 	if !ret {
-		return nil, fmt.Errorf("create container update info failure")
+		return nil, fmt.Errorf("created container, update container info failure")
 	}
 	return container, nil
 }
 
+// RemoveContainer is exported
+// Engine remove a container.
 func (engine *Engine) RemoveContainer(containerid string) error {
 
 	query := map[string][]string{"force": []string{"true"}}
@@ -243,18 +268,20 @@ func (engine *Engine) RemoveContainer(containerid string) error {
 		return err
 	}
 
-	defer respRemoved.Close()
+	defer respRemoved.Close(0)
 	if respRemoved.StatusCode() != 200 {
-		return fmt.Errorf("remove container %s failure, %s", containerid, respRemoved.String())
+		return fmt.Errorf("engine %s, remove container %s failure %d", engine.IP, containerid, respRemoved.StatusCode())
 	}
 
-	logger.INFO("[#cluster#] engine %s remove container %s", engine.IP, containerid)
+	logger.INFO("[#cluster#] engine %s, remove container %s", engine.IP, containerid)
 	engine.Lock()
 	delete(engine.containers, containerid)
 	engine.Unlock()
 	return nil
 }
 
+// OperateContainer is exported
+// Engine operate a container.
 func (engine *Engine) OperateContainer(containerid string, operate models.ContainerOperate) error {
 
 	buf := bytes.NewBuffer([]byte{})
@@ -268,12 +295,12 @@ func (engine *Engine) OperateContainer(containerid string, operate models.Contai
 		return err
 	}
 
-	defer respOperated.Close()
+	defer respOperated.Close(0)
 	if respOperated.StatusCode() != 200 {
-		return fmt.Errorf("container %s failure, %s", operate.Container, operate.Action, respOperated.String())
+		return fmt.Errorf("engine %s, %s container %s failure %d", engine.IP, operate.Action, operate.Container, respOperated.StatusCode())
 	}
 
-	logger.INFO("[#cluster#] engine %s %s container %s", engine.IP, operate.Action, operate.Container)
+	logger.INFO("[#cluster#] engine %s, %s container %s", engine.IP, operate.Action, operate.Container)
 	if containers, err := engine.updateContainer(containerid, engine.containers); err == nil {
 		engine.Lock()
 		engine.containers = containers
@@ -282,6 +309,41 @@ func (engine *Engine) OperateContainer(containerid string, operate models.Contai
 	return nil
 }
 
+// UpgradeContainer is exported
+// Engine upgrade a container.
+/*
+func (engine *Engine) UpgradeContainer(containerid string, operate models.ContainerOperate) error {
+
+	buf := bytes.NewBuffer([]byte{})
+	if err := json.NewEncoder(buf).Encode(operate); err != nil {
+		return err
+	}
+
+	header := map[string][]string{"Content-Type": []string{"application/json"}}
+	respUpgraded, err := engine.httpClient.Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	if err != nil {
+		return err
+	}
+
+	defer respUpgraded.Close()
+	if respUpgraded.StatusCode() != 200 {
+		return fmt.Errorf("%s container %s failure %d", operate.Action, operate.Container, respUpgraded.StatusCode())
+	}
+
+	logger.INFO("[#cluster#] engine %s %s container %s", engine.IP, operate.Action, operate.Container)
+
+	//engine.RefreshContainers()
+	//if containers, err := engine.updateContainer(containerid, engine.containers); err == nil {
+	//	engine.Lock()
+	//	engine.containers = containers
+	//	engine.Unlock()
+	//}
+	return nil
+}
+*/
+
+// RefreshContainers is exported
+// Engine refresh all containers.
 func (engine *Engine) RefreshContainers() error {
 
 	query := map[string][]string{"all": []string{"true"}}
@@ -290,9 +352,9 @@ func (engine *Engine) RefreshContainers() error {
 		return err
 	}
 
-	defer respContainers.Close()
+	defer respContainers.Close(0)
 	if respContainers.StatusCode() != 200 {
-		return fmt.Errorf("GET(%d) %s", respContainers.StatusCode(), respContainers.RawURL())
+		return fmt.Errorf("http GET response statuscode %d", respContainers.StatusCode())
 	}
 
 	dockerContainers := []types.Container{}
@@ -305,7 +367,7 @@ func (engine *Engine) RefreshContainers() error {
 	for _, c := range dockerContainers {
 		mergedUpdate, err := engine.updateContainer(c.ID, merged)
 		if err != nil {
-			logger.ERROR("[#cluster#] engine %s update container error:%s", engine.Addr, err.Error())
+			logger.ERROR("[#cluster#] engine refresh containers error, %s", err.Error())
 		} else {
 			merged = mergedUpdate
 		}
@@ -362,9 +424,9 @@ func (engine *Engine) updateSpecs() error {
 		return err
 	}
 
-	defer respSpecs.Close()
+	defer respSpecs.Close(0)
 	if respSpecs.StatusCode() != 200 {
-		return fmt.Errorf("GET(%d) %s", respSpecs.StatusCode(), respSpecs.RawURL())
+		return fmt.Errorf("http GET response statuscode %d", respSpecs.StatusCode())
 	}
 
 	dockerInfo := &types.Info{}
@@ -440,9 +502,9 @@ func (engine *Engine) updateContainer(containerid string, containers map[string]
 		return nil, err
 	}
 
-	defer respContainer.Close()
+	defer respContainer.Close(0)
 	if respContainer.StatusCode() != 200 {
-		return nil, fmt.Errorf("GET(%d) %s", respContainer.StatusCode(), respContainer.RawURL())
+		return nil, fmt.Errorf("engine %s, update container %s failure %d", engine.IP, containerid, respContainer.StatusCode())
 	}
 
 	containerJSON := &types.ContainerJSON{}

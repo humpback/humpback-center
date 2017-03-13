@@ -56,6 +56,7 @@ type Cluster struct {
 }
 
 // NewCluster is exported
+// Make cluster object, set options and discovery service.
 func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*Cluster, error) {
 
 	if discovery == nil {
@@ -106,6 +107,8 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 	}, nil
 }
 
+// Start is exported
+// Cluster start, open discovery service
 func (cluster *Cluster) Start() error {
 
 	cluster.configCache.Init()
@@ -117,12 +120,15 @@ func (cluster *Cluster) Start() error {
 	return ErrClusterDiscoveryInvalid
 }
 
+// Stop is exported
+// Cluster stop, close discovery service
 func (cluster *Cluster) Stop() {
 
 	close(cluster.stopCh)
 	logger.INFO("[#cluster#] discovery service closed.")
 }
 
+// GroupsEngineContains is exported
 func (cluster *Cluster) GroupsEngineContains(engine *Engine) bool {
 
 	ret := false
@@ -140,6 +146,7 @@ func (cluster *Cluster) GroupsEngineContains(engine *Engine) bool {
 	return ret
 }
 
+// GetEngine is exported
 func (cluster *Cluster) GetEngine(ip string) *Engine {
 
 	cluster.RLock()
@@ -150,6 +157,7 @@ func (cluster *Cluster) GetEngine(ip string) *Engine {
 	return nil
 }
 
+// GetGroupEngines is exported
 func (cluster *Cluster) GetGroupEngines(groupid string) []*Engine {
 
 	cluster.RLock()
@@ -167,6 +175,7 @@ func (cluster *Cluster) GetGroupEngines(groupid string) []*Engine {
 	return engines
 }
 
+// GetGroups is exported
 func (cluster *Cluster) GetGroups() []*Group {
 
 	groups := []*Group{}
@@ -178,6 +187,7 @@ func (cluster *Cluster) GetGroups() []*Group {
 	return groups
 }
 
+// GetGroup is exported
 func (cluster *Cluster) GetGroup(groupid string) *Group {
 
 	cluster.RLock()
@@ -188,6 +198,7 @@ func (cluster *Cluster) GetGroup(groupid string) *Group {
 	return nil
 }
 
+// SetGroup is exported
 func (cluster *Cluster) SetGroup(groupid string, servers []string, owners []string) {
 
 	cluster.Lock()
@@ -226,6 +237,7 @@ func (cluster *Cluster) SetGroup(groupid string, servers []string, owners []stri
 	}
 }
 
+// RemoveGroup is exported
 func (cluster *Cluster) RemoveGroup(groupid string) bool {
 
 	cluster.Lock()
@@ -344,7 +356,7 @@ func (cluster *Cluster) OperateContainers(metaid string, action string) (*types.
 				if container.GroupID == metaData.GroupID && container.MetaID == metaid {
 					err := engine.OperateContainer(container.Info.ID, models.ContainerOperate{Action: action, Container: container.Info.ID})
 					if err != nil {
-						logger.ERROR("[#cluster#] engine %s operate container error:%s", engine.IP, err.Error())
+						logger.ERROR("[#cluster#] engine %s, operate container error:%s", engine.IP, err.Error())
 					}
 					operatedContainers = operatedContainers.SetOperatedPair(engine.IP, container.Info.ID, err)
 				}
@@ -382,7 +394,7 @@ func (cluster *Cluster) RemoveContainers(metaid string) (*types.RemovedContainer
 				if container.GroupID == metaData.GroupID && container.MetaID == metaid {
 					err := engine.RemoveContainer(container.Info.ID)
 					if err != nil {
-						logger.ERROR("[#cluster#] engine %s remove container error:%s", engine.IP, err.Error())
+						logger.ERROR("[#cluster#] engine %s, remove container error:%s", engine.IP, err.Error())
 					} else {
 						cluster.configCache.RemoveContainerBaseConfig(metaid, container.Info.ID)
 					}
@@ -437,10 +449,11 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, config m
 		containerConfig.Name = groupid[:8] + "-" + containerConfig.Name + "-" + strconv.Itoa(index)
 		engine, container, err := cluster.createContainer(engines, ipList, containerConfig)
 		if err != nil {
-			logger.ERROR("[#cluster#] create container %s %s, error:%s", groupid, containerConfig.Name, err.Error())
 			if err == ErrClusterNoEngineAvailable {
+				logger.ERROR("[#cluster#] create container %s, error:%s", containerConfig.Name, err.Error())
 				continue
 			}
+			logger.ERROR("[#cluster#] engine %s, create container %s, error:%s", engine.IP, containerConfig.Name, err.Error())
 			ipList = filterAppendIPList(engine, ipList)
 			var retries int64
 			for ; retries < cluster.createRetry && err != nil; retries++ {
@@ -448,6 +461,11 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, config m
 				ipList = filterAppendIPList(engine, ipList)
 			}
 			if err != nil {
+				if err == ErrClusterNoEngineAvailable {
+					logger.ERROR("[#cluster#] create container %s, error:%s", containerConfig.Name, err.Error())
+				} else {
+					logger.ERROR("[#cluster#] engine %s, create container %s, error:%s", engine.IP, containerConfig.Name, err.Error())
+				}
 				continue
 			}
 		}
