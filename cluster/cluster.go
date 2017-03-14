@@ -9,6 +9,7 @@ import "github.com/humpback/humpback-agent/models"
 import "github.com/humpback/humpback-center/cluster/types"
 
 import (
+	"fmt"
 	"math/rand"
 	"net"
 	"sort"
@@ -359,16 +360,19 @@ func (cluster *Cluster) OperateContainers(metaid string, action string) (*types.
 
 	operatedContainers := types.OperatedContainers{}
 	for _, engine := range engines {
-		if engine.IsHealthy() {
-			containers := engine.Containers()
-			for _, container := range containers {
-				if container.GroupID == metaData.GroupID && container.MetaID == metaid {
-					err := engine.OperateContainer(container.Info.ID, models.ContainerOperate{Action: action, Container: container.Info.ID})
+		containers := engine.Containers()
+		for _, container := range containers {
+			if container.GroupID == metaData.GroupID && container.MetaID == metaid {
+				var err error
+				if engine.IsHealthy() {
+					err = engine.OperateContainer(container.Info.ID, models.ContainerOperate{Action: action, Container: container.Info.ID})
 					if err != nil {
 						logger.ERROR("[#cluster#] engine %s, operate container error:%s", engine.IP, err.Error())
 					}
-					operatedContainers = operatedContainers.SetOperatedPair(engine.IP, container.Info.ID, err)
+				} else {
+					err = fmt.Errorf("engine state is %s", engine.State())
 				}
+				operatedContainers = operatedContainers.SetOperatedPair(engine.IP, container.Info.ID, err)
 			}
 		}
 	}
@@ -391,18 +395,21 @@ func (cluster *Cluster) RemoveContainers(metaid string) (*types.RemovedContainer
 
 	removedContainers := types.RemovedContainers{}
 	for _, engine := range engines {
-		if engine.IsHealthy() {
-			containers := engine.Containers()
-			for _, container := range containers {
-				if container.GroupID == metaData.GroupID && container.MetaID == metaid {
+		containers := engine.Containers()
+		for _, container := range containers {
+			if container.GroupID == metaData.GroupID && container.MetaID == metaid {
+				var err error
+				if engine.IsHealthy() {
 					err := engine.RemoveContainer(container.Info.ID)
 					if err != nil {
 						logger.ERROR("[#cluster#] engine %s, remove container error:%s", engine.IP, err.Error())
 					} else {
 						cluster.configCache.RemoveContainerBaseConfig(metaid, container.Info.ID)
 					}
-					removedContainers = removedContainers.SetRemovedPair(engine.IP, container.Info.ID, err)
+				} else {
+					err = fmt.Errorf("engine state is %s", engine.State())
 				}
+				removedContainers = removedContainers.SetRemovedPair(engine.IP, container.Info.ID, err)
 			}
 		}
 	}

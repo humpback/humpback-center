@@ -117,7 +117,7 @@ func (engine *Engine) Open(addr string) {
 // Close a engine, reset engine info.
 func (engine *Engine) Close() {
 
-	engine.cleanupContainers()
+	//engine.cleanupContainers()
 	engine.Lock()
 	defer engine.Unlock()
 	if engine.state == StateDisconnected {
