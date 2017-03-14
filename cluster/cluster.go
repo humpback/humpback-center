@@ -146,6 +146,21 @@ func (cluster *Cluster) GroupsEngineContains(engine *Engine) bool {
 	return ret
 }
 
+// GetMetaDataEngines is exported
+func (cluster *Cluster) GetMetaDataEngines(metaid string) (*MetaData, []*Engine, error) {
+
+	metaData := cluster.configCache.GetMetaData(metaid)
+	if metaData == nil {
+		return nil, nil, ErrClusterMetaDataNotFound
+	}
+
+	engines := cluster.GetGroupEngines(metaData.GroupID)
+	if engines == nil {
+		return nil, nil, ErrClusterGroupNotFound
+	}
+	return metaData, engines, nil
+}
+
 // GetEngine is exported
 func (cluster *Cluster) GetEngine(ip string) *Engine {
 
@@ -336,16 +351,10 @@ func (cluster *Cluster) removeEngine(ip string) *Engine {
 // OperateContainers is exported
 func (cluster *Cluster) OperateContainers(metaid string, action string) (*types.OperatedContainers, error) {
 
-	metaData := cluster.configCache.GetMetaData(metaid)
-	if metaData == nil {
-		logger.ERROR("[#cluster#] operate container error %s %s", ErrClusterMetaDataNotFound, metaid)
-		return nil, ErrClusterMetaDataNotFound
-	}
-
-	engines := cluster.GetGroupEngines(metaData.GroupID)
-	if engines == nil {
-		logger.ERROR("[#cluster#] operate container error %s %s", ErrClusterGroupNotFound, metaData.GroupID)
-		return nil, ErrClusterGroupNotFound
+	metaData, engines, err := cluster.GetMetaDataEngines(metaid)
+	if err != nil {
+		logger.ERROR("[#cluster#] operate containers %s error, %s", metaid, err.Error())
+		return nil, err
 	}
 
 	operatedContainers := types.OperatedContainers{}
@@ -374,16 +383,10 @@ func (cluster *Cluster) SetContainers(metaid string, instances int) {
 // RemoveContainers is exported
 func (cluster *Cluster) RemoveContainers(metaid string) (*types.RemovedContainers, error) {
 
-	metaData := cluster.configCache.GetMetaData(metaid)
-	if metaData == nil {
-		logger.ERROR("[#cluster#] remove container error %s %s", ErrClusterMetaDataNotFound, metaid)
-		return nil, ErrClusterMetaDataNotFound
-	}
-
-	engines := cluster.GetGroupEngines(metaData.GroupID)
-	if engines == nil {
-		logger.ERROR("[#cluster#] remove container error %s %s", ErrClusterGroupNotFound, metaData.GroupID)
-		return nil, ErrClusterGroupNotFound
+	metaData, engines, err := cluster.GetMetaDataEngines(metaid)
+	if err != nil {
+		logger.ERROR("[#cluster#] remove containers %s error, %s", metaid, err.Error())
+		return nil, err
 	}
 
 	removedContainers := types.RemovedContainers{}

@@ -227,7 +227,7 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
-	respCreated, err := engine.httpClient.Post("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	respCreated, err := http.NewClient().Post("http://"+engine.Addr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +263,7 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 func (engine *Engine) RemoveContainer(containerid string) error {
 
 	query := map[string][]string{"force": []string{"true"}}
-	respRemoved, err := engine.httpClient.Delete("http://"+engine.Addr+"/v1/containers/"+containerid, query, nil)
+	respRemoved, err := http.NewClient().Delete("http://"+engine.Addr+"/v1/containers/"+containerid, query, nil)
 	if err != nil {
 		return err
 	}
@@ -290,7 +290,7 @@ func (engine *Engine) OperateContainer(containerid string, operate models.Contai
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
-	respOperated, err := engine.httpClient.Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	respOperated, err := http.NewClient().Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return err
 	}
@@ -320,7 +320,7 @@ func (engine *Engine) UpgradeContainer(containerid string, operate models.Contai
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
-	respUpgraded, err := engine.httpClient.Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	respUpgraded, err := http.NewClient().Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return err
 	}
@@ -347,7 +347,7 @@ func (engine *Engine) UpgradeContainer(containerid string, operate models.Contai
 func (engine *Engine) RefreshContainers() error {
 
 	query := map[string][]string{"all": []string{"true"}}
-	respContainers, err := engine.httpClient.Get("http://"+engine.Addr+"/v1/containers", query, nil)
+	respContainers, err := http.NewClient().Get("http://"+engine.Addr+"/v1/containers", query, nil)
 	if err != nil {
 		return err
 	}
@@ -419,7 +419,7 @@ func (engine *Engine) refreshLoop() {
 
 func (engine *Engine) updateSpecs() error {
 
-	respSpecs, err := engine.httpClient.Get("http://"+engine.Addr+"/v1/dockerinfo", nil, nil)
+	respSpecs, err := http.NewClient().Get("http://"+engine.Addr+"/v1/dockerinfo", nil, nil)
 	if err != nil {
 		return err
 	}
@@ -497,7 +497,7 @@ func (engine *Engine) updateContainer(containerid string, containers map[string]
 	engine.RUnlock()
 
 	query := map[string][]string{"originaldata": []string{"true"}}
-	respContainer, err := engine.httpClient.Get("http://"+engine.Addr+"/v1/containers/"+containerid, query, nil)
+	respContainer, err := http.NewClient().Get("http://"+engine.Addr+"/v1/containers/"+containerid, query, nil)
 	if err != nil {
 		return nil, err
 	}
