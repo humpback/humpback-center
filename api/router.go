@@ -25,7 +25,8 @@ var routes = map[string]map[string]handler{
 		"/v1/repository/images/migrate": postRepositoryImagesMigrate,
 	},
 	"PUT": {
-		"/v1/cluster/containers": putClusterOperateContainers,
+		"/v1/cluster/containers/action":  putClusterOperateContainers,
+		"/v1/cluster/containers/upgrade": putClusterUpgradeContainers,
 	},
 	"DELETE": {
 		"/v1/repository/images/{name:.*}": deleteRepositoryImages,

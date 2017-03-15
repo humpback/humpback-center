@@ -164,9 +164,9 @@ func ResolveClusterCreateContainerRequest(r *http.Request) (*ClusterCreateContai
 /*
 ResolveClusterOperateContainerRequest
 Method:  PUT
-Route:   /v1/cluster/containers
+Route:   /v1/cluster/containers/action
 MetaID:    containers metaid
-Action:    operate action (start|stop|restart|kill|pause|unpause|upgrade)
+Action:    operate action (start|stop|restart|kill|pause|unpause)
 */
 type ClusterOperateContainerRequest struct {
 	MetaID string `json:"metaid"`
@@ -187,6 +187,36 @@ func ResolveClusterOperateContainerRequest(r *http.Request) (*ClusterOperateCont
 
 	if len(strings.TrimSpace(request.MetaID)) == 0 {
 		return nil, fmt.Errorf("operate containers metaid invalid, can not be empty")
+	}
+	return request, nil
+}
+
+/*
+ResolveClusterUpgradeContainerRequest
+Method:  PUT
+Route:   /v1/cluster/containers/upgrade
+MetaID:    containers metaid
+ImageTag:  upgrade new image tag
+*/
+type ClusterUpgradeContainerRequest struct {
+	MetaID   string `json:"metaid"`
+	ImageTag string `json:"imagetag"`
+}
+
+func ResolveClusterUpgradeContainerRequest(r *http.Request) (*ClusterUpgradeContainerRequest, error) {
+
+	buf, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	request := &ClusterUpgradeContainerRequest{}
+	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
+		return nil, err
+	}
+
+	if len(strings.TrimSpace(request.MetaID)) == 0 {
+		return nil, fmt.Errorf("upgrade containers metaid invalid, can not be empty")
 	}
 	return request, nil
 }

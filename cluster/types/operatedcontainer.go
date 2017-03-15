@@ -11,11 +11,11 @@ type OperatedContainer struct {
 type OperatedContainers []*OperatedContainer
 
 // SetOperatedPair is exported
-func (operated OperatedContainers) SetOperatedPair(ip string, containerid string, err error) OperatedContainers {
+func (operated OperatedContainers) SetOperatedPair(ip string, containerid string, action string, err error) OperatedContainers {
 
-	result := "operate successed."
+	result := action + " successed."
 	if err != nil {
-		result = err.Error()
+		result = action + "failure, " + err.Error()
 	}
 
 	operatedContainer := &OperatedContainer{

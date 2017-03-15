@@ -169,6 +169,31 @@ func putClusterOperateContainers(c *Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
+func putClusterUpgradeContainers(c *Context) error {
+
+	result := response.ResponseResult{ResponseID: c.ID}
+	req, err := request.ResolveClusterUpgradeContainerRequest(c.Request())
+	if err != nil {
+		logger.ERROR("[#api#] %s resolve upgradecontainer request faild, %s", c.ID, err.Error())
+		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
+		return c.JSON(http.StatusBadRequest, result)
+	}
+
+	logger.INFO("[#api#] %s resolve upgradecontainer request successed. %+v", c.ID, req)
+	if err := c.Controller.UpgradeContainers(req.MetaID, req.ImageTag); err != nil {
+		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())
+		if err == cluster.ErrClusterMetaDataNotFound || err == cluster.ErrClusterGroupNotFound {
+			return c.JSON(http.StatusNotFound, result)
+		}
+		return c.JSON(http.StatusInternalServerError, result)
+	}
+
+	resp := response.NewClusterUpgradeContainerResponse(req.MetaID, "upgrade containers accepted")
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster upgrade containers response")
+	result.SetResponse(resp)
+	return c.JSON(http.StatusAccepted, result)
+}
+
 func deleteClusterRemoveContainers(c *Context) error {
 
 	result := response.ResponseResult{ResponseID: c.ID}

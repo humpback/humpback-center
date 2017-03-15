@@ -242,7 +242,7 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 		return nil, err
 	}
 
-	logger.INFO("[#cluster#] engine %s, create container %s:%s", engine.IP, createContainerResponse.ID, config.Name)
+	logger.INFO("[#cluster#] engine %s, create container %s:%s", engine.IP, createContainerResponse.ID[:12], config.Name)
 	containers, err := engine.updateContainer(createContainerResponse.ID, engine.containers)
 	if err != nil {
 		return nil, err
@@ -270,10 +270,10 @@ func (engine *Engine) RemoveContainer(containerid string) error {
 
 	defer respRemoved.Close(0)
 	if respRemoved.StatusCode() != 200 {
-		return fmt.Errorf("engine %s, remove container %s failure %d", engine.IP, containerid, respRemoved.StatusCode())
+		return fmt.Errorf("engine %s, remove container %s failure %d", engine.IP, containerid[:12], respRemoved.StatusCode())
 	}
 
-	logger.INFO("[#cluster#] engine %s, remove container %s", engine.IP, containerid)
+	logger.INFO("[#cluster#] engine %s, remove container %s", engine.IP, containerid[:12])
 	engine.Lock()
 	delete(engine.containers, containerid)
 	engine.Unlock()
@@ -282,7 +282,7 @@ func (engine *Engine) RemoveContainer(containerid string) error {
 
 // OperateContainer is exported
 // Engine operate a container.
-func (engine *Engine) OperateContainer(containerid string, operate models.ContainerOperate) error {
+func (engine *Engine) OperateContainer(operate models.ContainerOperate) error {
 
 	buf := bytes.NewBuffer([]byte{})
 	if err := json.NewEncoder(buf).Encode(operate); err != nil {
@@ -297,11 +297,11 @@ func (engine *Engine) OperateContainer(containerid string, operate models.Contai
 
 	defer respOperated.Close(0)
 	if respOperated.StatusCode() != 200 {
-		return fmt.Errorf("engine %s, %s container %s failure %d", engine.IP, operate.Action, operate.Container, respOperated.StatusCode())
+		return fmt.Errorf("engine %s, %s container %s failure %d", engine.IP, operate.Action, operate.Container[:12], respOperated.StatusCode())
 	}
 
-	logger.INFO("[#cluster#] engine %s, %s container %s", engine.IP, operate.Action, operate.Container)
-	if containers, err := engine.updateContainer(containerid, engine.containers); err == nil {
+	logger.INFO("[#cluster#] engine %s, %s container %s", engine.IP, operate.Action, operate.Container[:12])
+	if containers, err := engine.updateContainer(operate.Container, engine.containers); err == nil {
 		engine.Lock()
 		engine.containers = containers
 		engine.Unlock()
@@ -311,36 +311,42 @@ func (engine *Engine) OperateContainer(containerid string, operate models.Contai
 
 // UpgradeContainer is exported
 // Engine upgrade a container.
-/*
-func (engine *Engine) UpgradeContainer(containerid string, operate models.ContainerOperate) error {
+func (engine *Engine) UpgradeContainer(operate models.ContainerOperate) (*Container, error) {
 
 	buf := bytes.NewBuffer([]byte{})
 	if err := json.NewEncoder(buf).Encode(operate); err != nil {
-		return err
+		return nil, err
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
 	respUpgraded, err := http.NewClient().Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	defer respUpgraded.Close()
+	defer respUpgraded.Close(0)
 	if respUpgraded.StatusCode() != 200 {
-		return fmt.Errorf("%s container %s failure %d", operate.Action, operate.Container, respUpgraded.StatusCode())
+		return nil, fmt.Errorf("%s container %s failure %d", operate.Action, operate.Container[:12], respUpgraded.StatusCode())
 	}
 
-	logger.INFO("[#cluster#] engine %s %s container %s", engine.IP, operate.Action, operate.Container)
+	upgradeContainerResponse := &ctypes.UpgradeContainerResponse{}
+	if err := respUpgraded.JSON(upgradeContainerResponse); err != nil {
+		return nil, err
+	}
 
-	//engine.RefreshContainers()
-	//if containers, err := engine.updateContainer(containerid, engine.containers); err == nil {
-	//	engine.Lock()
-	//	engine.containers = containers
-	//	engine.Unlock()
-	//}
-	return nil
+	logger.INFO("[#cluster#] engine %s %s container %s to %s", engine.IP, operate.Action, operate.Container[:12], upgradeContainerResponse.ID[:12])
+	if err := engine.RefreshContainers(); err != nil {
+		return nil, err
+	}
+
+	engine.Lock()
+	defer engine.Unlock()
+	container, ret := engine.containers[upgradeContainerResponse.ID]
+	if !ret {
+		return nil, fmt.Errorf("upgrade container, update container info failure")
+	}
+	return container, nil
 }
-*/
 
 // RefreshContainers is exported
 // Engine refresh all containers.
@@ -504,7 +510,7 @@ func (engine *Engine) updateContainer(containerid string, containers map[string]
 
 	defer respContainer.Close(0)
 	if respContainer.StatusCode() != 200 {
-		return nil, fmt.Errorf("engine %s, update container %s failure %d", engine.IP, containerid, respContainer.StatusCode())
+		return nil, fmt.Errorf("engine %s, update container %s failure %d", engine.IP, containerid[:12], respContainer.StatusCode())
 	}
 
 	containerJSON := &types.ContainerJSON{}

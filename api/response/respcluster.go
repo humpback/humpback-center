@@ -118,9 +118,9 @@ func NewClusterCreateContainerResponse(groupid string, metaid string, instances 
 /*
 ClusterOperateContainerResponse
 Method:  PUT
-Route:   /v1/cluster/containers
+Route:   /v1/cluster/containers/action
 MetaID:    containers metaid
-Action:    operate action (start|stop|restart|kill|pause|unpause|upgrade)
+Action:    operate action (start|stop|restart|kill|pause|unpause)
 Containers: operated containers pairs.
 */
 type ClusterOperateContainerResponse struct {
@@ -135,6 +135,25 @@ func NewClusterOperateContainerResponse(metaid string, action string, containers
 		MetaID:     metaid,
 		Action:     action,
 		Containers: containers,
+	}
+}
+
+/*
+ClusterUpgradeContainerResponse
+Method:  PUT
+Route:   /v1/cluster/containers/upgrade
+MetaID:  containers metaid
+*/
+type ClusterUpgradeContainerResponse struct {
+	MetaID  string `json:"metaid"`
+	Upgrade string `json:"upgrade"`
+}
+
+func NewClusterUpgradeContainerResponse(metaid string, upgrade string) *ClusterUpgradeContainerResponse {
+
+	return &ClusterUpgradeContainerResponse{
+		MetaID:  metaid,
+		Upgrade: upgrade,
 	}
 }
 

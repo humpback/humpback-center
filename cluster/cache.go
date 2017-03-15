@@ -25,6 +25,7 @@ type ContainerBaseConfig struct {
 type MetaData struct {
 	GroupID     string                 `json:"GroupId"`
 	MetaID      string                 `json:"MetaId"`
+	ImageTag    string                 `json:"ImageTag"`
 	Name        string                 `json:"Name"`
 	BaseConfigs []*ContainerBaseConfig `json:"BaseConfigs"`
 }
@@ -96,6 +97,24 @@ func (cache *ContainersConfigCache) MakeUniqueMetaID() string {
 		break
 	}
 	return metaid
+}
+
+// SetImageTag is exported
+// Return set tag result
+func (cache *ContainersConfigCache) SetImageTag(metaid string, imagetag string) bool {
+
+	cache.Lock()
+	defer cache.Unlock()
+	if metaData, ret := cache.data[metaid]; ret {
+		originalTag := metaData.ImageTag
+		metaData.ImageTag = imagetag
+		if err := cache.writeMetaData(metaData); err != nil {
+			metaData.ImageTag = originalTag
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 // GetMetaData is exported
@@ -210,9 +229,15 @@ func (cache *ContainersConfigCache) SetContainerBaseConfig(metaid string, groupi
 	defer cache.Unlock()
 	metaData, ret = cache.data[metaid]
 	if !ret {
+		imageTag := "latest"
+		imageName := strings.SplitN(baseConfig.Image, ":", 2)
+		if len(imageName) == 2 {
+			imageTag = imageName[1]
+		}
 		metaData = &MetaData{
 			GroupID:     groupid,
 			MetaID:      metaid,
+			ImageTag:    imageTag,
 			Name:        name,
 			BaseConfigs: []*ContainerBaseConfig{baseConfig},
 		}

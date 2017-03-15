@@ -16,4 +16,6 @@ var (
 	ErrClusterCreateContainerNameConflict = errors.New("cluster create container name conflict, this cluster already exists")
 	//create container all failure
 	ErrClusterCreateContainerFailure = errors.New("cluster create container failure")
+	//cluster containers is upgrading
+	ErrClusterContainersUpgrading = errors.New("cluster containers is upgrading")
 )

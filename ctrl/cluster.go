@@ -165,6 +165,11 @@ func (c *Controller) OperateContainers(metaid string, action string) (*types.Ope
 	return c.Cluster.OperateContainers(metaid, action)
 }
 
+func (c *Controller) UpgradeContainers(metaid string, imagetag string) error {
+
+	return c.Cluster.UpgradeContainers(metaid, imagetag)
+}
+
 func (c *Controller) RemoveContainers(metaid string) (*types.RemovedContainers, error) {
 
 	return c.Cluster.RemoveContainers(metaid)

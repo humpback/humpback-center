@@ -15,7 +15,7 @@ func (removed RemovedContainers) SetRemovedPair(ip string, containerid string, e
 
 	result := "remove successed."
 	if err != nil {
-		result = err.Error()
+		result = "remove failure, " + err.Error()
 	}
 
 	removedContainer := &RemovedContainer{

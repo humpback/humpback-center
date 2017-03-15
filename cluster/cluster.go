@@ -39,6 +39,7 @@ type Group struct {
 // overcommitRatio: engine overcommit ratio, cpus & momery resources.
 // createRetry: create container retry count.
 // configCache: container config metadata cache.
+// upgradeContainers: upgrading containers.
 // pendingContainers: createing containers.
 // engines: map[ip]*Engine
 // groups:  map[groupid]*Group
@@ -50,6 +51,7 @@ type Cluster struct {
 	createRetry       int64
 	randSeed          *rand.Rand
 	configCache       *ContainersConfigCache
+	upgradeContainers *UpgradeContainers
 	pendingContainers map[string]*pendingContainer
 	engines           map[string]*Engine
 	groups            map[string]*Group
@@ -101,6 +103,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		createRetry:       createretry,
 		randSeed:          rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
 		configCache:       configCache,
+		upgradeContainers: NewUpgradeContainers(configCache),
 		pendingContainers: make(map[string]*pendingContainer),
 		engines:           make(map[string]*Engine),
 		groups:            make(map[string]*Group),
@@ -352,9 +355,9 @@ func (cluster *Cluster) removeEngine(ip string) *Engine {
 // OperateContainers is exported
 func (cluster *Cluster) OperateContainers(metaid string, action string) (*types.OperatedContainers, error) {
 
-	metaData, engines, err := cluster.GetMetaDataEngines(metaid)
+	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
-		logger.ERROR("[#cluster#] operate containers %s error, %s", metaid, err.Error())
+		logger.ERROR("[#cluster#] %s containers %s error, %s", action, metaid, err.Error())
 		return nil, err
 	}
 
@@ -365,29 +368,60 @@ func (cluster *Cluster) OperateContainers(metaid string, action string) (*types.
 			if container.GroupID == metaData.GroupID && container.MetaID == metaid {
 				var err error
 				if engine.IsHealthy() {
-					err = engine.OperateContainer(container.Info.ID, models.ContainerOperate{Action: action, Container: container.Info.ID})
+					err = engine.OperateContainer(models.ContainerOperate{Action: action, Container: container.Info.ID})
 					if err != nil {
-						logger.ERROR("[#cluster#] engine %s, operate container error:%s", engine.IP, err.Error())
+						logger.ERROR("[#cluster#] engine %s, %s container error:%s", engine.IP, action, err.Error())
 					}
 				} else {
 					err = fmt.Errorf("engine state is %s", engine.State())
 				}
-				operatedContainers = operatedContainers.SetOperatedPair(engine.IP, container.Info.ID, err)
+				operatedContainers = operatedContainers.SetOperatedPair(engine.IP, container.Info.ID, action, err)
 			}
 		}
 	}
 	return &operatedContainers, nil
 }
 
+// UpgradeContainers is exported
+func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) error {
+
+	metaData, engines, err := cluster.validateMetaData(metaid)
+	if err != nil {
+		logger.ERROR("[#cluster#] upgrade containers %s error, %s", metaid, err.Error())
+		return err
+	}
+
+	upgradecontainers := Containers{}
+	for _, engine := range engines {
+		containers := engine.Containers()
+		for _, container := range containers {
+			if container.GroupID == metaData.GroupID && container.MetaID == metaid {
+				upgradecontainers = append(upgradecontainers, container)
+			}
+		}
+	}
+
+	if len(upgradecontainers) > 0 {
+		cluster.upgradeContainers.Upgrade(metaid, imagetag, upgradecontainers)
+	}
+	return nil
+}
+
 // SetContainers is exported
-func (cluster *Cluster) SetContainers(metaid string, instances int) {
+func (cluster *Cluster) SetContainers(metaid string, instances int) error {
 	//在现有metaid上调整实例数(增加或删除实例), metaid不会变，配置不会变
+	//metaData, engines, err := cluster.validateMetaData(metaid)
+	//if err != nil {
+	//	logger.ERROR("[#cluster#] set containers %s error, %s", metaid, err.Error())
+	//	return err
+	//}
+	return nil
 }
 
 // RemoveContainers is exported
 func (cluster *Cluster) RemoveContainers(metaid string) (*types.RemovedContainers, error) {
 
-	metaData, engines, err := cluster.GetMetaDataEngines(metaid)
+	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
 		logger.ERROR("[#cluster#] remove containers %s error, %s", metaid, err.Error())
 		return nil, err
@@ -484,6 +518,9 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, config m
 		createdContainers = createdContainers.SetCreatedPair(engine.IP, container.Config.Container)
 		containerConfig.ID = container.Info.ID
 		baseConfig := &ContainerBaseConfig{Container: containerConfig}
+		container.GroupID = groupid
+		container.MetaID = metaid
+		container.BaseConfig = baseConfig
 		cluster.configCache.SetContainerBaseConfig(metaid, groupid, config.Name, baseConfig)
 	}
 
@@ -534,7 +571,7 @@ func (cluster *Cluster) selectEngines(engines []*Engine, ipList []string, config
 	if len(selectEngines) > 0 && len(ipList) > 0 {
 		filterEngines := filterIPList(selectEngines, ipList)
 		if len(filterEngines) > 0 {
-			return filterEngines
+			selectEngines = filterEngines
 		} else {
 			for i := len(selectEngines) - 1; i > 0; i-- {
 				j := cluster.randSeed.Intn(i + 1)
@@ -559,6 +596,19 @@ func (cluster *Cluster) cehckContainerNameUniqueness(groupid string, name string
 		return false
 	}
 	return true
+}
+
+func (cluster *Cluster) validateMetaData(metaid string) (*MetaData, []*Engine, error) {
+
+	if ret := cluster.upgradeContainers.Contains(metaid); ret {
+		return nil, nil, ErrClusterContainersUpgrading
+	}
+
+	metaData, engines, err := cluster.GetMetaDataEngines(metaid)
+	if err != nil {
+		return nil, nil, err
+	}
+	return metaData, engines, nil
 }
 
 /*
