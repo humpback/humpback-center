@@ -92,6 +92,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		cacheRoot = val
 	}
 
+	upgradedelay := 10 * time.Second
 	if val, ret := driverOpts.String("upgradedelay", ""); ret {
 		if dur, err := time.ParseDuration(val); err == nil {
 			upgradedelay = dur
