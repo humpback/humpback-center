@@ -10,6 +10,8 @@ var (
 	ErrClusterMetaDataNotFound = errors.New("cluster metadata not found")
 	//cluster group not found
 	ErrClusterGroupNotFound = errors.New("cluster group not found")
+	//cluster container not found
+	ErrClusterContainerNotFound = errors.New("cluster container not found")
 	//cluster group no docker engine available
 	ErrClusterNoEngineAvailable = errors.New("cluster no docker-engine available")
 	//create container name conflict

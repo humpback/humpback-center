@@ -162,7 +162,12 @@ func (c *Controller) CreateClusterContainers(groupid string, instances int, conf
 
 func (c *Controller) OperateContainers(metaid string, action string) (*types.OperatedContainers, error) {
 
-	return c.Cluster.OperateContainers(metaid, action)
+	return c.Cluster.OperateContainers(metaid, "", action)
+}
+
+func (c *Controller) OperateContainer(containerid string, action string) (string, *types.OperatedContainers, error) {
+
+	return c.Cluster.OperateContainer(containerid, action)
 }
 
 func (c *Controller) UpgradeContainers(metaid string, imagetag string) error {
@@ -172,5 +177,10 @@ func (c *Controller) UpgradeContainers(metaid string, imagetag string) error {
 
 func (c *Controller) RemoveContainers(metaid string) (*types.RemovedContainers, error) {
 
-	return c.Cluster.RemoveContainers(metaid)
+	return c.Cluster.RemoveContainers(metaid, "")
+}
+
+func (c *Controller) RemoveContainer(containerid string) (string, *types.RemovedContainers, error) {
+
+	return c.Cluster.RemoveContainer(containerid)
 }

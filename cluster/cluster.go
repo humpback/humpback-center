@@ -359,8 +359,20 @@ func (cluster *Cluster) removeEngine(ip string) *Engine {
 	return engine
 }
 
+// OperateContainer is exported
+func (cluster *Cluster) OperateContainer(containerid string, action string) (string, *types.OperatedContainers, error) {
+
+	metaData := cluster.configCache.GetMetaDataOfContainer(containerid)
+	if metaData == nil {
+		return "", nil, ErrClusterContainerNotFound
+	}
+	operatedContainers, err := cluster.OperateContainers(metaData.MetaID, containerid, action)
+	return metaData.MetaID, operatedContainers, err
+}
+
 // OperateContainers is exported
-func (cluster *Cluster) OperateContainers(metaid string, action string) (*types.OperatedContainers, error) {
+// if containerid is empty string so operate metaid's all containers
+func (cluster *Cluster) OperateContainers(metaid string, containerid string, action string) (*types.OperatedContainers, error) {
 
 	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
@@ -368,20 +380,30 @@ func (cluster *Cluster) OperateContainers(metaid string, action string) (*types.
 		return nil, err
 	}
 
+	foundContainer := false
 	operatedContainers := types.OperatedContainers{}
 	for _, engine := range engines {
+		if foundContainer {
+			break
+		}
 		containers := engine.Containers()
 		for _, container := range containers {
 			if container.GroupID == metaData.GroupID && container.MetaID == metaid {
-				var err error
-				if engine.IsHealthy() {
-					if err = engine.OperateContainer(models.ContainerOperate{Action: action, Container: container.Info.ID}); err != nil {
-						logger.ERROR("[#cluster#] engine %s, %s container error:%s", engine.IP, action, err.Error())
+				if containerid == "" || container.Info.ID == containerid {
+					var err error
+					if engine.IsHealthy() {
+						if err = engine.OperateContainer(models.ContainerOperate{Action: action, Container: container.Info.ID}); err != nil {
+							logger.ERROR("[#cluster#] engine %s, %s container error:%s", engine.IP, action, err.Error())
+						}
+					} else {
+						err = fmt.Errorf("engine state is %s", engine.State())
 					}
-				} else {
-					err = fmt.Errorf("engine state is %s", engine.State())
+					operatedContainers = operatedContainers.SetOperatedPair(engine.IP, container.Info.ID, action, err)
 				}
-				operatedContainers = operatedContainers.SetOperatedPair(engine.IP, container.Info.ID, action, err)
+				if container.Info.ID == containerid {
+					foundContainer = true
+					break
+				}
 			}
 		}
 	}
@@ -424,8 +446,20 @@ func (cluster *Cluster) SetContainers(metaid string, instances int) error {
 	return nil
 }
 
+// RemoveContainer is exported
+func (cluster *Cluster) RemoveContainer(containerid string) (string, *types.RemovedContainers, error) {
+
+	metaData := cluster.configCache.GetMetaDataOfContainer(containerid)
+	if metaData == nil {
+		return "", nil, ErrClusterContainerNotFound
+	}
+	removedContainers, err := cluster.RemoveContainers(metaData.MetaID, containerid)
+	return metaData.MetaID, removedContainers, err
+}
+
 // RemoveContainers is exported
-func (cluster *Cluster) RemoveContainers(metaid string) (*types.RemovedContainers, error) {
+// if containerid is empty string so remove metaid's all containers
+func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*types.RemovedContainers, error) {
 
 	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
@@ -433,22 +467,32 @@ func (cluster *Cluster) RemoveContainers(metaid string) (*types.RemovedContainer
 		return nil, err
 	}
 
+	foundContainer := false
 	removedContainers := types.RemovedContainers{}
 	for _, engine := range engines {
+		if foundContainer {
+			break
+		}
 		containers := engine.Containers()
 		for _, container := range containers {
 			if container.GroupID == metaData.GroupID && container.MetaID == metaid {
-				var err error
-				if engine.IsHealthy() {
-					if err = engine.RemoveContainer(container.Info.ID); err != nil {
-						logger.ERROR("[#cluster#] engine %s, remove container error:%s", engine.IP, err.Error())
+				if containerid == "" || container.Info.ID == containerid {
+					var err error
+					if engine.IsHealthy() {
+						if err = engine.RemoveContainer(container.Info.ID); err != nil {
+							logger.ERROR("[#cluster#] engine %s, remove container error:%s", engine.IP, err.Error())
+						} else {
+							cluster.configCache.RemoveContainerBaseConfig(metaid, container.Info.ID)
+						}
 					} else {
-						cluster.configCache.RemoveContainerBaseConfig(metaid, container.Info.ID)
+						err = fmt.Errorf("engine state is %s", engine.State())
 					}
-				} else {
-					err = fmt.Errorf("engine state is %s", engine.State())
+					removedContainers = removedContainers.SetRemovedPair(engine.IP, container.Info.ID, err)
 				}
-				removedContainers = removedContainers.SetRemovedPair(engine.IP, container.Info.ID, err)
+				if container.Info.ID == containerid {
+					foundContainer = true
+					break
+				}
 			}
 		}
 	}

@@ -118,20 +118,21 @@ func NewClusterCreateContainerResponse(groupid string, metaid string, instances 
 /*
 ClusterOperateContainerResponse
 Method:  PUT
-Route:   /v1/cluster/containers/action
+Route1:  /v1/cluster/collections/action
+Route2:  /v1/cluster/containers/action
 MetaID:    containers metaid
 Action:    operate action (start|stop|restart|kill|pause|unpause)
 Containers: operated containers pairs.
 */
-type ClusterOperateContainerResponse struct {
+type ClusterOperateContainersResponse struct {
 	MetaID     string                    `json:"metaid"`
 	Action     string                    `json:"action"`
 	Containers *types.OperatedContainers `json:"containers"`
 }
 
-func NewClusterOperateContainerResponse(metaid string, action string, containers *types.OperatedContainers) *ClusterOperateContainerResponse {
+func NewClusterOperateContainersResponse(metaid string, action string, containers *types.OperatedContainers) *ClusterOperateContainersResponse {
 
-	return &ClusterOperateContainerResponse{
+	return &ClusterOperateContainersResponse{
 		MetaID:     metaid,
 		Action:     action,
 		Containers: containers,
@@ -158,20 +159,21 @@ func NewClusterUpgradeContainerResponse(metaid string, upgrade string) *ClusterU
 }
 
 /*
-ClusterRemoveContainerResponse
+ClusterRemoveContainersResponse
 Method:  PUT
-Route:   /v1/cluster/containers
-MetaID:    containers metaid
+Route1:  /v1/cluster/collections/{metaid}
+Route2:  /v1/cluster/containers/{containerid}
+MetaID:  containers metaid
 Containers: removed containers pairs.
 */
-type ClusterRemoveContainerResponse struct {
+type ClusterRemoveContainersResponse struct {
 	MetaID     string                   `json:"metaid"`
 	Containers *types.RemovedContainers `json:"containers"`
 }
 
-func NewClusterRemoveContainerResponse(metaid string, containers *types.RemovedContainers) *ClusterRemoveContainerResponse {
+func NewClusterRemoveContainersResponse(metaid string, containers *types.RemovedContainers) *ClusterRemoveContainersResponse {
 
-	return &ClusterRemoveContainerResponse{
+	return &ClusterRemoveContainersResponse{
 		MetaID:     metaid,
 		Containers: containers,
 	}

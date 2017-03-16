@@ -21,16 +21,18 @@ var routes = map[string]map[string]handler{
 	},
 	"POST": {
 		"/v1/cluster/groups/event":      postClusterGroupEvent,
-		"/v1/cluster/collection":        postClusterCreateContainers,
+		"/v1/cluster/collections":       postClusterCreateContainers,
 		"/v1/repository/images/migrate": postRepositoryImagesMigrate,
 	},
 	"PUT": {
-		"/v1/cluster/collection/action":  putClusterOperateContainers,
-		"/v1/cluster/collection/upgrade": putClusterUpgradeContainers,
+		"/v1/cluster/collections/action":  putClusterOperateContainers,
+		"/v1/cluster/containers/action":   putClusterOperateContainer,
+		"/v1/cluster/collections/upgrade": putClusterUpgradeContainers,
 	},
 	"DELETE": {
-		"/v1/repository/images/{name:.*}": deleteRepositoryImages,
-		"/v1/cluster/collection/{metaid}": deleteClusterRemoveContainers,
+		"/v1/repository/images/{name:.*}":      deleteRepositoryImages,
+		"/v1/cluster/collections/{metaid}":     deleteClusterRemoveContainers,
+		"/v1/cluster/containers/{containerid}": deleteClusterRemoveContainer,
 	},
 }
 

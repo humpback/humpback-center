@@ -144,6 +144,22 @@ func (cache *ContainersConfigCache) GetMetaDataOfName(name string) *MetaData {
 	return nil
 }
 
+// GetMetaDataOfContainer is exported
+// Return containerid of a metadata
+func (cache *ContainersConfigCache) GetMetaDataOfContainer(containerid string) *MetaData {
+
+	cache.RLock()
+	defer cache.RUnlock()
+	for _, metaData := range cache.data {
+		for _, baseConfig := range metaData.BaseConfigs {
+			if baseConfig.ID == containerid {
+				return metaData
+			}
+		}
+	}
+	return nil
+}
+
 // ContainsMetaData is exported
 // Return bool, find metadata name
 func (cache *ContainersConfigCache) ContainsMetaData(name string) bool {

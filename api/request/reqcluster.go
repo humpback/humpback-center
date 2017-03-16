@@ -162,15 +162,45 @@ func ResolveClusterCreateContainerRequest(r *http.Request) (*ClusterCreateContai
 }
 
 /*
+ResolveClusterOperateContainersRequest
+Method:  PUT
+Route:   /v1/cluster/collections/action
+MetaID:  containers metaid
+Action:  operate action (start|stop|restart|kill|pause|unpause)
+*/
+type ClusterOperateContainersRequest struct {
+	MetaID string `json:"metaid"`
+	Action string `json:"action"`
+}
+
+func ResolveClusterOperateContainersRequest(r *http.Request) (*ClusterOperateContainersRequest, error) {
+
+	buf, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	request := &ClusterOperateContainersRequest{}
+	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
+		return nil, err
+	}
+
+	if len(strings.TrimSpace(request.MetaID)) == 0 {
+		return nil, fmt.Errorf("operate containers metaid invalid, can not be empty")
+	}
+	return request, nil
+}
+
+/*
 ResolveClusterOperateContainerRequest
 Method:  PUT
 Route:   /v1/cluster/containers/action
-MetaID:    containers metaid
-Action:    operate action (start|stop|restart|kill|pause|unpause)
+ContainerID: operate container id
+Action:  operate action (start|stop|restart|kill|pause|unpause)
 */
 type ClusterOperateContainerRequest struct {
-	MetaID string `json:"metaid"`
-	Action string `json:"action"`
+	ContainerID string `json:"containerid"`
+	Action      string `json:"action"`
 }
 
 func ResolveClusterOperateContainerRequest(r *http.Request) (*ClusterOperateContainerRequest, error) {
@@ -185,7 +215,7 @@ func ResolveClusterOperateContainerRequest(r *http.Request) (*ClusterOperateCont
 		return nil, err
 	}
 
-	if len(strings.TrimSpace(request.MetaID)) == 0 {
+	if len(strings.TrimSpace(request.ContainerID)) == 0 {
 		return nil, fmt.Errorf("operate containers metaid invalid, can not be empty")
 	}
 	return request, nil
@@ -222,24 +252,47 @@ func ResolveClusterUpgradeContainerRequest(r *http.Request) (*ClusterUpgradeCont
 }
 
 /*
-ResolveClusterRemoveContainerRequest
+ResolveClusterRemoveContainersRequest
 Method:  DELETE
-Route:   /v1/cluster/containers/{metaid}
-MetaID:    containers metaid
+Route:   /v1/cluster/collections/{metaid}
+MetaID:  remove containers metaid
 */
-type ClusterRemoveContainerRequest struct {
+type ClusterRemoveContainersRequest struct {
 	MetaID string `json:"metaid"`
 }
 
-func ResolveClusterRemoveContainerRequest(r *http.Request) (*ClusterRemoveContainerRequest, error) {
+func ResolveClusterRemoveContainersRequest(r *http.Request) (*ClusterRemoveContainersRequest, error) {
 
 	vars := mux.Vars(r)
 	metaid := strings.TrimSpace(vars["metaid"])
 	if len(strings.TrimSpace(metaid)) == 0 {
 		return nil, fmt.Errorf("remove containers metaid invalid, can not be empty")
 	}
-	request := &ClusterRemoveContainerRequest{
+	request := &ClusterRemoveContainersRequest{
 		MetaID: metaid,
+	}
+	return request, nil
+}
+
+/*
+ResolveClusterRemoveContainerRequest
+Method:  DELETE
+Route:   /v1/cluster/containers/{containerid}
+ContainerID:  remove container id
+*/
+type ClusterRemoveContainerRequest struct {
+	ContainerID string `json:"containerid"`
+}
+
+func ResolveClusterRemoveContainerRequest(r *http.Request) (*ClusterRemoveContainerRequest, error) {
+
+	vars := mux.Vars(r)
+	containerid := strings.TrimSpace(vars["containerid"])
+	if len(strings.TrimSpace(containerid)) == 0 {
+		return nil, fmt.Errorf("remove containers containerid invalid, can not be empty")
+	}
+	request := &ClusterRemoveContainerRequest{
+		ContainerID: containerid,
 	}
 	return request, nil
 }

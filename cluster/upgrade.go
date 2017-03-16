@@ -100,14 +100,14 @@ func NewUpgrader(metaid string, imageTag string, containers Containers, upgradeD
 	}
 }
 
-func (u *upgrader) Start() {
+func (upgrader *upgrader) Start() {
 
-	u.Lock()
-	defer u.Unlock()
+	upgrader.Lock()
+	defer upgrader.Unlock()
 	var err error
-	u.configCache.SetImageTag(u.MetaID, u.NewImageTag)
-	for _, upgradeContainer := range u.containers {
-		if err = upgradeContainer.Execute(u.NewImageTag); err != nil {
+	upgrader.configCache.SetImageTag(upgrader.MetaID, upgrader.NewImageTag)
+	for _, upgradeContainer := range upgrader.containers {
+		if err = upgradeContainer.Execute(upgrader.NewImageTag); err != nil {
 			logger.ERROR("[#cluster#] upgrade execute %s", err.Error())
 			break
 		}
@@ -120,17 +120,17 @@ func (u *upgrader) Start() {
 			upgradeContainer.New.GroupID = baseConfig.MetaData.GroupID
 			upgradeContainer.New.MetaID = baseConfig.MetaData.MetaID
 			upgradeContainer.New.BaseConfig = &baseConfig
-			u.configCache.SetContainerBaseConfig(baseConfig.MetaData.MetaID, baseConfig.MetaData.GroupID, baseConfig.Name, &baseConfig)
-			u.configCache.RemoveContainerBaseConfig(baseConfig.MetaData.MetaID, upgradeContainer.Original.Config.ID)
-			time.Sleep(u.delayInterval)
+			upgrader.configCache.SetContainerBaseConfig(baseConfig.MetaData.MetaID, baseConfig.MetaData.GroupID, baseConfig.Name, &baseConfig)
+			upgrader.configCache.RemoveContainerBaseConfig(baseConfig.MetaData.MetaID, upgradeContainer.Original.Config.ID)
+			time.Sleep(upgrader.delayInterval)
 		}
 	}
 
 	if err != nil { //recovery upgrade completed containers
-		u.configCache.SetImageTag(u.MetaID, u.OriginalImageTag)
-		for _, upgradeContainer := range u.containers {
+		upgrader.configCache.SetImageTag(upgrader.MetaID, upgrader.OriginalImageTag)
+		for _, upgradeContainer := range upgrader.containers {
 			if upgradeContainer.State == UpgradeCompleted {
-				if err := upgradeContainer.Recovery(u.OriginalImageTag); err != nil {
+				if err := upgradeContainer.Recovery(upgrader.OriginalImageTag); err != nil {
 					logger.ERROR("[#cluster#] upgrade recovery %s", err.Error())
 				}
 				if upgradeContainer.State == UpgradeRecovery {
@@ -142,9 +142,9 @@ func (u *upgrader) Start() {
 					upgradeContainer.Original.GroupID = baseConfig.MetaData.GroupID
 					upgradeContainer.Original.MetaID = baseConfig.MetaData.MetaID
 					upgradeContainer.Original.BaseConfig = &baseConfig
-					u.configCache.SetContainerBaseConfig(baseConfig.MetaData.MetaID, baseConfig.MetaData.GroupID, baseConfig.Name, &baseConfig)
-					u.configCache.RemoveContainerBaseConfig(baseConfig.MetaData.MetaID, upgradeContainer.New.Config.ID)
-					time.Sleep(u.delayInterval)
+					upgrader.configCache.SetContainerBaseConfig(baseConfig.MetaData.MetaID, baseConfig.MetaData.GroupID, baseConfig.Name, &baseConfig)
+					upgrader.configCache.RemoveContainerBaseConfig(baseConfig.MetaData.MetaID, upgradeContainer.New.Config.ID)
+					time.Sleep(upgrader.delayInterval)
 				}
 			}
 		}
@@ -173,23 +173,23 @@ func NewUpgradeContainers(upgradeDelay time.Duration, configCache *ContainersCon
 	}
 }
 
-func (cache *UpgradeContainers) Upgrade(metaid string, imageTag string, containers Containers) {
+func (upgradeContainers *UpgradeContainers) Upgrade(metaid string, imageTag string, containers Containers) {
 
-	cache.Lock()
-	if _, ret := cache.upgraders[metaid]; !ret {
-		upgrader := NewUpgrader(metaid, imageTag, containers, cache.delayInterval, cache.configCache)
+	upgradeContainers.Lock()
+	if _, ret := upgradeContainers.upgraders[metaid]; !ret {
+		upgrader := NewUpgrader(metaid, imageTag, containers, upgradeContainers.delayInterval, upgradeContainers.configCache)
 		if upgrader != nil {
-			cache.upgraders[metaid] = upgrader
+			upgradeContainers.upgraders[metaid] = upgrader
 			go upgrader.Start()
 		}
 	}
-	cache.Unlock()
+	upgradeContainers.Unlock()
 }
 
-func (cache *UpgradeContainers) Contains(metaid string) bool {
+func (upgradeContainers *UpgradeContainers) Contains(metaid string) bool {
 
-	cache.RLock()
-	defer cache.RUnlock()
-	_, ret := cache.upgraders[metaid]
+	upgradeContainers.RLock()
+	defer upgradeContainers.RUnlock()
+	_, ret := upgradeContainers.upgraders[metaid]
 	return ret
 }
