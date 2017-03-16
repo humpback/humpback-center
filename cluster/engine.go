@@ -263,7 +263,7 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 func (engine *Engine) RemoveContainer(containerid string) error {
 
 	query := map[string][]string{"force": []string{"true"}}
-	respRemoved, err := http.NewClient().Delete("http://"+engine.Addr+"/v1/containers/"+containerid, query, nil)
+	respRemoved, err := http.NewWithTimeout(10*time.Second).Delete("http://"+engine.Addr+"/v1/containers/"+containerid, query, nil)
 	if err != nil {
 		return err
 	}
@@ -290,7 +290,7 @@ func (engine *Engine) OperateContainer(operate models.ContainerOperate) error {
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
-	respOperated, err := http.NewClient().Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	respOperated, err := http.NewWithTimeout(10*time.Second).Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return err
 	}
@@ -319,7 +319,7 @@ func (engine *Engine) UpgradeContainer(operate models.ContainerOperate) (*Contai
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
-	respUpgraded, err := http.NewClient().Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	respUpgraded, err := http.NewWithTimeout(10*time.Second).Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return nil, err
 	}

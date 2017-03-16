@@ -15,7 +15,7 @@ func (operated OperatedContainers) SetOperatedPair(ip string, containerid string
 
 	result := action + " successed."
 	if err != nil {
-		result = action + "failure, " + err.Error()
+		result = action + " failure, " + err.Error()
 	}
 
 	operatedContainer := &OperatedContainer{

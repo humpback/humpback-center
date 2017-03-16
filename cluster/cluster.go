@@ -92,6 +92,12 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		cacheRoot = val
 	}
 
+	if val, ret := driverOpts.String("upgradedelay", ""); ret {
+		if dur, err := time.ParseDuration(val); err == nil {
+			upgradedelay = dur
+		}
+	}
+
 	configCache, err := NewContainersConfigCache(cacheRoot)
 	if err != nil {
 		return nil, err
@@ -103,7 +109,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		createRetry:       createretry,
 		randSeed:          rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
 		configCache:       configCache,
-		upgradeContainers: NewUpgradeContainers(configCache),
+		upgradeContainers: NewUpgradeContainers(upgradedelay, configCache),
 		pendingContainers: make(map[string]*pendingContainer),
 		engines:           make(map[string]*Engine),
 		groups:            make(map[string]*Group),
@@ -368,8 +374,7 @@ func (cluster *Cluster) OperateContainers(metaid string, action string) (*types.
 			if container.GroupID == metaData.GroupID && container.MetaID == metaid {
 				var err error
 				if engine.IsHealthy() {
-					err = engine.OperateContainer(models.ContainerOperate{Action: action, Container: container.Info.ID})
-					if err != nil {
+					if err = engine.OperateContainer(models.ContainerOperate{Action: action, Container: container.Info.ID}); err != nil {
 						logger.ERROR("[#cluster#] engine %s, %s container error:%s", engine.IP, action, err.Error())
 					}
 				} else {
@@ -434,8 +439,7 @@ func (cluster *Cluster) RemoveContainers(metaid string) (*types.RemovedContainer
 			if container.GroupID == metaData.GroupID && container.MetaID == metaid {
 				var err error
 				if engine.IsHealthy() {
-					err := engine.RemoveContainer(container.Info.ID)
-					if err != nil {
+					if err = engine.RemoveContainer(container.Info.ID); err != nil {
 						logger.ERROR("[#cluster#] engine %s, remove container error:%s", engine.IP, err.Error())
 					} else {
 						cluster.configCache.RemoveContainerBaseConfig(metaid, container.Info.ID)
