@@ -26,7 +26,7 @@ type MetaData struct {
 	GroupID     string                 `json:"GroupId"`
 	MetaID      string                 `json:"MetaId"`
 	ImageTag    string                 `json:"ImageTag"`
-	Name        string                 `json:"Name"`
+	Config      models.Container       `json:"Config"`
 	BaseConfigs []*ContainerBaseConfig `json:"BaseConfigs"`
 }
 
@@ -137,7 +137,7 @@ func (cache *ContainersConfigCache) GetMetaDataOfName(name string) *MetaData {
 	cache.RLock()
 	defer cache.RUnlock()
 	for _, metaData := range cache.data {
-		if metaData.Name == name {
+		if metaData.Config.Name == name {
 			return metaData
 		}
 	}
@@ -217,6 +217,29 @@ func (cache *ContainersConfigCache) RemoveGroupMetaData(groupid string) bool {
 	return removed
 }
 
+func (cache *ContainersConfigCache) CreateMetaData(groupid string, config models.Container) *MetaData {
+
+	cache.Lock()
+	defer cache.Unlock()
+	metaid := cache.MakeUniqueMetaID()
+	imageTag := "latest"
+	imageName := strings.SplitN(config.Image, ":", 2)
+	if len(imageName) == 2 {
+		imageTag = imageName[1]
+	}
+
+	metaData := &MetaData{
+		GroupID:     groupid,
+		MetaID:      metaid,
+		ImageTag:    imageTag,
+		Config:      config,
+		BaseConfigs: []*ContainerBaseConfig{},
+	}
+	cache.data[metaid] = metaData
+	cache.writeMetaData(metaData)
+	return metaData
+}
+
 // GetContainerBaseConfig is exported
 func (cache *ContainersConfigCache) GetContainerBaseConfig(metaid string, containerid string) *ContainerBaseConfig {
 
@@ -233,33 +256,12 @@ func (cache *ContainersConfigCache) GetContainerBaseConfig(metaid string, contai
 	return nil
 }
 
-// SetContainerBaseConfig is exported
-func (cache *ContainersConfigCache) SetContainerBaseConfig(metaid string, groupid string, name string, baseConfig *ContainerBaseConfig) {
-
-	var (
-		ret      bool
-		metaData *MetaData
-	)
+// CreateContainerBaseConfig is exported
+func (cache *ContainersConfigCache) CreateContainerBaseConfig(metaid string, baseConfig *ContainerBaseConfig) {
 
 	cache.Lock()
 	defer cache.Unlock()
-	metaData, ret = cache.data[metaid]
-	if !ret {
-		imageTag := "latest"
-		imageName := strings.SplitN(baseConfig.Image, ":", 2)
-		if len(imageName) == 2 {
-			imageTag = imageName[1]
-		}
-		metaData = &MetaData{
-			GroupID:     groupid,
-			MetaID:      metaid,
-			ImageTag:    imageTag,
-			Name:        name,
-			BaseConfigs: []*ContainerBaseConfig{baseConfig},
-		}
-		baseConfig.MetaData = metaData
-		cache.data[metaData.MetaID] = metaData
-	} else {
+	if metaData, ret := cache.data[metaid]; ret {
 		for i := 0; i < len(metaData.BaseConfigs); i++ {
 			if metaData.BaseConfigs[i].ID == baseConfig.ID {
 				return
@@ -267,8 +269,8 @@ func (cache *ContainersConfigCache) SetContainerBaseConfig(metaid string, groupi
 		}
 		baseConfig.MetaData = metaData
 		metaData.BaseConfigs = append(metaData.BaseConfigs, baseConfig)
+		cache.writeMetaData(metaData)
 	}
-	cache.writeMetaData(metaData)
 }
 
 // RemoveContainerBaseConfig is exported

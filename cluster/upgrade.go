@@ -124,7 +124,7 @@ func (upgrader *Upgrader) Start() {
 			upgradeContainer.New.GroupID = baseConfig.MetaData.GroupID
 			upgradeContainer.New.MetaID = baseConfig.MetaData.MetaID
 			upgradeContainer.New.BaseConfig = &baseConfig
-			upgrader.configCache.SetContainerBaseConfig(baseConfig.MetaData.MetaID, baseConfig.MetaData.GroupID, baseConfig.Name, &baseConfig)
+			upgrader.configCache.CreateContainerBaseConfig(baseConfig.MetaData.MetaID, &baseConfig)
 			upgrader.configCache.RemoveContainerBaseConfig(baseConfig.MetaData.MetaID, upgradeContainer.Original.Config.ID)
 			time.Sleep(upgrader.delayInterval)
 		}
@@ -146,7 +146,7 @@ func (upgrader *Upgrader) Start() {
 					upgradeContainer.Original.GroupID = baseConfig.MetaData.GroupID
 					upgradeContainer.Original.MetaID = baseConfig.MetaData.MetaID
 					upgradeContainer.Original.BaseConfig = &baseConfig
-					upgrader.configCache.SetContainerBaseConfig(baseConfig.MetaData.MetaID, baseConfig.MetaData.GroupID, baseConfig.Name, &baseConfig)
+					upgrader.configCache.CreateContainerBaseConfig(baseConfig.MetaData.MetaID, &baseConfig)
 					upgrader.configCache.RemoveContainerBaseConfig(baseConfig.MetaData.MetaID, upgradeContainer.New.Config.ID)
 					time.Sleep(upgrader.delayInterval)
 				}

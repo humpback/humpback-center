@@ -436,14 +436,27 @@ func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) error 
 }
 
 // SetContainers is exported
-func (cluster *Cluster) SetContainers(metaid string, instances int) error {
-	//在现有metaid上调整实例数(增加或删除实例), metaid不会变，配置不会变
-	//metaData, engines, err := cluster.validateMetaData(metaid)
-	//if err != nil {
-	//	logger.ERROR("[#cluster#] set containers %s error, %s", metaid, err.Error())
-	//	return err
-	//}
-	return nil
+func (cluster *Cluster) SetContainers(metaid string, instances int) (*types.CreatedContainers, error) {
+
+	/*metaData, engines, err := cluster.validateMetaData(metaid)
+	if err != nil {
+		logger.ERROR("[#cluster#] set containers %s error, %s", metaid, err.Error())
+		return nil, err
+	}
+
+	createdContainers := types.CreatedContainers{}
+	originalIns := len(metaData.BaseConfigs)
+	if originalIns == instances {
+		return &createdContainers, nil
+	}
+
+	if originalIns < instances {
+		//在原有基础上增加实例 count:instances-originalIns
+	} else {
+		//在原有基础上删除实例 count:originalIns-instances
+	}
+	*/
+	return nil, nil
 }
 
 // RemoveContainer is exported
@@ -532,14 +545,14 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, config m
 	}
 	cluster.Unlock()
 
-	metaid := cluster.configCache.MakeUniqueMetaID()
+	metaData := cluster.configCache.CreateMetaData(groupid, config)
 	createdContainers := types.CreatedContainers{}
 	ipList := []string{}
 	index := 1
 	for ; instances > 0; instances-- {
 		containerConfig := config
-		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_GROUPID="+groupid, "HUMPBACK_CLUSTER_METAID="+metaid)
-		containerConfig.Name = groupid[:8] + "-" + containerConfig.Name + "-" + strconv.Itoa(index)
+		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_GROUPID="+metaData.GroupID, "HUMPBACK_CLUSTER_METAID="+metaData.MetaID)
+		containerConfig.Name = metaData.GroupID[:8] + "-" + containerConfig.Name + "-" + strconv.Itoa(index)
 		engine, container, err := cluster.createContainer(engines, ipList, containerConfig)
 		if err != nil {
 			if err == ErrClusterNoEngineAvailable {
@@ -567,20 +580,19 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, config m
 		createdContainers = createdContainers.SetCreatedPair(engine.IP, container.Config.Container)
 		containerConfig.ID = container.Info.ID
 		baseConfig := &ContainerBaseConfig{Container: containerConfig}
-		container.GroupID = groupid
-		container.MetaID = metaid
+		container.GroupID = metaData.GroupID
+		container.MetaID = metaData.MetaID
 		container.BaseConfig = baseConfig
-		cluster.configCache.SetContainerBaseConfig(metaid, groupid, config.Name, baseConfig)
+		cluster.configCache.CreateContainerBaseConfig(metaData.MetaID, baseConfig)
 	}
 
 	cluster.Lock()
 	delete(cluster.pendingContainers, config.Name)
 	cluster.Unlock()
-	metaData := cluster.configCache.GetMetaData(metaid)
 	if instances > 0 && len(metaData.BaseConfigs) == 0 {
 		return "", nil, ErrClusterCreateContainerFailure
 	}
-	return metaid, &createdContainers, nil
+	return metaData.MetaID, &createdContainers, nil
 }
 
 func (cluster *Cluster) createContainer(engines []*Engine, ipList []string, config models.Container) (*Engine, *Container, error) {
