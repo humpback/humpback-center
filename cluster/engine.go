@@ -18,8 +18,10 @@ import (
 )
 
 const (
-	// timeout for request send out to the engine
-	requestTimeout = 15 * time.Second
+	// engine send request timeout min value
+	requestMinTimeout = 15 * time.Second
+	// engine send request timeout max value
+	requestMaxTimeout = 45 * time.Second
 	// engine refresh loop interval
 	refreshInterval = 20 * time.Second
 	// threshold of delta duration between humpback-center and humpback-agent's systime
@@ -69,7 +71,6 @@ type Engine struct {
 	overcommitRatio int64
 	configCache     *ContainersConfigCache
 	containers      map[string]*Container
-	httpClient      *http.HttpClient
 	stopCh          chan struct{}
 	state           engineState
 }
@@ -101,7 +102,6 @@ func (engine *Engine) Open(addr string) {
 	engine.Addr = addr
 	if engine.state != StateHealthy {
 		engine.state = StateHealthy
-		engine.httpClient = http.NewWithTimeout(requestTimeout)
 		engine.stopCh = make(chan struct{})
 		logger.INFO("[#cluster#] engine %s open.", engine.IP)
 		go func() {
@@ -124,7 +124,6 @@ func (engine *Engine) Close() {
 		return
 	}
 	close(engine.stopCh) //quit refreshLoop.
-	engine.httpClient.Close()
 	engine.ID = ""
 	engine.Name = ""
 	engine.Addr = ""
@@ -227,12 +226,12 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
-	respCreated, err := http.NewClient().Post("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	respCreated, err := http.NewWithTimeout(requestMaxTimeout).Post("http://"+engine.Addr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return nil, err
 	}
 
-	defer respCreated.Close(0)
+	defer respCreated.Close()
 	if respCreated.StatusCode() != 200 {
 		return nil, fmt.Errorf("engine %s, create container %s failure %d", engine.IP, config.Name, respCreated.StatusCode())
 	}
@@ -263,12 +262,12 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 func (engine *Engine) RemoveContainer(containerid string) error {
 
 	query := map[string][]string{"force": []string{"true"}}
-	respRemoved, err := http.NewWithTimeout(10*time.Second).Delete("http://"+engine.Addr+"/v1/containers/"+containerid, query, nil)
+	respRemoved, err := http.NewWithTimeout(requestMinTimeout).Delete("http://"+engine.Addr+"/v1/containers/"+containerid, query, nil)
 	if err != nil {
 		return err
 	}
 
-	defer respRemoved.Close(0)
+	defer respRemoved.Close()
 	if respRemoved.StatusCode() != 200 {
 		return fmt.Errorf("engine %s, remove container %s failure %d", engine.IP, containerid[:12], respRemoved.StatusCode())
 	}
@@ -290,12 +289,12 @@ func (engine *Engine) OperateContainer(operate models.ContainerOperate) error {
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
-	respOperated, err := http.NewWithTimeout(10*time.Second).Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	respOperated, err := http.NewWithTimeout(requestMinTimeout).Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return err
 	}
 
-	defer respOperated.Close(0)
+	defer respOperated.Close()
 	if respOperated.StatusCode() != 200 {
 		return fmt.Errorf("engine %s, %s container %s failure %d", engine.IP, operate.Action, operate.Container[:12], respOperated.StatusCode())
 	}
@@ -319,12 +318,12 @@ func (engine *Engine) UpgradeContainer(operate models.ContainerOperate) (*Contai
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
-	respUpgraded, err := http.NewWithTimeout(10*time.Second).Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	respUpgraded, err := http.NewWithTimeout(requestMaxTimeout).Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return nil, err
 	}
 
-	defer respUpgraded.Close(0)
+	defer respUpgraded.Close()
 	if respUpgraded.StatusCode() != 200 {
 		return nil, fmt.Errorf("%s container %s failure %d", operate.Action, operate.Container[:12], respUpgraded.StatusCode())
 	}
@@ -353,12 +352,12 @@ func (engine *Engine) UpgradeContainer(operate models.ContainerOperate) (*Contai
 func (engine *Engine) RefreshContainers() error {
 
 	query := map[string][]string{"all": []string{"true"}}
-	respContainers, err := http.NewClient().Get("http://"+engine.Addr+"/v1/containers", query, nil)
+	respContainers, err := http.NewWithTimeout(requestMinTimeout).Get("http://"+engine.Addr+"/v1/containers", query, nil)
 	if err != nil {
 		return err
 	}
 
-	defer respContainers.Close(0)
+	defer respContainers.Close()
 	if respContainers.StatusCode() != 200 {
 		return fmt.Errorf("http GET response statuscode %d", respContainers.StatusCode())
 	}
@@ -425,12 +424,12 @@ func (engine *Engine) refreshLoop() {
 
 func (engine *Engine) updateSpecs() error {
 
-	respSpecs, err := http.NewClient().Get("http://"+engine.Addr+"/v1/dockerinfo", nil, nil)
+	respSpecs, err := http.NewWithTimeout(requestMinTimeout).Get("http://"+engine.Addr+"/v1/dockerinfo", nil, nil)
 	if err != nil {
 		return err
 	}
 
-	defer respSpecs.Close(0)
+	defer respSpecs.Close()
 	if respSpecs.StatusCode() != 200 {
 		return fmt.Errorf("http GET response statuscode %d", respSpecs.StatusCode())
 	}
@@ -503,12 +502,12 @@ func (engine *Engine) updateContainer(containerid string, containers map[string]
 	engine.RUnlock()
 
 	query := map[string][]string{"originaldata": []string{"true"}}
-	respContainer, err := http.NewClient().Get("http://"+engine.Addr+"/v1/containers/"+containerid, query, nil)
+	respContainer, err := http.NewWithTimeout(requestMinTimeout).Get("http://"+engine.Addr+"/v1/containers/"+containerid, query, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	defer respContainer.Close(0)
+	defer respContainer.Close()
 	if respContainer.StatusCode() != 200 {
 		return nil, fmt.Errorf("engine %s, update container %s failure %d", engine.IP, containerid[:12], respContainer.StatusCode())
 	}
