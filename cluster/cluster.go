@@ -435,30 +435,6 @@ func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) error 
 	return nil
 }
 
-// SetContainers is exported
-func (cluster *Cluster) SetContainers(metaid string, instances int) (*types.CreatedContainers, error) {
-
-	/*metaData, engines, err := cluster.validateMetaData(metaid)
-	if err != nil {
-		logger.ERROR("[#cluster#] set containers %s error, %s", metaid, err.Error())
-		return nil, err
-	}
-
-	createdContainers := types.CreatedContainers{}
-	originalIns := len(metaData.BaseConfigs)
-	if originalIns == instances {
-		return &createdContainers, nil
-	}
-
-	if originalIns < instances {
-		//在原有基础上增加实例 count:instances-originalIns
-	} else {
-		//在原有基础上删除实例 count:originalIns-instances
-	}
-	*/
-	return nil, nil
-}
-
 // RemoveContainer is exported
 func (cluster *Cluster) RemoveContainer(containerid string) (string, *types.RemovedContainers, error) {
 
@@ -518,42 +494,104 @@ func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*ty
 	return &removedContainers, nil
 }
 
+// SetContainers is exported
+func (cluster *Cluster) SetContainers(metaid string, instances int) (*types.CreatedContainers, error) {
+
+	if instances <= 0 {
+		return nil, ErrClusterContainersInstancesInvalid
+	}
+
+	metaData, engines, err := cluster.validateMetaData(metaid)
+	if err != nil {
+		logger.ERROR("[#cluster#] set containers %s error, %s", metaid, err.Error())
+		return nil, err
+	}
+
+	if len(engines) == 0 {
+		logger.ERROR("[#cluster#] set containers error %s : %s", metaData.GroupID, ErrClusterNoEngineAvailable)
+		return nil, ErrClusterNoEngineAvailable
+	}
+
+	originalInstances := len(metaData.BaseConfigs)
+	if originalInstances == instances {
+		return nil, ErrClusterContainersInstancesNoChange
+	}
+
+	if ret := cluster.containsPendingContainers(metaData.GroupID, metaData.Config.Name); ret {
+		return nil, fmt.Errorf("pedingContainers error.")
+	}
+
+	if originalInstances < instances {
+		createdContainers := cluster.createContainers(metaData, originalInstances+1, instances-originalInstances, metaData.Config)
+		if len(createdContainers) == 0 {
+			return nil, ErrClusterContainersInstancesNoChange
+		}
+	} else {
+		//在原有基础上删除实例 count:originalIns-instances
+	}
+
+	createdContainers := types.CreatedContainers{}
+	for _, engine := range engines {
+		containers := engine.Containers()
+		for _, container := range containers {
+			if container.MetaID == metaData.MetaID {
+				createdContainers = createdContainers.SetCreatedPair(engine.IP, container.Config.Container)
+			}
+		}
+	}
+	return &createdContainers, nil
+}
+
 // CreateContainers is exported
 func (cluster *Cluster) CreateContainers(groupid string, instances int, config models.Container) (string, *types.CreatedContainers, error) {
 
+	if instances <= 0 {
+		return "", nil, ErrClusterContainersInstancesInvalid
+	}
+
 	engines := cluster.GetGroupEngines(groupid)
 	if engines == nil {
-		logger.ERROR("[#cluster#] create container error %s : %s", groupid, ErrClusterGroupNotFound)
+		logger.ERROR("[#cluster#] create containers error %s : %s", groupid, ErrClusterGroupNotFound)
 		return "", nil, ErrClusterGroupNotFound
 	}
 
 	if len(engines) == 0 {
-		logger.ERROR("[#cluster#] create container error %s : %s", groupid, ErrClusterNoEngineAvailable)
+		logger.ERROR("[#cluster#] create containers error %s : %s", groupid, ErrClusterNoEngineAvailable)
 		return "", nil, ErrClusterNoEngineAvailable
 	}
 
 	if ret := cluster.cehckContainerNameUniqueness(groupid, config.Name); !ret {
-		logger.ERROR("[#cluster#] create container error %s : %s", groupid, ErrClusterCreateContainerNameConflict)
+		logger.ERROR("[#cluster#] create containers error %s : %s", groupid, ErrClusterCreateContainerNameConflict)
 		return "", nil, ErrClusterCreateContainerNameConflict
 	}
 
+	metaData := cluster.configCache.CreateMetaData(groupid, config)
+	createdContainers := cluster.createContainers(metaData, 1, instances, config)
+	if len(createdContainers) == 0 {
+		cluster.configCache.RemoveMetaData(metaData.MetaID)
+		return "", nil, ErrClusterCreateContainerFailure
+	}
+	return metaData.MetaID, &createdContainers, nil
+}
+
+// createContainers is exported
+func (cluster *Cluster) createContainers(metaData *MetaData, index int, instances int, config models.Container) types.CreatedContainers {
+
 	cluster.Lock()
 	cluster.pendingContainers[config.Name] = &pendingContainer{
-		GroupID: groupid,
+		GroupID: metaData.GroupID,
 		Name:    config.Name,
 		Config:  config,
 	}
 	cluster.Unlock()
 
-	metaData := cluster.configCache.CreateMetaData(groupid, config)
 	createdContainers := types.CreatedContainers{}
 	ipList := []string{}
-	index := 1
 	for ; instances > 0; instances-- {
 		containerConfig := config
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_GROUPID="+metaData.GroupID, "HUMPBACK_CLUSTER_METAID="+metaData.MetaID)
 		containerConfig.Name = metaData.GroupID[:8] + "-" + containerConfig.Name + "-" + strconv.Itoa(index)
-		engine, container, err := cluster.createContainer(engines, ipList, containerConfig)
+		engine, container, err := cluster.createContainer(metaData, ipList, containerConfig)
 		if err != nil {
 			if err == ErrClusterNoEngineAvailable {
 				logger.ERROR("[#cluster#] create container %s, error:%s", containerConfig.Name, err.Error())
@@ -563,7 +601,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, config m
 			ipList = filterAppendIPList(engine, ipList)
 			var retries int64
 			for ; retries < cluster.createRetry && err != nil; retries++ {
-				engine, container, err = cluster.createContainer(engines, ipList, containerConfig)
+				engine, container, err = cluster.createContainer(metaData, ipList, containerConfig)
 				ipList = filterAppendIPList(engine, ipList)
 			}
 			if err != nil {
@@ -589,13 +627,15 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, config m
 	cluster.Lock()
 	delete(cluster.pendingContainers, config.Name)
 	cluster.Unlock()
-	if instances > 0 && len(metaData.BaseConfigs) == 0 {
-		return "", nil, ErrClusterCreateContainerFailure
-	}
-	return metaData.MetaID, &createdContainers, nil
+	return createdContainers
 }
 
-func (cluster *Cluster) createContainer(engines []*Engine, ipList []string, config models.Container) (*Engine, *Container, error) {
+func (cluster *Cluster) createContainer(metaData *MetaData, ipList []string, config models.Container) (*Engine, *Container, error) {
+
+	engines := cluster.GetGroupEngines(metaData.GroupID)
+	if engines == nil || len(engines) == 0 {
+		return nil, nil, ErrClusterNoEngineAvailable
+	}
 
 	selectEngines := cluster.selectEngines(engines, ipList, config)
 	if len(selectEngines) == 0 {
@@ -643,15 +683,24 @@ func (cluster *Cluster) selectEngines(engines []*Engine, ipList []string, config
 	return selectEngines
 }
 
-func (cluster *Cluster) cehckContainerNameUniqueness(groupid string, name string) bool {
+func (cluster *Cluster) containsPendingContainers(groupid string, name string) bool {
 
 	cluster.RLock()
 	defer cluster.RUnlock()
 	for _, pendingContainer := range cluster.pendingContainers {
 		if pendingContainer.GroupID == groupid && pendingContainer.Name == name {
-			return false
+			return true
 		}
 	}
+	return false
+}
+
+func (cluster *Cluster) cehckContainerNameUniqueness(groupid string, name string) bool {
+
+	if ret := cluster.containsPendingContainers(groupid, name); ret {
+		return false
+	}
+
 	metaData := cluster.configCache.GetMetaDataOfName(name)
 	if metaData != nil && metaData.GroupID == groupid {
 		return false

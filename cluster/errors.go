@@ -14,10 +14,14 @@ var (
 	ErrClusterContainerNotFound = errors.New("cluster container not found")
 	//cluster group no docker engine available
 	ErrClusterNoEngineAvailable = errors.New("cluster no docker-engine available")
-	//create container name conflict
-	ErrClusterCreateContainerNameConflict = errors.New("cluster create container name conflict, this cluster already exists")
-	//create container all failure
-	ErrClusterCreateContainerFailure = errors.New("cluster create container failure")
+	//cluster containers instances invalid.
+	ErrClusterContainersInstancesInvalid = errors.New("cluster containers instances invalid")
+	//cluster create containers name conflict
+	ErrClusterCreateContainerNameConflict = errors.New("cluster create containers name conflict, this cluster already exists")
+	//cluster create containers all failure
+	ErrClusterCreateContainerFailure = errors.New("cluster create containers failure")
 	//cluster containers is upgrading
-	ErrClusterContainersUpgrading = errors.New("cluster containers is upgrading")
+	ErrClusterContainersUpgrading = errors.New("cluster containers state is upgrading")
+	//cluster containers instances no change
+	ErrClusterContainersInstancesNoChange = errors.New("cluster containers instances no change")
 )
