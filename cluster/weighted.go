@@ -25,7 +25,7 @@ func (weight weightedEngineList) Less(i, j int) bool {
 	var iengine = weight[i]
 	var jengine = weight[j]
 	if iengine.Weight == jengine.Weight {
-		return len(iengine.Engine.Containers()) < len(jengine.Engine.Containers())
+		return len(iengine.Engine.Containers("")) < len(jengine.Engine.Containers(""))
 	}
 	return iengine.Weight < jengine.Weight
 }

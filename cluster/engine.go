@@ -160,13 +160,16 @@ func (engine *Engine) State() string {
 }
 
 // Containers is exported
-// Return a engine all containers.
-func (engine *Engine) Containers() Containers {
+// Return a engine containers.
+// if metaid is empty string so return engine's all containers
+func (engine *Engine) Containers(metaid string) Containers {
 
 	engine.RLock()
 	containers := Containers{}
 	for _, container := range engine.containers {
-		containers = append(containers, container)
+		if metaid == "" || container.MetaID == metaid {
+			containers = append(containers, container)
+		}
 	}
 	engine.RUnlock()
 	return containers

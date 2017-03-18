@@ -386,24 +386,22 @@ func (cluster *Cluster) OperateContainers(metaid string, containerid string, act
 		if foundContainer {
 			break
 		}
-		containers := engine.Containers()
+		containers := engine.Containers(metaData.MetaID)
 		for _, container := range containers {
-			if container.GroupID == metaData.GroupID && container.MetaID == metaid {
-				if containerid == "" || container.Info.ID == containerid {
-					var err error
-					if engine.IsHealthy() {
-						if err = engine.OperateContainer(models.ContainerOperate{Action: action, Container: container.Info.ID}); err != nil {
-							logger.ERROR("[#cluster#] engine %s, %s container error:%s", engine.IP, action, err.Error())
-						}
-					} else {
-						err = fmt.Errorf("engine state is %s", engine.State())
+			if containerid == "" || container.Info.ID == containerid {
+				var err error
+				if engine.IsHealthy() {
+					if err = engine.OperateContainer(models.ContainerOperate{Action: action, Container: container.Info.ID}); err != nil {
+						logger.ERROR("[#cluster#] engine %s, %s container error:%s", engine.IP, action, err.Error())
 					}
-					operatedContainers = operatedContainers.SetOperatedPair(engine.IP, container.Info.ID, action, err)
+				} else {
+					err = fmt.Errorf("engine state is %s", engine.State())
 				}
-				if container.Info.ID == containerid {
-					foundContainer = true
-					break
-				}
+				operatedContainers = operatedContainers.SetOperatedPair(engine.IP, container.Info.ID, action, err)
+			}
+			if container.Info.ID == containerid {
+				foundContainer = true
+				break
 			}
 		}
 	}
@@ -421,16 +419,14 @@ func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) error 
 
 	upgradecontainers := Containers{}
 	for _, engine := range engines {
-		containers := engine.Containers()
+		containers := engine.Containers(metaData.MetaID)
 		for _, container := range containers {
-			if container.GroupID == metaData.GroupID && container.MetaID == metaid {
-				upgradecontainers = append(upgradecontainers, container)
-			}
+			upgradecontainers = append(upgradecontainers, container)
 		}
 	}
 
 	if len(upgradecontainers) > 0 {
-		cluster.upgradeContainers.Upgrade(metaid, imagetag, upgradecontainers)
+		cluster.upgradeContainers.Upgrade(metaData.MetaID, imagetag, upgradecontainers)
 	}
 	return nil
 }
@@ -462,33 +458,31 @@ func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*ty
 		if foundContainer {
 			break
 		}
-		containers := engine.Containers()
+		containers := engine.Containers(metaData.MetaID)
 		for _, container := range containers {
-			if container.GroupID == metaData.GroupID && container.MetaID == metaid {
-				if containerid == "" || container.Info.ID == containerid {
-					var err error
-					if engine.IsHealthy() {
-						if err = engine.RemoveContainer(container.Info.ID); err != nil {
-							logger.ERROR("[#cluster#] engine %s, remove container error:%s", engine.IP, err.Error())
-						} else {
-							cluster.configCache.RemoveContainerBaseConfig(metaid, container.Info.ID)
-						}
+			if containerid == "" || container.Info.ID == containerid {
+				var err error
+				if engine.IsHealthy() {
+					if err = engine.RemoveContainer(container.Info.ID); err != nil {
+						logger.ERROR("[#cluster#] engine %s, remove container error:%s", engine.IP, err.Error())
 					} else {
-						err = fmt.Errorf("engine state is %s", engine.State())
+						cluster.configCache.RemoveContainerBaseConfig(metaData.MetaID, container.Info.ID)
 					}
-					removedContainers = removedContainers.SetRemovedPair(engine.IP, container.Info.ID, err)
+				} else {
+					err = fmt.Errorf("engine state is %s", engine.State())
 				}
-				if container.Info.ID == containerid {
-					foundContainer = true
-					break
-				}
+				removedContainers = removedContainers.SetRemovedPair(engine.IP, container.Info.ID, err)
+			}
+			if container.Info.ID == containerid {
+				foundContainer = true
+				break
 			}
 		}
 	}
 
-	if metaData := cluster.configCache.GetMetaData(metaid); metaData != nil {
+	if metaData := cluster.configCache.GetMetaData(metaData.MetaID); metaData != nil {
 		if len(metaData.BaseConfigs) == 0 {
-			cluster.configCache.RemoveMetaData(metaid)
+			cluster.configCache.RemoveMetaData(metaData.MetaID)
 		}
 	}
 	return &removedContainers, nil
@@ -527,16 +521,15 @@ func (cluster *Cluster) SetContainers(metaid string, instances int) (*types.Crea
 			return nil, ErrClusterContainersInstancesNoChange
 		}
 	} else {
+
 		//在原有基础上删除实例 count:originalIns-instances
 	}
 
 	createdContainers := types.CreatedContainers{}
 	for _, engine := range engines {
-		containers := engine.Containers()
+		containers := engine.Containers(metaData.MetaID)
 		for _, container := range containers {
-			if container.MetaID == metaData.MetaID {
-				createdContainers = createdContainers.SetCreatedPair(engine.IP, container.Config.Container)
-			}
+			createdContainers = createdContainers.SetCreatedPair(engine.IP, container.Config.Container)
 		}
 	}
 	return &createdContainers, nil
