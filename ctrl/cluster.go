@@ -160,6 +160,11 @@ func (c *Controller) CreateClusterContainers(groupid string, instances int, conf
 	return c.Cluster.CreateContainers(groupid, instances, config)
 }
 
+func (c *Controller) SetClusterContainers(metaid string, instances int) (*types.CreatedContainers, error) {
+
+	return c.Cluster.SetContainers(metaid, instances)
+}
+
 func (c *Controller) OperateContainers(metaid string, action string) (*types.OperatedContainers, error) {
 
 	return c.Cluster.OperateContainers(metaid, "", action)

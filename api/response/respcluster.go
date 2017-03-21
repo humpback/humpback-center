@@ -85,7 +85,7 @@ func NewClusterGroupEventResponse(message string) *ClusterGroupEventResponse {
 }
 
 /*
-ClusterCreateContainerResponse
+ClusterCreateContainersResponse
 Method:  POST
 Route:   /v1/cluster/containers
 GroupID: cluster groupid
@@ -93,24 +93,52 @@ MetaID:  cluster containers metaid
 Created: create result message.
 Containers: created containers pairs.
 */
-type ClusterCreateContainerResponse struct {
+type ClusterCreateContainersResponse struct {
 	GroupID    string                   `json:"groupid"`
 	MetaID     string                   `json:"metaid"`
 	Created    string                   `json:"created"`
 	Containers *types.CreatedContainers `json:"containers"`
 }
 
-func NewClusterCreateContainerResponse(groupid string, metaid string, instances int, containers *types.CreatedContainers) *ClusterCreateContainerResponse {
+func NewClusterCreateContainersResponse(groupid string, metaid string, instances int, containers *types.CreatedContainers) *ClusterCreateContainersResponse {
 
 	created := "created all"
 	if instances > len(*containers) {
 		created = "created partial"
 	}
 
-	return &ClusterCreateContainerResponse{
+	return &ClusterCreateContainersResponse{
 		GroupID:    groupid,
 		MetaID:     metaid,
 		Created:    created,
+		Containers: containers,
+	}
+}
+
+/*
+ClusterSetContainersResponse
+Method:  PUT
+Route:   /v1/cluster/containers
+MetaID:  cluster containers metaid
+Seted:   set result message.
+Containers: set containers pairs.
+*/
+type ClusterSetContainersResponse struct {
+	MetaID     string                   `json:"metaid"`
+	Seted      string                   `json:"seted"`
+	Containers *types.CreatedContainers `json:"containers"`
+}
+
+func NewClusterSetContainersResponse(metaid string, instances int, containers *types.CreatedContainers) *ClusterSetContainersResponse {
+
+	seted := "seted all"
+	if instances > len(*containers) {
+		seted = "seted partial"
+	}
+
+	return &ClusterSetContainersResponse{
+		MetaID:     metaid,
+		Seted:      seted,
 		Containers: containers,
 	}
 }
@@ -140,19 +168,19 @@ func NewClusterOperateContainersResponse(metaid string, action string, container
 }
 
 /*
-ClusterUpgradeContainerResponse
+ClusterUpgradeContainersResponse
 Method:  PUT
 Route:   /v1/cluster/containers/upgrade
 MetaID:  containers metaid
 */
-type ClusterUpgradeContainerResponse struct {
+type ClusterUpgradeContainersResponse struct {
 	MetaID  string `json:"metaid"`
 	Upgrade string `json:"upgrade"`
 }
 
-func NewClusterUpgradeContainerResponse(metaid string, upgrade string) *ClusterUpgradeContainerResponse {
+func NewClusterUpgradeContainersResponse(metaid string, upgrade string) *ClusterUpgradeContainersResponse {
 
-	return &ClusterUpgradeContainerResponse{
+	return &ClusterUpgradeContainersResponse{
 		MetaID:  metaid,
 		Upgrade: upgrade,
 	}

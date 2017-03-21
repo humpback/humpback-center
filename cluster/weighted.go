@@ -61,7 +61,7 @@ func weightEngines(engines []*Engine, config models.Container) weightedEngineLis
 			memoryScore = (engine.UsedMemory()/1024/1024 + config.Memory) * 100 / totalMemory
 		}
 
-		logger.INFO("[#cluster#] weighted engine %s cpuScore:%d memorySocre:%d weight:%d", engine.IP, cpuScore, memoryScore, cpuScore+memoryScore)
+		//logger.INFO("[#cluster#] weighted engine %s cpuScore:%d memorySocre:%d weight:%d", engine.IP, cpuScore, memoryScore, cpuScore+memoryScore)
 		if cpuScore <= 100 && memoryScore <= 100 {
 			weightedEngines = append(weightedEngines, &WeightedEngine{
 				Engine: engine,

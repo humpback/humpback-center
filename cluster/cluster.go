@@ -510,7 +510,7 @@ func (cluster *Cluster) SetContainers(metaid string, instances int) (*types.Crea
 	}
 
 	if ret := cluster.containsPendingContainers(metaData.GroupID, metaData.Config.Name); ret {
-		return nil, fmt.Errorf("pedingContainers error.")
+		return nil, ErrClusterContainersSetting
 	}
 
 	if originalInstances < instances {

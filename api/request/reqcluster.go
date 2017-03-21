@@ -122,27 +122,27 @@ func ResolveClusterGroupEventRequest(r *http.Request) (*ClusterGroupEventRequest
 }
 
 /*
-ResolveClusterCreateContainerRequest
+ResolveClusterCreateContainersRequest
 Method:  POST
 Route:   /v1/cluster/containers
 GroupID:   cluster groupid
 Instances: create container instance count
 Config:    container config
 */
-type ClusterCreateContainerRequest struct {
+type ClusterCreateContainersRequest struct {
 	GroupID   string           `json:"groupid"`
 	Instances int              `json:"instances"`
 	Config    models.Container `json:"config"`
 }
 
-func ResolveClusterCreateContainerRequest(r *http.Request) (*ClusterCreateContainerRequest, error) {
+func ResolveClusterCreateContainersRequest(r *http.Request) (*ClusterCreateContainersRequest, error) {
 
 	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	request := &ClusterCreateContainerRequest{}
+	request := &ClusterCreateContainersRequest{}
 	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
 		return nil, err
 	}
@@ -151,12 +151,46 @@ func ResolveClusterCreateContainerRequest(r *http.Request) (*ClusterCreateContai
 		return nil, fmt.Errorf("create containers cluster groupid invalid, can not be empty")
 	}
 
-	if request.Instances < 0 {
+	if request.Instances <= 0 {
 		return nil, fmt.Errorf("create containers instances invalid, should be larger than 0")
 	}
 
 	if len(strings.TrimSpace(request.Config.Name)) == 0 {
 		return nil, fmt.Errorf("create containers name can not be empty")
+	}
+	return request, nil
+}
+
+/*
+ResolveClusterSetContainersRequest
+Method:  PUT
+Route:   /v1/cluster/containers
+MetaID:   containers metaid
+Instances: set meta containers instance count
+*/
+type ClusterSetContainersRequest struct {
+	MetaID    string `json:"metaid"`
+	Instances int    `json:"instances"`
+}
+
+func ResolveClusterSetContainersRequest(r *http.Request) (*ClusterSetContainersRequest, error) {
+
+	buf, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	request := &ClusterSetContainersRequest{}
+	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
+		return nil, err
+	}
+
+	if len(strings.TrimSpace(request.MetaID)) == 0 {
+		return nil, fmt.Errorf("set containers metaid invalid, can not be empty")
+	}
+
+	if request.Instances <= 0 {
+		return nil, fmt.Errorf("set containers instances invalid, should be larger than 0")
 	}
 	return request, nil
 }
@@ -222,25 +256,25 @@ func ResolveClusterOperateContainerRequest(r *http.Request) (*ClusterOperateCont
 }
 
 /*
-ResolveClusterUpgradeContainerRequest
+ResolveClusterUpgradeContainersRequest
 Method:  PUT
 Route:   /v1/cluster/containers/upgrade
 MetaID:    containers metaid
 ImageTag:  upgrade new image tag
 */
-type ClusterUpgradeContainerRequest struct {
+type ClusterUpgradeContainersRequest struct {
 	MetaID   string `json:"metaid"`
 	ImageTag string `json:"imagetag"`
 }
 
-func ResolveClusterUpgradeContainerRequest(r *http.Request) (*ClusterUpgradeContainerRequest, error) {
+func ResolveClusterUpgradeContainersRequest(r *http.Request) (*ClusterUpgradeContainersRequest, error) {
 
 	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	request := &ClusterUpgradeContainerRequest{}
+	request := &ClusterUpgradeContainersRequest{}
 	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
 		return nil, err
 	}
