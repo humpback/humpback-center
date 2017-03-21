@@ -17,6 +17,7 @@ import (
 
 // ContainerBaseConfig is exported
 type ContainerBaseConfig struct {
+	Index int `json:"Index"`
 	models.Container
 	MetaData *MetaData `json:"-"`
 }
@@ -217,6 +218,7 @@ func (cache *ContainersConfigCache) RemoveGroupMetaData(groupid string) bool {
 	return removed
 }
 
+// CreateMetaData is exported
 func (cache *ContainersConfigCache) CreateMetaData(groupid string, config models.Container) *MetaData {
 
 	cache.Lock()

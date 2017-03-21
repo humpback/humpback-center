@@ -19,12 +19,53 @@ type ContainerConfig struct {
 
 // Container is exported
 type Container struct {
-	GroupID    string
-	MetaID     string
 	BaseConfig *ContainerBaseConfig
 	Config     *ContainerConfig
 	Info       types.ContainerJSON
 	Engine     *Engine
+}
+
+// GroupID is exported
+// Return Container GroupID
+func (c *Container) GroupID() string {
+
+	if c.BaseConfig != nil && c.BaseConfig.MetaData != nil {
+		return c.BaseConfig.MetaData.GroupID
+	}
+	return ""
+}
+
+// MetaID is exported
+// Return Container MetaID
+func (c *Container) MetaID() string {
+
+	if c.BaseConfig != nil && c.BaseConfig.MetaData != nil {
+		return c.BaseConfig.MetaData.MetaID
+	}
+	return ""
+}
+
+// Index is exported
+// Return Container Index
+func (c *Container) Index() int {
+
+	if c.BaseConfig != nil {
+		return c.BaseConfig.Index
+	}
+	return -1
+}
+
+// OriginalName is exported
+// Return Container OriginalName
+func (c *Container) OriginalName() string {
+
+	if c.BaseConfig != nil {
+		configEnvMap := convert.ConvertKVStringSliceToMap(c.BaseConfig.Env)
+		if originalName, ret := configEnvMap["HUMPBACK_CLUSTER_CONTAINER_ORIGINALNAME"]; ret {
+			return originalName
+		}
+	}
+	return ""
 }
 
 // update is exported
@@ -37,20 +78,13 @@ func (c *Container) update(engine *Engine, containerJSON *types.ContainerJSON) {
 		Container: *config,
 	}
 	c.Config = containerConfig
-
 	containerJSON.HostConfig.CPUShares = containerJSON.HostConfig.CPUShares * engine.Cpus / 1024.0
 	startAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.StartedAt)
 	finishedAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.FinishedAt)
 	containerJSON.State.StartedAt = startAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
 	containerJSON.State.FinishedAt = finishedAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
 	c.Info = *containerJSON
-
-	baseConfig := readConainerBaseConfig(containerJSON.ID, engine.configCache, containerJSON.Config.Env)
-	if baseConfig != nil {
-		c.GroupID = baseConfig.MetaData.GroupID
-		c.MetaID = baseConfig.MetaData.MetaID
-		c.BaseConfig = baseConfig
-	}
+	c.BaseConfig = readConainerBaseConfig(containerJSON.ID, engine.configCache, containerJSON.Config.Env)
 }
 
 // readConainerBaseConfig is exported
@@ -61,10 +95,7 @@ func readConainerBaseConfig(containerid string, configCache *ContainersConfigCac
 	groupID := configEnvMap["HUMPBACK_CLUSTER_GROUPID"]
 	metaID := configEnvMap["HUMPBACK_CLUSTER_METAID"]
 	if len(groupID) > 0 && len(metaID) > 0 {
-		baseConfig := configCache.GetContainerBaseConfig(metaID, containerid)
-		if baseConfig != nil && baseConfig.MetaData.GroupID == groupID && baseConfig.MetaData.MetaID == metaID {
-			return baseConfig
-		}
+		return configCache.GetContainerBaseConfig(metaID, containerid)
 	}
 	return nil
 }

@@ -465,8 +465,6 @@ func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*ty
 				if engine.IsHealthy() {
 					if err = engine.RemoveContainer(container.Info.ID); err != nil {
 						logger.ERROR("[#cluster#] engine %s, remove container error:%s", engine.IP, err.Error())
-					} else {
-						cluster.configCache.RemoveContainerBaseConfig(metaData.MetaID, container.Info.ID)
 					}
 				} else {
 					err = fmt.Errorf("engine state is %s", engine.State())
@@ -581,9 +579,13 @@ func (cluster *Cluster) createContainers(metaData *MetaData, index int, instance
 	createdContainers := types.CreatedContainers{}
 	ipList := []string{}
 	for ; instances > 0; instances-- {
+		indexStr := strconv.Itoa(index)
 		containerConfig := config
-		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_GROUPID="+metaData.GroupID, "HUMPBACK_CLUSTER_METAID="+metaData.MetaID)
-		containerConfig.Name = metaData.GroupID[:8] + "-" + containerConfig.Name + "-" + strconv.Itoa(index)
+		containerConfig.Name = metaData.GroupID[:8] + "-" + containerConfig.Name + "-" + indexStr
+		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_GROUPID="+metaData.GroupID)
+		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_METAID="+metaData.MetaID)
+		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_CONTAINER_INDEX="+indexStr)
+		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_CONTAINER_ORIGINALNAME="+containerConfig.Name)
 		engine, container, err := cluster.createContainer(metaData, ipList, containerConfig)
 		if err != nil {
 			if err == ErrClusterNoEngineAvailable {
@@ -606,15 +608,9 @@ func (cluster *Cluster) createContainers(metaData *MetaData, index int, instance
 				continue
 			}
 		}
-		index++
 		ipList = filterAppendIPList(engine, ipList)
 		createdContainers = createdContainers.SetCreatedPair(engine.IP, container.Config.Container)
-		containerConfig.ID = container.Info.ID
-		baseConfig := &ContainerBaseConfig{Container: containerConfig}
-		container.GroupID = metaData.GroupID
-		container.MetaID = metaData.MetaID
-		container.BaseConfig = baseConfig
-		cluster.configCache.CreateContainerBaseConfig(metaData.MetaID, baseConfig)
+		index++
 	}
 
 	cluster.Lock()

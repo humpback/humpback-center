@@ -1,6 +1,7 @@
 package cluster
 
 import "github.com/docker/docker/api/types"
+import "github.com/humpback/gounits/convert"
 import "github.com/humpback/gounits/http"
 import "github.com/humpback/gounits/logger"
 import "github.com/humpback/humpback-agent/models"
@@ -12,6 +13,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -167,7 +169,7 @@ func (engine *Engine) Containers(metaid string) Containers {
 	engine.RLock()
 	containers := Containers{}
 	for _, container := range engine.containers {
-		if metaid == "" || container.MetaID == metaid {
+		if metaid == "" || container.MetaID() == metaid {
 			containers = append(containers, container)
 		}
 	}
@@ -244,6 +246,12 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 		return nil, err
 	}
 
+	config.ID = createContainerResponse.ID
+	configEnvMap := convert.ConvertKVStringSliceToMap(config.Env)
+	containerIndex, _ := strconv.Atoi(configEnvMap["HUMPBACK_CLUSTER_CONTAINER_INDEX"])
+	metaData := engine.configCache.GetMetaData(configEnvMap["HUMPBACK_CLUSTER_METAID"])
+	baseConfig := &ContainerBaseConfig{Index: containerIndex, Container: config, MetaData: metaData}
+	engine.configCache.CreateContainerBaseConfig(metaData.MetaID, baseConfig)
 	logger.INFO("[#cluster#] engine %s, create container %s:%s", engine.IP, createContainerResponse.ID[:12], config.Name)
 	containers, err := engine.updateContainer(createContainerResponse.ID, engine.containers)
 	if err != nil {
@@ -277,7 +285,10 @@ func (engine *Engine) RemoveContainer(containerid string) error {
 
 	logger.INFO("[#cluster#] engine %s, remove container %s", engine.IP, containerid[:12])
 	engine.Lock()
-	delete(engine.containers, containerid)
+	if container, ret := engine.containers[containerid]; ret {
+		engine.configCache.RemoveContainerBaseConfig(container.MetaID(), containerid)
+		delete(engine.containers, containerid)
+	}
 	engine.Unlock()
 	return nil
 }
