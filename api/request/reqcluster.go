@@ -127,11 +127,13 @@ Method:  POST
 Route:   /v1/cluster/containers
 GroupID:   cluster groupid
 Instances: create container instance count
+WebHook:   web hook site url
 Config:    container config
 */
 type ClusterCreateContainersRequest struct {
 	GroupID   string           `json:"GroupId"`
 	Instances int              `json:"Instances"`
+	WebHook   string           `json:"WebHook"`
 	Config    models.Container `json:"Config"`
 }
 
@@ -162,25 +164,27 @@ func ResolveClusterCreateContainersRequest(r *http.Request) (*ClusterCreateConta
 }
 
 /*
-ResolveClusterSetContainersRequest
+ResolveClusterUpdateContainersRequest
 Method:  PUT
 Route:   /v1/cluster/containers
 MetaID:   containers metaid
-Instances: set meta containers instance count
+Instances: update containers instance count
+WebHook:   web hook site url
 */
-type ClusterSetContainersRequest struct {
+type ClusterUpdateContainersRequest struct {
 	MetaID    string `json:"MetaId"`
 	Instances int    `json:"Instances"`
+	WebHook   string `json:"WebHook"`
 }
 
-func ResolveClusterSetContainersRequest(r *http.Request) (*ClusterSetContainersRequest, error) {
+func ResolveClusterUpdateContainersRequest(r *http.Request) (*ClusterUpdateContainersRequest, error) {
 
 	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	request := &ClusterSetContainersRequest{}
+	request := &ClusterUpdateContainersRequest{}
 	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
 		return nil, err
 	}

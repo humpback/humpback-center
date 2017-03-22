@@ -113,7 +113,7 @@ func postClusterCreateContainers(c *Context) error {
 	}
 
 	logger.INFO("[#api#] %s resolve create containers request successed. %+v", c.ID, req)
-	metaid, createdContainers, err := c.Controller.CreateClusterContainers(req.GroupID, req.Instances, req.Config)
+	metaid, createdContainers, err := c.Controller.CreateClusterContainers(req.GroupID, req.Instances, req.WebHook, req.Config)
 	if err != nil {
 		logger.ERROR("[#api#] %s create containers to group %s error: %s", c.ID, req.GroupID, err.Error())
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())
@@ -131,20 +131,20 @@ func postClusterCreateContainers(c *Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-func putClusterSetContainers(c *Context) error {
+func putClusterUpdateContainers(c *Context) error {
 
 	result := response.ResponseResult{ResponseID: c.ID}
-	req, err := request.ResolveClusterSetContainersRequest(c.Request())
+	req, err := request.ResolveClusterUpdateContainersRequest(c.Request())
 	if err != nil {
-		logger.ERROR("[#api#] %s resolve set containers request faild, %s", c.ID, err.Error())
+		logger.ERROR("[#api#] %s resolve update containers request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
 		return c.JSON(http.StatusBadRequest, result)
 	}
 
-	logger.INFO("[#api#] %s resolve set containers request successed. %+v", c.ID, req)
-	setedContainers, err := c.Controller.SetClusterContainers(req.MetaID, req.Instances)
+	logger.INFO("[#api#] %s resolve update containers request successed. %+v", c.ID, req)
+	updatedContainers, err := c.Controller.UpdateClusterContainers(req.MetaID, req.Instances, req.WebHook)
 	if err != nil {
-		logger.ERROR("[#api#] %s set containers to meta %s error: %s", c.ID, req.MetaID, err.Error())
+		logger.ERROR("[#api#] %s update containers to meta %s error: %s", c.ID, req.MetaID, err.Error())
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())
 		if err == cluster.ErrClusterMetaDataNotFound {
 			return c.JSON(http.StatusNotFound, result)
@@ -152,8 +152,8 @@ func putClusterSetContainers(c *Context) error {
 		return c.JSON(http.StatusInternalServerError, result)
 	}
 
-	resp := response.NewClusterSetContainersResponse(req.MetaID, req.Instances, setedContainers)
-	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster set containers response")
+	resp := response.NewClusterUpdateContainersResponse(req.MetaID, req.Instances, updatedContainers)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster update containers response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
 }

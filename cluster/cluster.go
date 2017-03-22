@@ -508,40 +508,33 @@ func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*ty
 	return &removedContainers, nil
 }
 
-// SetContainers is exported
-func (cluster *Cluster) SetContainers(metaid string, instances int) (*types.CreatedContainers, error) {
+// UpdateContainers is exported
+func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhook string) (*types.CreatedContainers, error) {
 
 	if instances <= 0 {
+		logger.ERROR("[#cluster#] update containers %s error, %s", metaid, ErrClusterContainersInstancesInvalid)
 		return nil, ErrClusterContainersInstancesInvalid
 	}
 
 	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
-		logger.ERROR("[#cluster#] set containers %s error, %s", metaid, err.Error())
+		logger.ERROR("[#cluster#] update containers %s error, %s", metaid, err.Error())
 		return nil, err
 	}
 
-	if len(engines) == 0 {
-		logger.ERROR("[#cluster#] set containers error %s : %s", metaData.GroupID, ErrClusterNoEngineAvailable)
-		return nil, ErrClusterNoEngineAvailable
-	}
-
-	originalInstances := len(metaData.BaseConfigs)
-	if originalInstances == instances {
-		return nil, ErrClusterContainersInstancesNoChange
-	}
-
 	if ret := cluster.containsPendingContainers(metaData.GroupID, metaData.Config.Name); ret {
+		logger.ERROR("[#cluster#] update containers %s error, %s", metaData.MetaID, ErrClusterContainersSetting)
 		return nil, ErrClusterContainersSetting
 	}
 
-	if originalInstances < instances {
-		createdContainers := cluster.createContainers(metaData, originalInstances+1, instances-originalInstances, metaData.Config)
-		if len(createdContainers) == 0 {
-			return nil, ErrClusterContainersInstancesNoChange
+	cluster.configCache.SetMetaData(metaid, instances, webhook)
+	if len(engines) > 0 {
+		originalInstances := len(metaData.BaseConfigs)
+		if originalInstances < instances {
+			cluster.createContainers(metaData, originalInstances+1, instances-originalInstances, metaData.Config)
+		} else {
+			cluster.reduceContainers(metaData, engines, originalInstances-instances)
 		}
-	} else {
-		cluster.reduceContainers(metaData, engines, originalInstances-instances)
 	}
 
 	createdContainers := types.CreatedContainers{}
@@ -555,7 +548,7 @@ func (cluster *Cluster) SetContainers(metaid string, instances int) (*types.Crea
 }
 
 // CreateContainers is exported
-func (cluster *Cluster) CreateContainers(groupid string, instances int, config models.Container) (string, *types.CreatedContainers, error) {
+func (cluster *Cluster) CreateContainers(groupid string, instances int, webhook string, config models.Container) (string, *types.CreatedContainers, error) {
 
 	if instances <= 0 {
 		return "", nil, ErrClusterContainersInstancesInvalid
@@ -577,7 +570,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, config m
 		return "", nil, ErrClusterCreateContainerNameConflict
 	}
 
-	metaData := cluster.configCache.CreateMetaData(groupid, config)
+	metaData := cluster.configCache.CreateMetaData(groupid, instances, webhook, config)
 	createdContainers := cluster.createContainers(metaData, 1, instances, config)
 	if len(createdContainers) == 0 {
 		cluster.configCache.RemoveMetaData(metaData.MetaID)

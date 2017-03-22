@@ -12,6 +12,8 @@ type EngineContainer struct {
 // GroupContainer is exported
 type GroupContainer struct {
 	MetaID     string             `json:"MetaId"`
+	Instances  int                `json:"Instances"`
+	WebHook    string             `json:"WebHook"`
 	Config     models.Container   `json:"Config"`
 	Containers []*EngineContainer `json:"Containers"`
 }

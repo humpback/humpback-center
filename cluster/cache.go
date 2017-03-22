@@ -26,6 +26,8 @@ type ContainerBaseConfig struct {
 type MetaData struct {
 	GroupID     string                 `json:"GroupId"`
 	MetaID      string                 `json:"MetaId"`
+	Instances   int                    `json:"Instances"`
+	WebHook     string                 `json:"WebHook"`
 	ImageTag    string                 `json:"ImageTag"`
 	Config      models.Container       `json:"Config"`
 	BaseConfigs []*ContainerBaseConfig `json:"BaseConfigs"`
@@ -186,6 +188,17 @@ func (cache *ContainersConfigCache) GetGroupMetaData(groupid string) []*MetaData
 	return out
 }
 
+func (cache *ContainersConfigCache) SetMetaData(metaid string, instances int, webhook string) {
+
+	cache.Lock()
+	defer cache.Unlock()
+	if metaData, ret := cache.data[metaid]; ret {
+		metaData.Instances = instances
+		metaData.WebHook = webhook
+		cache.writeMetaData(metaData)
+	}
+}
+
 // RemoveMetaData is exported
 // Remove metaid of a metadata
 func (cache *ContainersConfigCache) RemoveMetaData(metaid string) bool {
@@ -219,7 +232,7 @@ func (cache *ContainersConfigCache) RemoveGroupMetaData(groupid string) bool {
 }
 
 // CreateMetaData is exported
-func (cache *ContainersConfigCache) CreateMetaData(groupid string, config models.Container) *MetaData {
+func (cache *ContainersConfigCache) CreateMetaData(groupid string, instances int, webhook string, config models.Container) *MetaData {
 
 	cache.Lock()
 	defer cache.Unlock()
@@ -233,6 +246,8 @@ func (cache *ContainersConfigCache) CreateMetaData(groupid string, config models
 	metaData := &MetaData{
 		GroupID:     groupid,
 		MetaID:      metaid,
+		Instances:   instances,
+		WebHook:     webhook,
 		ImageTag:    imageTag,
 		Config:      config,
 		BaseConfigs: []*ContainerBaseConfig{},
