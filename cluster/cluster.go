@@ -201,6 +201,39 @@ func (cluster *Cluster) GetGroupEngines(groupid string) []*Engine {
 	return engines
 }
 
+// GetGroupContainers is exported
+func (cluster *Cluster) GetGroupContainers(groupid string) *types.GroupContainers {
+
+	cluster.RLock()
+	defer cluster.RUnlock()
+	if _, ret := cluster.groups[groupid]; !ret {
+		return nil
+	}
+
+	groupContainers := types.GroupContainers{}
+	engines := cluster.GetGroupEngines(groupid)
+	groupMetaData := cluster.configCache.GetGroupMetaData(groupid)
+	for _, metaData := range groupMetaData {
+		groupContainer := &types.GroupContainer{
+			MetaID:     metaData.MetaID,
+			Config:     metaData.Config,
+			Containers: make([]*types.EngineContainer, 0),
+		}
+		for _, engine := range engines {
+			containers := engine.Containers(metaData.MetaID)
+			for _, container := range containers {
+				groupContainer.Containers = append(groupContainer.Containers, &types.EngineContainer{
+					IP:        engine.IP,
+					HostName:  engine.Name,
+					Container: container.Config.Container,
+				})
+			}
+		}
+		groupContainers = append(groupContainers, groupContainer)
+	}
+	return &groupContainers
+}
+
 // GetGroups is exported
 func (cluster *Cluster) GetGroups() []*Group {
 
@@ -211,17 +244,6 @@ func (cluster *Cluster) GetGroups() []*Group {
 	}
 	cluster.RUnlock()
 	return groups
-}
-
-// GetGroup is exported
-func (cluster *Cluster) GetGroup(groupid string) *Group {
-
-	cluster.RLock()
-	defer cluster.RUnlock()
-	if group, ret := cluster.groups[groupid]; ret {
-		return group
-	}
-	return nil
 }
 
 // SetGroup is exported
@@ -519,8 +541,7 @@ func (cluster *Cluster) SetContainers(metaid string, instances int) (*types.Crea
 			return nil, ErrClusterContainersInstancesNoChange
 		}
 	} else {
-
-		//在原有基础上删除实例 count:originalIns-instances
+		cluster.reduceContainers(metaData, engines, originalInstances-instances)
 	}
 
 	createdContainers := types.CreatedContainers{}
@@ -563,6 +584,38 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, config m
 		return "", nil, ErrClusterCreateContainerFailure
 	}
 	return metaData.MetaID, &createdContainers, nil
+}
+
+// reduceContainers is exported
+func (cluster *Cluster) reduceContainers(metaData *MetaData, engines []*Engine, instances int) {
+
+	cluster.Lock()
+	cluster.pendingContainers[metaData.Config.Name] = &pendingContainer{
+		GroupID: metaData.GroupID,
+		Name:    metaData.Config.Name,
+		Config:  metaData.Config,
+	}
+	cluster.Unlock()
+
+	containers := reduceContainers{}
+	for _, engine := range engines {
+		if engine.IsHealthy() {
+			containers = append(containers, engine.Containers(metaData.MetaID)...)
+		}
+	}
+
+	sort.Sort(containers)
+	for i := 0; i < len(containers) && i < instances; i++ {
+		engine := containers[i].Engine
+		if err := engine.RemoveContainer(containers[i].Info.ID); err != nil {
+			logger.ERROR("[#cluster#] engine %s, remove container error:%s", engine.IP, err.Error())
+			break
+		}
+	}
+
+	cluster.Lock()
+	delete(cluster.pendingContainers, metaData.Config.Name)
+	cluster.Unlock()
 }
 
 // createContainers is exported

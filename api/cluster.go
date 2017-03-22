@@ -9,39 +9,27 @@ import (
 	"net/http"
 )
 
-func getClusterGroups(c *Context) error {
-
-	logger.INFO("[#api#] %s resolve getgroups request successed.", c.ID)
-	groups := c.Controller.GetClusterGroups()
-	logger.INFO("[#api#] %s getgroups %d.", c.ID, len(groups))
-	resp := response.NewClusterGroupsResponse(groups)
-	result := &response.ResponseResult{ResponseID: c.ID}
-	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster groups response")
-	result.SetResponse(resp)
-	return c.JSON(http.StatusOK, result)
-}
-
-func getClusterGroup(c *Context) error {
+func getClusterGroupContainers(c *Context) error {
 
 	result := &response.ResponseResult{ResponseID: c.ID}
-	req, err := request.ResolveClusterGroupRequest(c.Request())
+	req, err := request.ResolveClusterGroupContainersRequest(c.Request())
 	if err != nil {
-		logger.ERROR("[#api#] %s resolve getgroup request faild, %s", c.ID, err.Error())
+		logger.ERROR("[#api#] %s resolve get cluster group containers request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
 		return c.JSON(http.StatusBadRequest, result)
 	}
 
-	logger.INFO("[#api#] %s resolve getgroup request successed. %+v", c.ID, req)
-	group := c.Controller.GetClusterGroup(req.GroupID)
-	if group == nil {
-		logger.ERROR("[#api#] %s getgroup %s not found.", c.ID, req.GroupID)
+	logger.INFO("[#api#] %s resolve get cluster group containers request successed. %+v", c.ID, req)
+	groupContainers := c.Controller.GetClusterGroupContainers(req.GroupID)
+	if groupContainers == nil {
+		logger.ERROR("[#api#] %s get cluster group containers %s not found.", c.ID, req.GroupID)
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, "cluster group not found")
 		return c.JSON(http.StatusNotFound, result)
 	}
 
-	logger.INFO("[#api#] %s getgroup %p.", c.ID, group)
-	resp := response.NewClusterGroupResponse(group)
-	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster group response")
+	logger.INFO("[#api#] %s get cluster group containers %p.", c.ID, groupContainers)
+	resp := response.NewClusterGroupContainersResponse(req.GroupID, groupContainers)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster group containers response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
 }
@@ -51,21 +39,21 @@ func getClusterGroupEngines(c *Context) error {
 	result := &response.ResponseResult{ResponseID: c.ID}
 	req, err := request.ResolveClusterGroupEnginesRequest(c.Request())
 	if err != nil {
-		logger.ERROR("[#api#] %s resolve getengines request faild, %s", c.ID, err.Error())
+		logger.ERROR("[#api#] %s resolve get cluster group engines request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
 		return c.JSON(http.StatusBadRequest, result)
 	}
 
-	logger.INFO("[#api#] %s resolve getengines request successed. %+v", c.ID, req)
+	logger.INFO("[#api#] %s resolve get cluster group engines request successed. %+v", c.ID, req)
 	engines := c.Controller.GetClusterGroupEngines(req.GroupID)
 	if engines == nil {
-		logger.ERROR("[#api#] %s getengines group %s not found.", c.ID, req.GroupID)
+		logger.ERROR("[#api#] %s get cluster group engines group %s not found.", c.ID, req.GroupID)
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, "cluster group not found")
 		return c.JSON(http.StatusNotFound, result)
 	}
 
-	logger.INFO("[#api#] %s getengines %p.", c.ID, engines)
-	resp := response.NewClusterGroupEnginesResponse(engines)
+	logger.INFO("[#api#] %s get cluster group engines %p.", c.ID, engines)
+	resp := response.NewClusterGroupEnginesResponse(req.GroupID, engines)
 	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster group engines response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
@@ -76,20 +64,20 @@ func getClusterEngine(c *Context) error {
 	result := response.ResponseResult{ResponseID: c.ID}
 	req, err := request.ResolveClusterEngineRequest(c.Request())
 	if err != nil {
-		logger.ERROR("[#api#] %s resolve getengine request faild, %s", c.ID, err.Error())
+		logger.ERROR("[#api#] %s resolve get engine request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
 		return c.JSON(http.StatusBadRequest, result)
 	}
 
-	logger.INFO("[#api#] %s resolve getengine request successed. %+v", c.ID, req)
+	logger.INFO("[#api#] %s resolve get engine request successed. %+v", c.ID, req)
 	engine := c.Controller.GetClusterEngine(req.Server)
 	if engine == nil {
-		logger.ERROR("[#api#] %s getengine %s not found.", c.ID, req.Server)
+		logger.ERROR("[#api#] %s get  engine %s not found.", c.ID, req.Server)
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, "cluster engine not found")
 		return c.JSON(http.StatusNotFound, result)
 	}
 
-	logger.INFO("[#api#] %s getengine %p.", c.ID, engine)
+	logger.INFO("[#api#] %s get engine %p.", c.ID, engine)
 	resp := response.NewClusterEngineResponse(engine)
 	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster engine response")
 	result.SetResponse(resp)

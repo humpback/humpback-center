@@ -10,7 +10,7 @@ import (
 // regist to cluster options
 // APIAddr: humpback node API addr. (IP:Port)
 type ClusterRegistOptions struct {
-	Addr string `json:"addr"`
+	Addr string `json:"Addr"`
 }
 
 // NewClusterRegistOptions is exported

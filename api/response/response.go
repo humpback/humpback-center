@@ -15,11 +15,11 @@ Data: 响应数据
 */
 type ResponseResult struct {
 	Response   `json:"-,omitempty"`
-	Code       int         `json:"code"`
-	Error      string      `json:"error"`
-	Content    string      `json:"contnet"`
-	ResponseID string      `json:"responseid"`
-	Data       interface{} `json:"data,omitpty"`
+	Code       int         `json:"Code"`
+	Error      string      `json:"Error"`
+	Content    string      `json:"Contnet"`
+	ResponseID string      `json:"ResponseID"`
+	Data       interface{} `json:"Data,omitpty"`
 }
 
 func (r *ResponseResult) SetError(code int, err error, content string) {

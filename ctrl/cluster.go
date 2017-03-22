@@ -1,14 +1,12 @@
 package ctrl
 
 import "github.com/humpback/discovery"
-import "github.com/humpback/gounits/convert"
 import "github.com/humpback/gounits/logger"
 import "github.com/humpback/humpback-center/api/request"
 import "github.com/humpback/humpback-center/cluster"
 import "github.com/humpback/humpback-center/cluster/types"
 import "github.com/humpback/humpback-center/etc"
-import "github.com/humpback/humpback-center/models"
-import agentmodels "github.com/humpback/humpback-agent/models"
+import "github.com/humpback/humpback-agent/models"
 
 import (
 	"fmt"
@@ -82,57 +80,19 @@ func (c *Controller) SetCluster(cluster *cluster.Cluster) {
 	}
 }
 
-func (c *Controller) GetClusterGroups() []*models.Group {
+func (c *Controller) GetClusterGroupContainers(groupid string) *types.GroupContainers {
 
-	groups := []*models.Group{}
-	cgroups := c.Cluster.GetGroups()
-	for _, group := range cgroups {
-		it := models.NewGroup(group.ID)
-		for _, server := range group.Servers {
-			status := c.getEngineState(server)
-			it.Insert(server, status)
-		}
-		groups = append(groups, it)
-	}
-	return groups
+	return c.Cluster.GetGroupContainers(groupid)
 }
 
-func (c *Controller) GetClusterGroup(groupid string) *models.Group {
+func (c *Controller) GetClusterGroupEngines(groupid string) []*cluster.Engine {
 
-	if group := c.Cluster.GetGroup(groupid); group != nil {
-		it := models.NewGroup(group.ID)
-		for _, server := range group.Servers {
-			status := c.getEngineState(server)
-			it.Insert(server, status)
-		}
-		return it
-	}
-	return nil
+	return c.Cluster.GetGroupEngines(groupid)
 }
 
-func (c *Controller) GetClusterGroupEngines(groupid string) []*models.Engine {
+func (c *Controller) GetClusterEngine(server string) *cluster.Engine {
 
-	engines := c.Cluster.GetGroupEngines(groupid)
-	if engines == nil {
-		return nil
-	}
-
-	result := []*models.Engine{}
-	for _, engine := range engines {
-		labels := convert.ConvertMapToKVStringSlice(engine.Labels)
-		it := models.NewEngine(engine.ID, engine.Name, engine.IP, engine.Addr, labels, engine.State())
-		result = append(result, it)
-	}
-	return result
-}
-
-func (c *Controller) GetClusterEngine(server string) *models.Engine {
-
-	if engine := c.Cluster.GetEngine(server); engine != nil {
-		labels := convert.ConvertMapToKVStringSlice(engine.Labels)
-		return models.NewEngine(engine.ID, engine.Name, engine.IP, engine.Addr, labels, engine.State())
-	}
-	return nil
+	return c.Cluster.GetEngine(server)
 }
 
 func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
@@ -155,7 +115,7 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 	}
 }
 
-func (c *Controller) CreateClusterContainers(groupid string, instances int, config agentmodels.Container) (string, *types.CreatedContainers, error) {
+func (c *Controller) CreateClusterContainers(groupid string, instances int, config models.Container) (string, *types.CreatedContainers, error) {
 
 	return c.Cluster.CreateContainers(groupid, instances, config)
 }

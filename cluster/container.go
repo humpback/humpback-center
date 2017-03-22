@@ -207,3 +207,20 @@ func (containers Containers) Get(IDOrName string) *Container {
 	}
 	return nil
 }
+
+type reduceContainers Containers
+
+func (containers reduceContainers) Len() int {
+
+	return len(containers)
+}
+
+func (containers reduceContainers) Swap(i, j int) {
+
+	containers[i], containers[j] = containers[j], containers[i]
+}
+
+func (containers reduceContainers) Less(i, j int) bool {
+
+	return containers[i].Index() > containers[j].Index()
+}

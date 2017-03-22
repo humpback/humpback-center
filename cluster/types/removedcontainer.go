@@ -3,7 +3,7 @@ package types
 // RemovedContainer is exported
 type RemovedContainer struct {
 	IP          string `json:"IP"`
-	ContainerID string `json:"ContainerID"`
+	ContainerID string `json:"ContainerId"`
 	Result      string `json:"Result"`
 }
 

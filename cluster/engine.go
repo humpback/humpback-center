@@ -61,14 +61,15 @@ func GetStateText(state engineState) string {
 // Engine is exported
 type Engine struct {
 	sync.RWMutex
-	ID            string
-	Name          string
-	IP            string
-	Addr          string
-	Cpus          int64
-	Memory        int64
-	Labels        map[string]string //docker daemon labels
-	DeltaDuration time.Duration     //humpback-center's systime - humpback-agent's systime
+	ID            string            `json:"ID"`
+	Name          string            `json:"Name"`
+	IP            string            `json:"IP"`
+	Addr          string            `json:"Addr"`
+	Cpus          int64             `json:"Cpus"`
+	Memory        int64             `json:"Memory"`
+	Labels        map[string]string `json:"Labels"` //docker daemon labels
+	StateText     string            `json:"StateText"`
+	DeltaDuration time.Duration     `json:"DeltaDuration"` //humpback-center's systime - humpback-agent's systime
 
 	overcommitRatio int64
 	configCache     *ContainersConfigCache
@@ -90,6 +91,7 @@ func NewEngine(ip string, overcommitRatio float64, configCache *ContainersConfig
 		IP:              ipAddr.IP.String(),
 		overcommitRatio: int64(overcommitRatio * 100),
 		Labels:          make(map[string]string),
+		StateText:       stateText[StateDisconnected],
 		containers:      make(map[string]*Container),
 		configCache:     configCache,
 		state:           StateDisconnected,
@@ -104,6 +106,7 @@ func (engine *Engine) Open(addr string) {
 	engine.Addr = addr
 	if engine.state != StateHealthy {
 		engine.state = StateHealthy
+		engine.StateText = stateText[engine.state]
 		engine.stopCh = make(chan struct{})
 		logger.INFO("[#cluster#] engine %s open.", engine.IP)
 		go func() {
@@ -131,6 +134,7 @@ func (engine *Engine) Close() {
 	engine.Addr = ""
 	engine.Labels = make(map[string]string)
 	engine.state = StateDisconnected
+	engine.StateText = stateText[engine.state]
 	logger.INFO("[#cluster#] engine %s closed.", engine.IP)
 }
 
@@ -149,6 +153,7 @@ func (engine *Engine) SetState(state engineState) {
 
 	engine.Lock()
 	engine.state = state
+	engine.StateText = stateText[state]
 	engine.Unlock()
 }
 

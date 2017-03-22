@@ -13,16 +13,16 @@ import (
 )
 
 /*
-ResolveClusterGroupRequest
+ResolveClusterGroupContainersRequest
 Method:  GET
-Route:   /v1/cluster/groups/{groupid}
+Route:   /v1/cluster/groups/{groupid}/containers
 GroupID: cluster groupid
 */
-type ClusterGroupRequest struct {
-	GroupID string `json:"groupid"`
+type ClusterGroupContainersRequest struct {
+	GroupID string `json:"GroupId"`
 }
 
-func ResolveClusterGroupRequest(r *http.Request) (*ClusterGroupRequest, error) {
+func ResolveClusterGroupContainersRequest(r *http.Request) (*ClusterGroupContainersRequest, error) {
 
 	vars := mux.Vars(r)
 	groupid := strings.TrimSpace(vars["groupid"])
@@ -30,7 +30,7 @@ func ResolveClusterGroupRequest(r *http.Request) (*ClusterGroupRequest, error) {
 		return nil, fmt.Errorf("groupid invalid, can not be empty")
 	}
 
-	return &ClusterGroupRequest{
+	return &ClusterGroupContainersRequest{
 		GroupID: groupid,
 	}, nil
 }
@@ -42,7 +42,7 @@ Route:   /v1/cluster/groups/{groupid}/engines
 GroupID: cluster groupid
 */
 type ClusterGroupEnginesRequest struct {
-	GroupID string `json:"groupid"`
+	GroupID string `json:"GroupId"`
 }
 
 func ResolveClusterGroupEnginesRequest(r *http.Request) (*ClusterGroupEnginesRequest, error) {
@@ -65,7 +65,7 @@ Route:   /v1/cluster/engines/{server}
 Server: cluster engine host address
 */
 type ClusterEngineRequest struct {
-	Server string `json:"server"`
+	Server string `json:"Server"`
 }
 
 func ResolveClusterEngineRequest(r *http.Request) (*ClusterEngineRequest, error) {
@@ -88,8 +88,8 @@ const (
 )
 
 type ClusterGroupEventRequest struct {
-	GroupID string `json:"groupid"`
-	Event   string `json:"event"`
+	GroupID string `json:"GroupId"`
+	Event   string `json:"Event"`
 }
 
 /*
@@ -130,9 +130,9 @@ Instances: create container instance count
 Config:    container config
 */
 type ClusterCreateContainersRequest struct {
-	GroupID   string           `json:"groupid"`
-	Instances int              `json:"instances"`
-	Config    models.Container `json:"config"`
+	GroupID   string           `json:"GroupId"`
+	Instances int              `json:"Instances"`
+	Config    models.Container `json:"Config"`
 }
 
 func ResolveClusterCreateContainersRequest(r *http.Request) (*ClusterCreateContainersRequest, error) {
@@ -169,8 +169,8 @@ MetaID:   containers metaid
 Instances: set meta containers instance count
 */
 type ClusterSetContainersRequest struct {
-	MetaID    string `json:"metaid"`
-	Instances int    `json:"instances"`
+	MetaID    string `json:"MetaId"`
+	Instances int    `json:"Instances"`
 }
 
 func ResolveClusterSetContainersRequest(r *http.Request) (*ClusterSetContainersRequest, error) {
@@ -203,8 +203,8 @@ MetaID:  containers metaid
 Action:  operate action (start|stop|restart|kill|pause|unpause)
 */
 type ClusterOperateContainersRequest struct {
-	MetaID string `json:"metaid"`
-	Action string `json:"action"`
+	MetaID string `json:"MetaId"`
+	Action string `json:"Action"`
 }
 
 func ResolveClusterOperateContainersRequest(r *http.Request) (*ClusterOperateContainersRequest, error) {
@@ -233,8 +233,8 @@ ContainerID: operate container id
 Action:  operate action (start|stop|restart|kill|pause|unpause)
 */
 type ClusterOperateContainerRequest struct {
-	ContainerID string `json:"containerid"`
-	Action      string `json:"action"`
+	ContainerID string `json:"ContainerId"`
+	Action      string `json:"Action"`
 }
 
 func ResolveClusterOperateContainerRequest(r *http.Request) (*ClusterOperateContainerRequest, error) {
@@ -263,8 +263,8 @@ MetaID:    containers metaid
 ImageTag:  upgrade new image tag
 */
 type ClusterUpgradeContainersRequest struct {
-	MetaID   string `json:"metaid"`
-	ImageTag string `json:"imagetag"`
+	MetaID   string `json:"MetaId"`
+	ImageTag string `json:"ImageTag"`
 }
 
 func ResolveClusterUpgradeContainersRequest(r *http.Request) (*ClusterUpgradeContainersRequest, error) {
@@ -292,7 +292,7 @@ Route:   /v1/cluster/collections/{metaid}
 MetaID:  remove containers metaid
 */
 type ClusterRemoveContainersRequest struct {
-	MetaID string `json:"metaid"`
+	MetaID string `json:"MetaId"`
 }
 
 func ResolveClusterRemoveContainersRequest(r *http.Request) (*ClusterRemoveContainersRequest, error) {
@@ -315,7 +315,7 @@ Route:   /v1/cluster/containers/{containerid}
 ContainerID:  remove container id
 */
 type ClusterRemoveContainerRequest struct {
-	ContainerID string `json:"containerid"`
+	ContainerID string `json:"ContainerId"`
 }
 
 func ResolveClusterRemoveContainerRequest(r *http.Request) (*ClusterRemoveContainerRequest, error) {

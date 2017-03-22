@@ -1,37 +1,23 @@
 package response
 
+import "github.com/humpback/humpback-center/cluster"
 import "github.com/humpback/humpback-center/cluster/types"
-import "github.com/humpback/humpback-center/models"
 
 /*
-ClusterGroupsResponse
+ClusterGroupContainersResponse
 Method:  GET
-Route:   /v1/cluster/groups
+Route:   /v1/cluster/groups/{groupid}/containers
 */
-type ClusterGroupsResponse struct {
-	Groups []*models.Group `json:"groups"`
+type ClusterGroupContainersResponse struct {
+	GroupID    string                 `json:"GroupId"`
+	Containers *types.GroupContainers `json:"Containers"`
 }
 
-func NewClusterGroupsResponse(groups []*models.Group) *ClusterGroupsResponse {
+func NewClusterGroupContainersResponse(groupid string, containers *types.GroupContainers) *ClusterGroupContainersResponse {
 
-	return &ClusterGroupsResponse{
-		Groups: groups,
-	}
-}
-
-/*
-ClusterGroupResponse
-Method:  GET
-Route:   /v1/cluster/groups/{groupid}
-*/
-type ClusterGroupResponse struct {
-	Group *models.Group `json:"group"`
-}
-
-func NewClusterGroupResponse(group *models.Group) *ClusterGroupResponse {
-
-	return &ClusterGroupResponse{
-		Group: group,
+	return &ClusterGroupContainersResponse{
+		GroupID:    groupid,
+		Containers: containers,
 	}
 }
 
@@ -41,12 +27,14 @@ Method:  GET
 Route:   /v1/cluster/groups/{groupid}/engines
 */
 type ClusterGroupEnginesResponse struct {
-	Engines []*models.Engine `json:"engines"`
+	GroupID string            `json:"GroupId"`
+	Engines []*cluster.Engine `json:"Engines"`
 }
 
-func NewClusterGroupEnginesResponse(engines []*models.Engine) *ClusterGroupEnginesResponse {
+func NewClusterGroupEnginesResponse(groupid string, engines []*cluster.Engine) *ClusterGroupEnginesResponse {
 
 	return &ClusterGroupEnginesResponse{
+		GroupID: groupid,
 		Engines: engines,
 	}
 }
@@ -57,10 +45,10 @@ Method:  GET
 Route:   /v1/cluster/engines/{engineid}
 */
 type ClusterEngineResponse struct {
-	Engine *models.Engine `json:"engine"`
+	Engine *cluster.Engine `json:"Engine"`
 }
 
-func NewClusterEngineResponse(engine *models.Engine) *ClusterEngineResponse {
+func NewClusterEngineResponse(engine *cluster.Engine) *ClusterEngineResponse {
 
 	return &ClusterEngineResponse{
 		Engine: engine,
@@ -74,7 +62,7 @@ Route:   /v1/cluster/groups/event
 Message: response message
 */
 type ClusterGroupEventResponse struct {
-	Message string `json:"message"`
+	Message string `json:"Message"`
 }
 
 func NewClusterGroupEventResponse(message string) *ClusterGroupEventResponse {
@@ -94,10 +82,10 @@ Created: create result message.
 Containers: created containers pairs.
 */
 type ClusterCreateContainersResponse struct {
-	GroupID    string                   `json:"groupid"`
-	MetaID     string                   `json:"metaid"`
-	Created    string                   `json:"created"`
-	Containers *types.CreatedContainers `json:"containers"`
+	GroupID    string                   `json:"GroupId"`
+	MetaID     string                   `json:"MetaId"`
+	Created    string                   `json:"Created"`
+	Containers *types.CreatedContainers `json:"Containers"`
 }
 
 func NewClusterCreateContainersResponse(groupid string, metaid string, instances int, containers *types.CreatedContainers) *ClusterCreateContainersResponse {
@@ -124,9 +112,9 @@ Seted:   set result message.
 Containers: set containers pairs.
 */
 type ClusterSetContainersResponse struct {
-	MetaID     string                   `json:"metaid"`
-	Seted      string                   `json:"seted"`
-	Containers *types.CreatedContainers `json:"containers"`
+	MetaID     string                   `json:"MetaId"`
+	Seted      string                   `json:"Seted"`
+	Containers *types.CreatedContainers `json:"Containers"`
 }
 
 func NewClusterSetContainersResponse(metaid string, instances int, containers *types.CreatedContainers) *ClusterSetContainersResponse {
@@ -153,9 +141,9 @@ Action:    operate action (start|stop|restart|kill|pause|unpause)
 Containers: operated containers pairs.
 */
 type ClusterOperateContainersResponse struct {
-	MetaID     string                    `json:"metaid"`
-	Action     string                    `json:"action"`
-	Containers *types.OperatedContainers `json:"containers"`
+	MetaID     string                    `json:"MetaId"`
+	Action     string                    `json:"Action"`
+	Containers *types.OperatedContainers `json:"Containers"`
 }
 
 func NewClusterOperateContainersResponse(metaid string, action string, containers *types.OperatedContainers) *ClusterOperateContainersResponse {
@@ -174,8 +162,8 @@ Route:   /v1/cluster/containers/upgrade
 MetaID:  containers metaid
 */
 type ClusterUpgradeContainersResponse struct {
-	MetaID  string `json:"metaid"`
-	Upgrade string `json:"upgrade"`
+	MetaID  string `json:"MetaId"`
+	Upgrade string `json:"Upgrade"`
 }
 
 func NewClusterUpgradeContainersResponse(metaid string, upgrade string) *ClusterUpgradeContainersResponse {
@@ -195,8 +183,8 @@ MetaID:  containers metaid
 Containers: removed containers pairs.
 */
 type ClusterRemoveContainersResponse struct {
-	MetaID     string                   `json:"metaid"`
-	Containers *types.RemovedContainers `json:"containers"`
+	MetaID     string                   `json:"MetaId"`
+	Containers *types.RemovedContainers `json:"Containers"`
 }
 
 func NewClusterRemoveContainersResponse(metaid string, containers *types.RemovedContainers) *ClusterRemoveContainersResponse {
