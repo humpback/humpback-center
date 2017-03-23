@@ -13,16 +13,16 @@ import (
 )
 
 /*
-ResolveClusterGroupContainersRequest
+GroupAllContainersRequest is exported
 Method:  GET
-Route:   /v1/cluster/groups/{groupid}/containers
-GroupID: cluster groupid
+Route:   /v1/groups/{groupid}/collections
 */
-type ClusterGroupContainersRequest struct {
+type GroupAllContainersRequest struct {
 	GroupID string `json:"GroupId"`
 }
 
-func ResolveClusterGroupContainersRequest(r *http.Request) (*ClusterGroupContainersRequest, error) {
+// ResolveGroupAllContainersRequest is exported
+func ResolveGroupAllContainersRequest(r *http.Request) (*GroupAllContainersRequest, error) {
 
 	vars := mux.Vars(r)
 	groupid := strings.TrimSpace(vars["groupid"])
@@ -30,22 +30,70 @@ func ResolveClusterGroupContainersRequest(r *http.Request) (*ClusterGroupContain
 		return nil, fmt.Errorf("groupid invalid, can not be empty")
 	}
 
-	return &ClusterGroupContainersRequest{
+	return &GroupAllContainersRequest{
 		GroupID: groupid,
 	}, nil
 }
 
 /*
-ResolveClusterGroupEnginesRequest
+GroupContainersRequest is exported
 Method:  GET
-Route:   /v1/cluster/groups/{groupid}/engines
-GroupID: cluster groupid
+Route:   /v1/groups/collections/{metaid}
 */
-type ClusterGroupEnginesRequest struct {
+type GroupContainersRequest struct {
+	MetaID string `json:"MetaId"`
+}
+
+// ResolveGroupContainersRequest is exported
+func ResolveGroupContainersRequest(r *http.Request) (*GroupContainersRequest, error) {
+
+	vars := mux.Vars(r)
+	metaid := strings.TrimSpace(vars["metaid"])
+	if len(strings.TrimSpace(metaid)) == 0 {
+		return nil, fmt.Errorf("metaid invalid, can not be empty")
+	}
+
+	request := &GroupContainersRequest{
+		MetaID: metaid,
+	}
+	return request, nil
+}
+
+/*
+GroupContainersMetaBaseRequest is exported
+Method:  GET
+Route:   /v1/groups/collections/{metaid}/base
+*/
+type GroupContainersMetaBaseRequest struct {
+	MetaID string `json:"MetaId"`
+}
+
+// ResolveGroupContainersMetaBaseRequest is exported
+func ResolveGroupContainersMetaBaseRequest(r *http.Request) (*GroupContainersMetaBaseRequest, error) {
+
+	vars := mux.Vars(r)
+	metaid := strings.TrimSpace(vars["metaid"])
+	if len(strings.TrimSpace(metaid)) == 0 {
+		return nil, fmt.Errorf("metaid invalid, can not be empty")
+	}
+
+	request := &GroupContainersMetaBaseRequest{
+		MetaID: metaid,
+	}
+	return request, nil
+}
+
+/*
+GroupEnginesRequest is exported
+Method:  GET
+Route:   /v1/groups/{groupid}/engines
+*/
+type GroupEnginesRequest struct {
 	GroupID string `json:"GroupId"`
 }
 
-func ResolveClusterGroupEnginesRequest(r *http.Request) (*ClusterGroupEnginesRequest, error) {
+// ResolveGroupEnginesRequest is exported
+func ResolveGroupEnginesRequest(r *http.Request) (*GroupEnginesRequest, error) {
 
 	vars := mux.Vars(r)
 	groupid := strings.TrimSpace(vars["groupid"])
@@ -53,22 +101,22 @@ func ResolveClusterGroupEnginesRequest(r *http.Request) (*ClusterGroupEnginesReq
 		return nil, fmt.Errorf("groupid invalid, can not be empty")
 	}
 
-	return &ClusterGroupEnginesRequest{
+	return &GroupEnginesRequest{
 		GroupID: groupid,
 	}, nil
 }
 
 /*
-ResolveClusterEngineRequest
+GroupEngineRequest is exported
 Method:  GET
-Route:   /v1/cluster/engines/{server}
-Server: cluster engine host address
+Route:   /v1/groups/engines/{server}
 */
-type ClusterEngineRequest struct {
+type GroupEngineRequest struct {
 	Server string `json:"Server"`
 }
 
-func ResolveClusterEngineRequest(r *http.Request) (*ClusterEngineRequest, error) {
+// ResolveGroupEngineRequest is exported
+func ResolveGroupEngineRequest(r *http.Request) (*GroupEngineRequest, error) {
 
 	vars := mux.Vars(r)
 	server := strings.TrimSpace(vars["server"])
@@ -76,7 +124,7 @@ func ResolveClusterEngineRequest(r *http.Request) (*ClusterEngineRequest, error)
 		return nil, fmt.Errorf("engine server invalid, can not be empty")
 	}
 
-	return &ClusterEngineRequest{
+	return &GroupEngineRequest{
 		Server: server,
 	}, nil
 }
@@ -87,26 +135,25 @@ const (
 	GROUP_CHANGE_EVENT = "change"
 )
 
-type ClusterGroupEventRequest struct {
+/*
+GroupEventRequest is exported
+Method:  POST
+Route:   /v1/groups/event
+*/
+type GroupEventRequest struct {
 	GroupID string `json:"GroupId"`
 	Event   string `json:"Event"`
 }
 
-/*
-ResolveClusterGroupEventRequest
-Method:  POST
-Route:   /v1/cluster/groups/event
-GroupID: cluster groupid
-Event:   event type
-*/
-func ResolveClusterGroupEventRequest(r *http.Request) (*ClusterGroupEventRequest, error) {
+// ResolveGroupEventRequest is exported
+func ResolveGroupEventRequest(r *http.Request) (*GroupEventRequest, error) {
 
 	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	request := &ClusterGroupEventRequest{}
+	request := &GroupEventRequest{}
 	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
 		return nil, err
 	}
@@ -122,35 +169,32 @@ func ResolveClusterGroupEventRequest(r *http.Request) (*ClusterGroupEventRequest
 }
 
 /*
-ResolveClusterCreateContainersRequest
+GroupCreateContainersRequest is exported
 Method:  POST
-Route:   /v1/cluster/containers
-GroupID:   cluster groupid
-Instances: create container instance count
-WebHook:   web hook site url
-Config:    container config
+Route:   /v1/groups/collections
 */
-type ClusterCreateContainersRequest struct {
+type GroupCreateContainersRequest struct {
 	GroupID   string           `json:"GroupId"`
 	Instances int              `json:"Instances"`
 	WebHook   string           `json:"WebHook"`
 	Config    models.Container `json:"Config"`
 }
 
-func ResolveClusterCreateContainersRequest(r *http.Request) (*ClusterCreateContainersRequest, error) {
+// ResolveGroupCreateContainersRequest is exported
+func ResolveGroupCreateContainersRequest(r *http.Request) (*GroupCreateContainersRequest, error) {
 
 	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	request := &ClusterCreateContainersRequest{}
+	request := &GroupCreateContainersRequest{}
 	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
 		return nil, err
 	}
 
 	if len(strings.TrimSpace(request.GroupID)) == 0 {
-		return nil, fmt.Errorf("create containers cluster groupid invalid, can not be empty")
+		return nil, fmt.Errorf("create containers groupid invalid, can not be empty")
 	}
 
 	if request.Instances <= 0 {
@@ -164,27 +208,25 @@ func ResolveClusterCreateContainersRequest(r *http.Request) (*ClusterCreateConta
 }
 
 /*
-ResolveClusterUpdateContainersRequest
+GroupUpdateContainersRequest is exported
 Method:  PUT
-Route:   /v1/cluster/containers
-MetaID:   containers metaid
-Instances: update containers instance count
-WebHook:   web hook site url
+Route:   /v1/groups/collections
 */
-type ClusterUpdateContainersRequest struct {
+type GroupUpdateContainersRequest struct {
 	MetaID    string `json:"MetaId"`
 	Instances int    `json:"Instances"`
 	WebHook   string `json:"WebHook"`
 }
 
-func ResolveClusterUpdateContainersRequest(r *http.Request) (*ClusterUpdateContainersRequest, error) {
+// ResolveGroupUpdateContainersRequest is exported
+func ResolveGroupUpdateContainersRequest(r *http.Request) (*GroupUpdateContainersRequest, error) {
 
 	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	request := &ClusterUpdateContainersRequest{}
+	request := &GroupUpdateContainersRequest{}
 	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
 		return nil, err
 	}
@@ -200,25 +242,24 @@ func ResolveClusterUpdateContainersRequest(r *http.Request) (*ClusterUpdateConta
 }
 
 /*
-ResolveClusterOperateContainersRequest
+GroupOperateContainersRequest is exported
 Method:  PUT
-Route:   /v1/cluster/collections/action
-MetaID:  containers metaid
-Action:  operate action (start|stop|restart|kill|pause|unpause)
+Route:   /v1/groups/collections/action
 */
-type ClusterOperateContainersRequest struct {
+type GroupOperateContainersRequest struct {
 	MetaID string `json:"MetaId"`
 	Action string `json:"Action"`
 }
 
-func ResolveClusterOperateContainersRequest(r *http.Request) (*ClusterOperateContainersRequest, error) {
+// ResolveGroupOperateContainersRequest is exported
+func ResolveGroupOperateContainersRequest(r *http.Request) (*GroupOperateContainersRequest, error) {
 
 	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	request := &ClusterOperateContainersRequest{}
+	request := &GroupOperateContainersRequest{}
 	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
 		return nil, err
 	}
@@ -230,25 +271,24 @@ func ResolveClusterOperateContainersRequest(r *http.Request) (*ClusterOperateCon
 }
 
 /*
-ResolveClusterOperateContainerRequest
+GroupOperateContainerRequest is exported
 Method:  PUT
-Route:   /v1/cluster/containers/action
-ContainerID: operate container id
-Action:  operate action (start|stop|restart|kill|pause|unpause)
+Route:   /v1/groups/container/action
 */
-type ClusterOperateContainerRequest struct {
+type GroupOperateContainerRequest struct {
 	ContainerID string `json:"ContainerId"`
 	Action      string `json:"Action"`
 }
 
-func ResolveClusterOperateContainerRequest(r *http.Request) (*ClusterOperateContainerRequest, error) {
+// ResolveGroupOperateContainerRequest is exported
+func ResolveGroupOperateContainerRequest(r *http.Request) (*GroupOperateContainerRequest, error) {
 
 	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	request := &ClusterOperateContainerRequest{}
+	request := &GroupOperateContainerRequest{}
 	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
 		return nil, err
 	}
@@ -260,25 +300,24 @@ func ResolveClusterOperateContainerRequest(r *http.Request) (*ClusterOperateCont
 }
 
 /*
-ResolveClusterUpgradeContainersRequest
+GroupUpgradeContainersRequest is exported
 Method:  PUT
-Route:   /v1/cluster/containers/upgrade
-MetaID:    containers metaid
-ImageTag:  upgrade new image tag
+Route:   /v1/groups/collections/upgrade
 */
-type ClusterUpgradeContainersRequest struct {
+type GroupUpgradeContainersRequest struct {
 	MetaID   string `json:"MetaId"`
 	ImageTag string `json:"ImageTag"`
 }
 
-func ResolveClusterUpgradeContainersRequest(r *http.Request) (*ClusterUpgradeContainersRequest, error) {
+// ResolveGroupUpgradeContainersRequest is exported
+func ResolveGroupUpgradeContainersRequest(r *http.Request) (*GroupUpgradeContainersRequest, error) {
 
 	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	request := &ClusterUpgradeContainersRequest{}
+	request := &GroupUpgradeContainersRequest{}
 	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
 		return nil, err
 	}
@@ -290,46 +329,47 @@ func ResolveClusterUpgradeContainersRequest(r *http.Request) (*ClusterUpgradeCon
 }
 
 /*
-ResolveClusterRemoveContainersRequest
+GroupRemoveContainersRequest is exported
 Method:  DELETE
-Route:   /v1/cluster/collections/{metaid}
-MetaID:  remove containers metaid
+Route:   /v1/groups/collections/{metaid}
 */
-type ClusterRemoveContainersRequest struct {
+type GroupRemoveContainersRequest struct {
 	MetaID string `json:"MetaId"`
 }
 
-func ResolveClusterRemoveContainersRequest(r *http.Request) (*ClusterRemoveContainersRequest, error) {
+// ResolveGroupRemoveContainersRequest is exported
+func ResolveGroupRemoveContainersRequest(r *http.Request) (*GroupRemoveContainersRequest, error) {
 
 	vars := mux.Vars(r)
 	metaid := strings.TrimSpace(vars["metaid"])
 	if len(strings.TrimSpace(metaid)) == 0 {
 		return nil, fmt.Errorf("remove containers metaid invalid, can not be empty")
 	}
-	request := &ClusterRemoveContainersRequest{
+	request := &GroupRemoveContainersRequest{
 		MetaID: metaid,
 	}
 	return request, nil
 }
 
 /*
-ResolveClusterRemoveContainerRequest
+GroupRemoveContainerRequest is exported
 Method:  DELETE
-Route:   /v1/cluster/containers/{containerid}
-ContainerID:  remove container id
+Route:   /v1/groups/container/{containerid}
 */
-type ClusterRemoveContainerRequest struct {
+type GroupRemoveContainerRequest struct {
 	ContainerID string `json:"ContainerId"`
 }
 
-func ResolveClusterRemoveContainerRequest(r *http.Request) (*ClusterRemoveContainerRequest, error) {
+// ResolveGroupRemoveContainerRequest is exported
+func ResolveGroupRemoveContainerRequest(r *http.Request) (*GroupRemoveContainerRequest, error) {
 
 	vars := mux.Vars(r)
 	containerid := strings.TrimSpace(vars["containerid"])
 	if len(strings.TrimSpace(containerid)) == 0 {
 		return nil, fmt.Errorf("remove containers containerid invalid, can not be empty")
 	}
-	request := &ClusterRemoveContainerRequest{
+
+	request := &GroupRemoveContainerRequest{
 		ContainerID: containerid,
 	}
 	return request, nil

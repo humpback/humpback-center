@@ -11,28 +11,30 @@ type handler func(c *Context) error
 
 var routes = map[string]map[string]handler{
 	"GET": {
-		"/v1/_ping":                               ping,
-		"/v1/cluster/groups/{groupid}/containers": getClusterGroupContainers,
-		"/v1/cluster/groups/{groupid}/engines":    getClusterGroupEngines,
-		"/v1/cluster/engines/{server}":            getClusterEngine,
-		"/v1/repository/images/catalog":           getRepositoryImagesCatalog,
-		"/v1/repository/images/tags/*":            getRepositoryImagesTags,
+		"/v1/_ping":                            ping,
+		"/v1/groups/{groupid}/collections":     getGroupAllContainers,
+		"/v1/groups/{groupid}/engines":         getGroupEngines,
+		"/v1/groups/collections/{metaid}":      getGroupContainers,
+		"/v1/groups/collections/{metaid}/base": getGroupContainersMetaBase,
+		"/v1/groups/engines/{server}":          getGroupEngine,
+		"/v1/repository/images/catalog":        getRepositoryImagesCatalog,
+		"/v1/repository/images/tags/*":         getRepositoryImagesTags,
 	},
 	"POST": {
-		"/v1/cluster/groups/event":      postClusterGroupEvent,
-		"/v1/cluster/collections":       postClusterCreateContainers,
+		"/v1/groups/event":              postGroupEvent,
+		"/v1/groups/collections":        postGroupCreateContainers,
 		"/v1/repository/images/migrate": postRepositoryImagesMigrate,
 	},
 	"PUT": {
-		"/v1/cluster/collections":         putClusterUpdateContainers,
-		"/v1/cluster/collections/action":  putClusterOperateContainers,
-		"/v1/cluster/collections/upgrade": putClusterUpgradeContainers,
-		"/v1/cluster/containers/action":   putClusterOperateContainer,
+		"/v1/groups/collections":         putGroupUpdateContainers,
+		"/v1/groups/collections/upgrade": putGroupUpgradeContainers,
+		"/v1/groups/collections/action":  putGroupOperateContainers,
+		"/v1/groups/container/action":    putGroupOperateContainer,
 	},
 	"DELETE": {
-		"/v1/repository/images/{name:.*}":      deleteRepositoryImages,
-		"/v1/cluster/collections/{metaid}":     deleteClusterRemoveContainers,
-		"/v1/cluster/containers/{containerid}": deleteClusterRemoveContainer,
+		"/v1/groups/collections/{metaid}":    deleteGroupRemoveContainers,
+		"/v1/groups/container/{containerid}": deleteGroupRemoveContainer,
+		"/v1/repository/images/{name:.*}":    deleteRepositoryImages,
 	},
 }
 

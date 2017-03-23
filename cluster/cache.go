@@ -22,14 +22,19 @@ type ContainerBaseConfig struct {
 	MetaData *MetaData `json:"-"`
 }
 
+// MetaBase is exported
+type MetaBase struct {
+	GroupID   string           `json:"GroupId"`
+	MetaID    string           `json:"MetaId"`
+	Instances int              `json:"Instances"`
+	WebHook   string           `json:"WebHook"`
+	ImageTag  string           `json:"ImageTag"`
+	Config    models.Container `json:"Config"`
+}
+
 // MetaData is exported
 type MetaData struct {
-	GroupID     string                 `json:"GroupId"`
-	MetaID      string                 `json:"MetaId"`
-	Instances   int                    `json:"Instances"`
-	WebHook     string                 `json:"WebHook"`
-	ImageTag    string                 `json:"ImageTag"`
-	Config      models.Container       `json:"Config"`
+	MetaBase
 	BaseConfigs []*ContainerBaseConfig `json:"BaseConfigs"`
 }
 
@@ -188,6 +193,7 @@ func (cache *ContainersConfigCache) GetGroupMetaData(groupid string) []*MetaData
 	return out
 }
 
+// SetMetaData is exported
 func (cache *ContainersConfigCache) SetMetaData(metaid string, instances int, webhook string) {
 
 	cache.Lock()
@@ -244,12 +250,14 @@ func (cache *ContainersConfigCache) CreateMetaData(groupid string, instances int
 	}
 
 	metaData := &MetaData{
-		GroupID:     groupid,
-		MetaID:      metaid,
-		Instances:   instances,
-		WebHook:     webhook,
-		ImageTag:    imageTag,
-		Config:      config,
+		MetaBase: MetaBase{
+			GroupID:   groupid,
+			MetaID:    metaid,
+			Instances: instances,
+			WebHook:   webhook,
+			ImageTag:  imageTag,
+			Config:    config,
+		},
 		BaseConfigs: []*ContainerBaseConfig{},
 	}
 	cache.data[metaid] = metaData

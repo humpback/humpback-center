@@ -9,60 +9,110 @@ import (
 	"net/http"
 )
 
-func getClusterGroupContainers(c *Context) error {
+func getGroupAllContainers(c *Context) error {
 
 	result := &response.ResponseResult{ResponseID: c.ID}
-	req, err := request.ResolveClusterGroupContainersRequest(c.Request())
+	req, err := request.ResolveGroupAllContainersRequest(c.Request())
 	if err != nil {
-		logger.ERROR("[#api#] %s resolve get cluster group containers request faild, %s", c.ID, err.Error())
+		logger.ERROR("[#api#] %s resolve get group all containers request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
 		return c.JSON(http.StatusBadRequest, result)
 	}
 
-	logger.INFO("[#api#] %s resolve get cluster group containers request successed. %+v", c.ID, req)
-	groupContainers := c.Controller.GetClusterGroupContainers(req.GroupID)
+	logger.INFO("[#api#] %s resolve get group all containers request successed. %+v", c.ID, req)
+	groupContainers := c.Controller.GetClusterGroupAllContainers(req.GroupID)
 	if groupContainers == nil {
-		logger.ERROR("[#api#] %s get cluster group containers %s not found.", c.ID, req.GroupID)
-		result.SetError(request.RequestFailure, request.ErrRequestFailure, "cluster group not found")
+		logger.ERROR("[#api#] %s get group all containers %s not found.", c.ID, req.GroupID)
+		result.SetError(request.RequestFailure, request.ErrRequestFailure, "group not found")
 		return c.JSON(http.StatusNotFound, result)
 	}
 
-	logger.INFO("[#api#] %s get cluster group containers %p.", c.ID, groupContainers)
-	resp := response.NewClusterGroupContainersResponse(req.GroupID, groupContainers)
-	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster group containers response")
+	logger.INFO("[#api#] %s getr group all containers %p.", c.ID, groupContainers)
+	resp := response.NewGroupAllContainersResponse(req.GroupID, groupContainers)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "group containers response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
 }
 
-func getClusterGroupEngines(c *Context) error {
+func getGroupContainers(c *Context) error {
 
 	result := &response.ResponseResult{ResponseID: c.ID}
-	req, err := request.ResolveClusterGroupEnginesRequest(c.Request())
+	req, err := request.ResolveGroupContainersRequest(c.Request())
 	if err != nil {
-		logger.ERROR("[#api#] %s resolve get cluster group engines request faild, %s", c.ID, err.Error())
+		logger.ERROR("[#api#] %s resolve group containers request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
 		return c.JSON(http.StatusBadRequest, result)
 	}
 
-	logger.INFO("[#api#] %s resolve get cluster group engines request successed. %+v", c.ID, req)
+	logger.INFO("[#api#] %s resolve get group containers request successed. %+v", c.ID, req)
+	groupContainer := c.Controller.GetClusterGroupContainers(req.MetaID)
+	if groupContainer == nil {
+		logger.ERROR("[#api#] %s get containers meta %s not found.", c.ID, req.MetaID)
+		result.SetError(request.RequestFailure, request.ErrRequestFailure, "meta not found")
+		return c.JSON(http.StatusNotFound, result)
+	}
+
+	logger.INFO("[#api#] %s get group containers %p.", c.ID, groupContainer)
+	resp := response.NewGroupContainersResponse(req.MetaID, groupContainer)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "group containers response")
+	result.SetResponse(resp)
+	return c.JSON(http.StatusOK, result)
+}
+
+func getGroupContainersMetaBase(c *Context) error {
+
+	result := &response.ResponseResult{ResponseID: c.ID}
+	req, err := request.ResolveGroupContainersMetaBaseRequest(c.Request())
+	if err != nil {
+		logger.ERROR("[#api#] %s resolve group containers meta request faild, %s", c.ID, err.Error())
+		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
+		return c.JSON(http.StatusBadRequest, result)
+	}
+
+	logger.INFO("[#api#] %s resolve get group containers meta request successed. %+v", c.ID, req)
+	metaBase := c.Controller.GetClusterGroupContainersMetaBase(req.MetaID)
+	if metaBase == nil {
+		logger.ERROR("[#api#] %s get containers meta %s not found.", c.ID, req.MetaID)
+		result.SetError(request.RequestFailure, request.ErrRequestFailure, "meta not found")
+		return c.JSON(http.StatusNotFound, result)
+	}
+
+	logger.INFO("[#api#] %s get group meta containers %p.", c.ID, metaBase)
+	resp := response.NewGroupContainersMetaBaseResponse(req.MetaID, metaBase)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "group containers meta response")
+	result.SetResponse(resp)
+	return c.JSON(http.StatusOK, result)
+}
+
+func getGroupEngines(c *Context) error {
+
+	result := &response.ResponseResult{ResponseID: c.ID}
+	req, err := request.ResolveGroupEnginesRequest(c.Request())
+	if err != nil {
+		logger.ERROR("[#api#] %s resolve get group engines request faild, %s", c.ID, err.Error())
+		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
+		return c.JSON(http.StatusBadRequest, result)
+	}
+
+	logger.INFO("[#api#] %s resolve get group engines request successed. %+v", c.ID, req)
 	engines := c.Controller.GetClusterGroupEngines(req.GroupID)
 	if engines == nil {
-		logger.ERROR("[#api#] %s get cluster group engines group %s not found.", c.ID, req.GroupID)
-		result.SetError(request.RequestFailure, request.ErrRequestFailure, "cluster group not found")
+		logger.ERROR("[#api#] %s get group engines group %s not found.", c.ID, req.GroupID)
+		result.SetError(request.RequestFailure, request.ErrRequestFailure, "group not found")
 		return c.JSON(http.StatusNotFound, result)
 	}
 
-	logger.INFO("[#api#] %s get cluster group engines %p.", c.ID, engines)
-	resp := response.NewClusterGroupEnginesResponse(req.GroupID, engines)
-	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster group engines response")
+	logger.INFO("[#api#] %s get group engines %p.", c.ID, engines)
+	resp := response.NewGroupEnginesResponse(req.GroupID, engines)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "group engines response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
 }
 
-func getClusterEngine(c *Context) error {
+func getGroupEngine(c *Context) error {
 
 	result := response.ResponseResult{ResponseID: c.ID}
-	req, err := request.ResolveClusterEngineRequest(c.Request())
+	req, err := request.ResolveGroupEngineRequest(c.Request())
 	if err != nil {
 		logger.ERROR("[#api#] %s resolve get engine request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
@@ -73,39 +123,39 @@ func getClusterEngine(c *Context) error {
 	engine := c.Controller.GetClusterEngine(req.Server)
 	if engine == nil {
 		logger.ERROR("[#api#] %s get  engine %s not found.", c.ID, req.Server)
-		result.SetError(request.RequestFailure, request.ErrRequestFailure, "cluster engine not found")
+		result.SetError(request.RequestFailure, request.ErrRequestFailure, "engine not found")
 		return c.JSON(http.StatusNotFound, result)
 	}
 
 	logger.INFO("[#api#] %s get engine %p.", c.ID, engine)
-	resp := response.NewClusterEngineResponse(engine)
-	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster engine response")
+	resp := response.NewGroupEngineResponse(engine)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "engine response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
 }
 
-func postClusterGroupEvent(c *Context) error {
+func postGroupEvent(c *Context) error {
 
 	result := &response.ResponseResult{ResponseID: c.ID}
-	req, err := request.ResolveClusterGroupEventRequest(c.Request())
+	req, err := request.ResolveGroupEventRequest(c.Request())
 	if err != nil {
-		logger.ERROR("[#api#] %s resolve groupevent request faild, %s", c.ID, err.Error())
+		logger.ERROR("[#api#] %s resolve group event request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
 		return c.JSON(http.StatusBadRequest, result)
 	}
 
-	logger.INFO("[#api#] %s resolve groupevent request successed. %+v", c.ID, req)
+	logger.INFO("[#api#] %s resolve group event request successed. %+v", c.ID, req)
 	c.Controller.SetClusterGroupEvent(req.GroupID, req.Event)
-	resp := response.NewClusterGroupEventResponse("accepted.")
-	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster group event response")
+	resp := response.NewGroupEventResponse("accepted.")
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "group event response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusAccepted, result)
 }
 
-func postClusterCreateContainers(c *Context) error {
+func postGroupCreateContainers(c *Context) error {
 
 	result := response.ResponseResult{ResponseID: c.ID}
-	req, err := request.ResolveClusterCreateContainersRequest(c.Request())
+	req, err := request.ResolveGroupCreateContainersRequest(c.Request())
 	if err != nil {
 		logger.ERROR("[#api#] %s resolve create containers request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
@@ -125,16 +175,16 @@ func postClusterCreateContainers(c *Context) error {
 		return c.JSON(http.StatusInternalServerError, result)
 	}
 
-	resp := response.NewClusterCreateContainersResponse(req.GroupID, metaid, req.Instances, createdContainers)
-	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster create containers response")
+	resp := response.NewGroupCreateContainersResponse(req.GroupID, metaid, req.Instances, createdContainers)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "create containers response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
 }
 
-func putClusterUpdateContainers(c *Context) error {
+func putGroupUpdateContainers(c *Context) error {
 
 	result := response.ResponseResult{ResponseID: c.ID}
-	req, err := request.ResolveClusterUpdateContainersRequest(c.Request())
+	req, err := request.ResolveGroupUpdateContainersRequest(c.Request())
 	if err != nil {
 		logger.ERROR("[#api#] %s resolve update containers request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
@@ -152,16 +202,16 @@ func putClusterUpdateContainers(c *Context) error {
 		return c.JSON(http.StatusInternalServerError, result)
 	}
 
-	resp := response.NewClusterUpdateContainersResponse(req.MetaID, req.Instances, updatedContainers)
-	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster update containers response")
+	resp := response.NewGroupUpdateContainersResponse(req.MetaID, req.Instances, updatedContainers)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "update containers response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
 }
 
-func putClusterOperateContainers(c *Context) error {
+func putGroupOperateContainers(c *Context) error {
 
 	result := response.ResponseResult{ResponseID: c.ID}
-	req, err := request.ResolveClusterOperateContainersRequest(c.Request())
+	req, err := request.ResolveGroupOperateContainersRequest(c.Request())
 	if err != nil {
 		logger.ERROR("[#api#] %s resolve operate containers request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
@@ -179,16 +229,16 @@ func putClusterOperateContainers(c *Context) error {
 		return c.JSON(http.StatusInternalServerError, result)
 	}
 
-	resp := response.NewClusterOperateContainersResponse(req.MetaID, req.Action, operatedContainers)
-	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster operate containers response")
+	resp := response.NewGroupOperateContainersResponse(req.MetaID, req.Action, operatedContainers)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "operate containers response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
 }
 
-func putClusterOperateContainer(c *Context) error {
+func putGroupOperateContainer(c *Context) error {
 
 	result := response.ResponseResult{ResponseID: c.ID}
-	req, err := request.ResolveClusterOperateContainerRequest(c.Request())
+	req, err := request.ResolveGroupOperateContainerRequest(c.Request())
 	if err != nil {
 		logger.ERROR("[#api#] %s resolve operate container request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
@@ -206,16 +256,16 @@ func putClusterOperateContainer(c *Context) error {
 		return c.JSON(http.StatusInternalServerError, result)
 	}
 
-	resp := response.NewClusterOperateContainersResponse(metaID, req.Action, operatedContainers)
-	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster operate container response")
+	resp := response.NewGroupOperateContainersResponse(metaID, req.Action, operatedContainers)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "operate container response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
 }
 
-func putClusterUpgradeContainers(c *Context) error {
+func putGroupUpgradeContainers(c *Context) error {
 
 	result := response.ResponseResult{ResponseID: c.ID}
-	req, err := request.ResolveClusterUpgradeContainersRequest(c.Request())
+	req, err := request.ResolveGroupUpgradeContainersRequest(c.Request())
 	if err != nil {
 		logger.ERROR("[#api#] %s resolve upgrade containers request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
@@ -232,16 +282,16 @@ func putClusterUpgradeContainers(c *Context) error {
 		return c.JSON(http.StatusInternalServerError, result)
 	}
 
-	resp := response.NewClusterUpgradeContainersResponse(req.MetaID, "upgrade containers accepted")
-	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster upgrade containers response")
+	resp := response.NewGroupUpgradeContainersResponse(req.MetaID, "upgrade containers accepted")
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "upgrade containers response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusAccepted, result)
 }
 
-func deleteClusterRemoveContainers(c *Context) error {
+func deleteGroupRemoveContainers(c *Context) error {
 
 	result := response.ResponseResult{ResponseID: c.ID}
-	req, err := request.ResolveClusterRemoveContainersRequest(c.Request())
+	req, err := request.ResolveGroupRemoveContainersRequest(c.Request())
 	if err != nil {
 		logger.ERROR("[#api#] %s resolve remove containers request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
@@ -259,16 +309,16 @@ func deleteClusterRemoveContainers(c *Context) error {
 		return c.JSON(http.StatusInternalServerError, result)
 	}
 
-	resp := response.NewClusterRemoveContainersResponse(req.MetaID, removedContainers)
-	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster remove containers response")
+	resp := response.NewGroupRemoveContainersResponse(req.MetaID, removedContainers)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "remove containers response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
 }
 
-func deleteClusterRemoveContainer(c *Context) error {
+func deleteGroupRemoveContainer(c *Context) error {
 
 	result := response.ResponseResult{ResponseID: c.ID}
-	req, err := request.ResolveClusterRemoveContainerRequest(c.Request())
+	req, err := request.ResolveGroupRemoveContainerRequest(c.Request())
 	if err != nil {
 		logger.ERROR("[#api#] %s resolve remove container request faild, %s", c.ID, err.Error())
 		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
@@ -286,8 +336,8 @@ func deleteClusterRemoveContainer(c *Context) error {
 		return c.JSON(http.StatusInternalServerError, result)
 	}
 
-	resp := response.NewClusterRemoveContainersResponse(metaID, removedContainers)
-	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster remove container response")
+	resp := response.NewGroupRemoveContainersResponse(metaID, removedContainers)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "remove container response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
 }

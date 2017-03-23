@@ -80,9 +80,19 @@ func (c *Controller) SetCluster(cluster *cluster.Cluster) {
 	}
 }
 
-func (c *Controller) GetClusterGroupContainers(groupid string) *types.GroupContainers {
+func (c *Controller) GetClusterGroupAllContainers(groupid string) *types.GroupContainers {
 
-	return c.Cluster.GetGroupContainers(groupid)
+	return c.Cluster.GetGroupAllContainers(groupid)
+}
+
+func (c *Controller) GetClusterGroupContainers(metaid string) *types.GroupContainer {
+
+	return c.Cluster.GetGroupContainers(metaid)
+}
+
+func (c *Controller) GetClusterGroupContainersMetaBase(metaid string) *cluster.MetaBase {
+
+	return c.Cluster.GetMetaBase(metaid)
 }
 
 func (c *Controller) GetClusterGroupEngines(groupid string) []*cluster.Engine {

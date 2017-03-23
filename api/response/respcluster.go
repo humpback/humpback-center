@@ -4,98 +4,136 @@ import "github.com/humpback/humpback-center/cluster"
 import "github.com/humpback/humpback-center/cluster/types"
 
 /*
-ClusterGroupContainersResponse
+GroupAllContainersResponse is exported
 Method:  GET
-Route:   /v1/cluster/groups/{groupid}/containers
+Route:   /v1/groups/{groupid}/collections
 */
-type ClusterGroupContainersResponse struct {
+type GroupAllContainersResponse struct {
 	GroupID    string                 `json:"GroupId"`
 	Containers *types.GroupContainers `json:"Containers"`
 }
 
-func NewClusterGroupContainersResponse(groupid string, containers *types.GroupContainers) *ClusterGroupContainersResponse {
+// NewGroupAllContainersResponse is exported
+func NewGroupAllContainersResponse(groupid string, containers *types.GroupContainers) *GroupAllContainersResponse {
 
-	return &ClusterGroupContainersResponse{
+	return &GroupAllContainersResponse{
 		GroupID:    groupid,
 		Containers: containers,
 	}
 }
 
 /*
-ClusterGroupEnginesResponse
+GroupContainersResponse is exported
 Method:  GET
-Route:   /v1/cluster/groups/{groupid}/engines
+Route:   /v1/groups/collections/{metaid}
 */
-type ClusterGroupEnginesResponse struct {
+type GroupContainersResponse struct {
+	MetaID    string                `json:"MetaId"`
+	Container *types.GroupContainer `json:"Container"`
+}
+
+// NewGroupContainersResponse is exported
+func NewGroupContainersResponse(metaid string, container *types.GroupContainer) *GroupContainersResponse {
+
+	return &GroupContainersResponse{
+		MetaID:    metaid,
+		Container: container,
+	}
+}
+
+/*
+GroupContainersMetaBaseResponse is exported
+Method:  GET
+Route:   /v1/groups/collections/{metaid}/base
+*/
+type GroupContainersMetaBaseResponse struct {
+	MetaID   string            `json:"MetaId"`
+	MetaBase *cluster.MetaBase `json:"MetaBase"`
+}
+
+// NewGroupContainersMetaBaseResponse is exported
+func NewGroupContainersMetaBaseResponse(metaid string, metaBase *cluster.MetaBase) *GroupContainersMetaBaseResponse {
+
+	return &GroupContainersMetaBaseResponse{
+		MetaID:   metaid,
+		MetaBase: metaBase,
+	}
+}
+
+/*
+GroupEnginesResponse is exported
+Method:  GET
+Route:   /v1/groups/{groupid}/engines
+*/
+type GroupEnginesResponse struct {
 	GroupID string            `json:"GroupId"`
 	Engines []*cluster.Engine `json:"Engines"`
 }
 
-func NewClusterGroupEnginesResponse(groupid string, engines []*cluster.Engine) *ClusterGroupEnginesResponse {
+// NewGroupEnginesResponse is exported
+func NewGroupEnginesResponse(groupid string, engines []*cluster.Engine) *GroupEnginesResponse {
 
-	return &ClusterGroupEnginesResponse{
+	return &GroupEnginesResponse{
 		GroupID: groupid,
 		Engines: engines,
 	}
 }
 
 /*
-ClusterEngineResponse
+GroupEngineResponse is exported
 Method:  GET
-Route:   /v1/cluster/engines/{engineid}
+Route:   /v1/groups/engines/{server}
 */
-type ClusterEngineResponse struct {
+type GroupEngineResponse struct {
 	Engine *cluster.Engine `json:"Engine"`
 }
 
-func NewClusterEngineResponse(engine *cluster.Engine) *ClusterEngineResponse {
+// NewGroupEngineResponse is exported
+func NewGroupEngineResponse(engine *cluster.Engine) *GroupEngineResponse {
 
-	return &ClusterEngineResponse{
+	return &GroupEngineResponse{
 		Engine: engine,
 	}
 }
 
 /*
-ClusterGroupEventResponse
+GroupEventResponse is exported
 Method:  POST
-Route:   /v1/cluster/groups/event
-Message: response message
+Route:   /v1/groups/event
 */
-type ClusterGroupEventResponse struct {
+type GroupEventResponse struct {
 	Message string `json:"Message"`
 }
 
-func NewClusterGroupEventResponse(message string) *ClusterGroupEventResponse {
+// NewGroupEventResponse is exported
+func NewGroupEventResponse(message string) *GroupEventResponse {
 
-	return &ClusterGroupEventResponse{
+	return &GroupEventResponse{
 		Message: message,
 	}
 }
 
 /*
-ClusterCreateContainersResponse
+GroupCreateContainersResponse is exported
 Method:  POST
-Route:   /v1/cluster/containers
-GroupID: cluster groupid
-MetaID:  cluster containers metaid
-Created: create result message.
-Containers: created containers pairs.
+Route:   /v1/groups/collections
 */
-type ClusterCreateContainersResponse struct {
+type GroupCreateContainersResponse struct {
 	GroupID    string                   `json:"GroupId"`
 	MetaID     string                   `json:"MetaId"`
 	Created    string                   `json:"Created"`
 	Containers *types.CreatedContainers `json:"Containers"`
 }
 
-func NewClusterCreateContainersResponse(groupid string, metaid string, instances int, containers *types.CreatedContainers) *ClusterCreateContainersResponse {
+// NewGroupCreateContainersResponse is exported
+func NewGroupCreateContainersResponse(groupid string, metaid string, instances int, containers *types.CreatedContainers) *GroupCreateContainersResponse {
 
 	created := "created all"
 	if instances > len(*containers) {
 		created = "created partial"
 	}
 
-	return &ClusterCreateContainersResponse{
+	return &GroupCreateContainersResponse{
 		GroupID:    groupid,
 		MetaID:     metaid,
 		Created:    created,
@@ -104,27 +142,25 @@ func NewClusterCreateContainersResponse(groupid string, metaid string, instances
 }
 
 /*
-ClusterUpdateContainersResponse
+GroupUpdateContainersResponse is exported
 Method:  PUT
-Route:   /v1/cluster/containers
-MetaID:  cluster containers metaid
-Updated:   update result message.
-Containers: update containers pairs.
+Route:   /v1/groups/collections
 */
-type ClusterUpdateContainersResponse struct {
+type GroupUpdateContainersResponse struct {
 	MetaID     string                   `json:"MetaId"`
 	Updated    string                   `json:"Updated"`
 	Containers *types.CreatedContainers `json:"Containers"`
 }
 
-func NewClusterUpdateContainersResponse(metaid string, instances int, containers *types.CreatedContainers) *ClusterUpdateContainersResponse {
+// NewGroupUpdateContainersResponse is exported
+func NewGroupUpdateContainersResponse(metaid string, instances int, containers *types.CreatedContainers) *GroupUpdateContainersResponse {
 
 	updated := "updated all"
 	if instances > len(*containers) {
 		updated = "updated partial"
 	}
 
-	return &ClusterUpdateContainersResponse{
+	return &GroupUpdateContainersResponse{
 		MetaID:     metaid,
 		Updated:    updated,
 		Containers: containers,
@@ -132,23 +168,21 @@ func NewClusterUpdateContainersResponse(metaid string, instances int, containers
 }
 
 /*
-ClusterOperateContainersResponse
+GroupOperateContainersResponse is exported
 Method:  PUT
-Route1:  /v1/cluster/collections/action
-Route2:  /v1/cluster/containers/action
-MetaID:    containers metaid
-Action:    operate action (start|stop|restart|kill|pause|unpause)
-Containers: operated containers pairs.
+Route1:  /v1/groups/collections/action
+Route2:  /v1/groups/container/action
 */
-type ClusterOperateContainersResponse struct {
+type GroupOperateContainersResponse struct {
 	MetaID     string                    `json:"MetaId"`
 	Action     string                    `json:"Action"`
 	Containers *types.OperatedContainers `json:"Containers"`
 }
 
-func NewClusterOperateContainersResponse(metaid string, action string, containers *types.OperatedContainers) *ClusterOperateContainersResponse {
+// NewGroupOperateContainersResponse is exported
+func NewGroupOperateContainersResponse(metaid string, action string, containers *types.OperatedContainers) *GroupOperateContainersResponse {
 
-	return &ClusterOperateContainersResponse{
+	return &GroupOperateContainersResponse{
 		MetaID:     metaid,
 		Action:     action,
 		Containers: containers,
@@ -156,40 +190,40 @@ func NewClusterOperateContainersResponse(metaid string, action string, container
 }
 
 /*
-ClusterUpgradeContainersResponse
+GroupUpgradeContainersResponse is exported
 Method:  PUT
-Route:   /v1/cluster/containers/upgrade
+Route:   /v1/groups/collections/upgrade
 MetaID:  containers metaid
 */
-type ClusterUpgradeContainersResponse struct {
+type GroupUpgradeContainersResponse struct {
 	MetaID  string `json:"MetaId"`
 	Upgrade string `json:"Upgrade"`
 }
 
-func NewClusterUpgradeContainersResponse(metaid string, upgrade string) *ClusterUpgradeContainersResponse {
+// NewGroupUpgradeContainersResponse is exported
+func NewGroupUpgradeContainersResponse(metaid string, upgrade string) *GroupUpgradeContainersResponse {
 
-	return &ClusterUpgradeContainersResponse{
+	return &GroupUpgradeContainersResponse{
 		MetaID:  metaid,
 		Upgrade: upgrade,
 	}
 }
 
 /*
-ClusterRemoveContainersResponse
+GroupRemoveContainersResponse is exported
 Method:  PUT
-Route1:  /v1/cluster/collections/{metaid}
-Route2:  /v1/cluster/containers/{containerid}
-MetaID:  containers metaid
-Containers: removed containers pairs.
+Route1:  /v1/groups/collections/{metaid}
+Route2:  /v1/groups/container/{containerid}
 */
-type ClusterRemoveContainersResponse struct {
+type GroupRemoveContainersResponse struct {
 	MetaID     string                   `json:"MetaId"`
 	Containers *types.RemovedContainers `json:"Containers"`
 }
 
-func NewClusterRemoveContainersResponse(metaid string, containers *types.RemovedContainers) *ClusterRemoveContainersResponse {
+// NewGroupRemoveContainersResponse is exported
+func NewGroupRemoveContainersResponse(metaid string, containers *types.RemovedContainers) *GroupRemoveContainersResponse {
 
-	return &ClusterRemoveContainersResponse{
+	return &GroupRemoveContainersResponse{
 		MetaID:     metaid,
 		Containers: containers,
 	}

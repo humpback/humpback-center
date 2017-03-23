@@ -182,6 +182,20 @@ func (engine *Engine) Containers(metaid string) Containers {
 	return containers
 }
 
+// Container is exported
+// Return a engine container.
+func (engine *Engine) Container(containerid string) *Container {
+
+	engine.RLock()
+	defer engine.RUnlock()
+	for _, container := range engine.containers {
+		if container.Info.ID == container.Info.ID {
+			return container
+		}
+	}
+	return nil
+}
+
 // UsedMemory is exported
 // Return a engine all containers used memory size.
 func (engine *Engine) UsedMemory() int64 {

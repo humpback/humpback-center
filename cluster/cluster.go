@@ -172,6 +172,15 @@ func (cluster *Cluster) GetMetaDataEngines(metaid string) (*MetaData, []*Engine,
 	return metaData, engines, nil
 }
 
+// GetMetaBase is exported
+func (cluster *Cluster) GetMetaBase(metaid string) *MetaBase {
+
+	if metaData := cluster.configCache.GetMetaData(metaid); metaData != nil {
+		return &metaData.MetaBase
+	}
+	return nil
+}
+
 // GetEngine is exported
 func (cluster *Cluster) GetEngine(ip string) *Engine {
 
@@ -201,37 +210,54 @@ func (cluster *Cluster) GetGroupEngines(groupid string) []*Engine {
 	return engines
 }
 
-// GetGroupContainers is exported
-func (cluster *Cluster) GetGroupContainers(groupid string) *types.GroupContainers {
+// GetGroupAllContainers is exported
+func (cluster *Cluster) GetGroupAllContainers(groupid string) *types.GroupContainers {
 
 	cluster.RLock()
-	defer cluster.RUnlock()
 	if _, ret := cluster.groups[groupid]; !ret {
 		return nil
 	}
+	cluster.RUnlock()
 
 	groupContainers := types.GroupContainers{}
-	engines := cluster.GetGroupEngines(groupid)
 	groupMetaData := cluster.configCache.GetGroupMetaData(groupid)
 	for _, metaData := range groupMetaData {
-		groupContainer := &types.GroupContainer{
-			MetaID:     metaData.MetaID,
-			Config:     metaData.Config,
-			Containers: make([]*types.EngineContainer, 0),
+		if groupContainer := cluster.GetGroupContainers(metaData.MetaID); groupContainer != nil {
+			groupContainers = append(groupContainers, groupContainer)
 		}
+	}
+	return &groupContainers
+}
+
+// GetGroupContainers is exported
+func (cluster *Cluster) GetGroupContainers(metaid string) *types.GroupContainer {
+
+	metaData, engines, err := cluster.GetMetaDataEngines(metaid)
+	if err != nil {
+		return nil
+	}
+
+	groupContainer := &types.GroupContainer{
+		MetaID:     metaData.MetaID,
+		Instances:  metaData.Instances,
+		WebHook:    metaData.WebHook,
+		Config:     metaData.Config,
+		Containers: make([]*types.EngineContainer, 0),
+	}
+
+	for _, baseConfig := range metaData.BaseConfigs {
 		for _, engine := range engines {
-			containers := engine.Containers(metaData.MetaID)
-			for _, container := range containers {
+			if container := engine.Container(baseConfig.ID); container != nil {
 				groupContainer.Containers = append(groupContainer.Containers, &types.EngineContainer{
 					IP:        engine.IP,
 					HostName:  engine.Name,
 					Container: container.Config.Container,
 				})
+				break
 			}
 		}
-		groupContainers = append(groupContainers, groupContainer)
 	}
-	return &groupContainers
+	return groupContainer
 }
 
 // GetGroups is exported
