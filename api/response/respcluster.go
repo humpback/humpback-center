@@ -28,15 +28,13 @@ Method:  GET
 Route:   /v1/groups/collections/{metaid}
 */
 type GroupContainersResponse struct {
-	MetaID    string                `json:"MetaId"`
 	Container *types.GroupContainer `json:"Container"`
 }
 
 // NewGroupContainersResponse is exported
-func NewGroupContainersResponse(metaid string, container *types.GroupContainer) *GroupContainersResponse {
+func NewGroupContainersResponse(container *types.GroupContainer) *GroupContainersResponse {
 
 	return &GroupContainersResponse{
-		MetaID:    metaid,
 		Container: container,
 	}
 }
@@ -47,15 +45,13 @@ Method:  GET
 Route:   /v1/groups/collections/{metaid}/base
 */
 type GroupContainersMetaBaseResponse struct {
-	MetaID   string            `json:"MetaId"`
 	MetaBase *cluster.MetaBase `json:"MetaBase"`
 }
 
 // NewGroupContainersMetaBaseResponse is exported
-func NewGroupContainersMetaBaseResponse(metaid string, metaBase *cluster.MetaBase) *GroupContainersMetaBaseResponse {
+func NewGroupContainersMetaBaseResponse(metaBase *cluster.MetaBase) *GroupContainersMetaBaseResponse {
 
 	return &GroupContainersMetaBaseResponse{
-		MetaID:   metaid,
 		MetaBase: metaBase,
 	}
 }

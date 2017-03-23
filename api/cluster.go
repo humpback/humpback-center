@@ -53,7 +53,7 @@ func getGroupContainers(c *Context) error {
 	}
 
 	logger.INFO("[#api#] %s get group containers %p.", c.ID, groupContainer)
-	resp := response.NewGroupContainersResponse(req.MetaID, groupContainer)
+	resp := response.NewGroupContainersResponse(groupContainer)
 	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "group containers response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
@@ -78,7 +78,7 @@ func getGroupContainersMetaBase(c *Context) error {
 	}
 
 	logger.INFO("[#api#] %s get group meta containers %p.", c.ID, metaBase)
-	resp := response.NewGroupContainersMetaBaseResponse(req.MetaID, metaBase)
+	resp := response.NewGroupContainersMetaBaseResponse(metaBase)
 	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "group containers meta response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)

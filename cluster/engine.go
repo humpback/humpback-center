@@ -189,7 +189,7 @@ func (engine *Engine) Container(containerid string) *Container {
 	engine.RLock()
 	defer engine.RUnlock()
 	for _, container := range engine.containers {
-		if container.Info.ID == container.Info.ID {
+		if container.Info.ID == containerid {
 			return container
 		}
 	}
