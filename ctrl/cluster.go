@@ -1,16 +1,24 @@
 package ctrl
 
 import "github.com/humpback/discovery"
+import "github.com/humpback/gounits/http"
 import "github.com/humpback/gounits/logger"
+import "github.com/humpback/humpback-agent/models"
 import "github.com/humpback/humpback-center/api/request"
 import "github.com/humpback/humpback-center/cluster"
 import "github.com/humpback/humpback-center/cluster/types"
 import "github.com/humpback/humpback-center/etc"
-import "github.com/humpback/humpback-agent/models"
 
 import (
+	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
+)
+
+const (
+	// humpback-api site request timeout value
+	requestAPITimeout = 15 * time.Second
 )
 
 func createCluster(configuration *etc.Configuration) (*cluster.Cluster, error) {
@@ -38,21 +46,19 @@ func createCluster(configuration *etc.Configuration) (*cluster.Cluster, error) {
 	return cluster, nil
 }
 
-func (c *Controller) initCluster() error {
+func (c *Controller) initCluster() {
 
-	groups, err := c.DataStorage.GetGroups()
-	if err != nil {
-		return fmt.Errorf("init cluster groups error:%s", err.Error())
+	if groups := c.getClusterGroupStoreData(""); groups != nil {
+		logger.INFO("[#ctrl#] init cluster groups:%d", len(groups))
+		for _, group := range groups {
+			c.Cluster.SetGroup(group.ID, group.Servers, group.Owners)
+		}
 	}
-	logger.INFO("[#ctrl#] init cluster groups:%d", len(groups))
-	for _, group := range groups {
-		c.Cluster.SetGroup(group.ID, group.Servers, group.Owners)
-	}
-	return nil
 }
 
 func (c *Controller) startCluster() error {
 
+	c.initCluster()
 	logger.INFO("[#ctrl#] start cluster.")
 	return c.Cluster.Start()
 }
@@ -61,6 +67,38 @@ func (c *Controller) stopCluster() {
 
 	c.Cluster.Stop()
 	logger.INFO("[#ctrl#] stop cluster.")
+}
+
+func (c *Controller) getClusterGroupStoreData(groupid string) []*cluster.Group {
+
+	query := map[string][]string{}
+	groupid = strings.TrimSpace(groupid)
+	if groupid != "" {
+		query["groupid"] = []string{groupid}
+	}
+
+	t := time.Now().UnixNano() / int64(time.Millisecond)
+	value := fmt.Sprintf("HUMPBACK_CENTER%d", t)
+	code := base64.StdEncoding.EncodeToString([]byte(value))
+	header := map[string][]string{"x-get-cluster": []string{code}}
+	respGroups, err := http.NewWithTimeout(requestAPITimeout).Get(c.Configuration.SiteAPI+"/groups/getclusters", query, header)
+	if err != nil {
+		logger.ERROR("[#ctrl#] get cluster group storedata error:%s", err.Error())
+		return nil
+	}
+
+	defer respGroups.Close()
+	if respGroups.StatusCode() != 200 {
+		logger.ERROR("[#ctrl#] get cluster group storedata error:%d", respGroups.StatusCode())
+		return nil
+	}
+
+	groups := []*cluster.Group{}
+	if err := respGroups.JSON(&groups); err != nil {
+		logger.ERROR("[#ctrl#] get cluster group storedata error:%s", err.Error())
+		return nil
+	}
+	return groups
 }
 
 func (c *Controller) getEngineState(server string) string {
@@ -111,12 +149,12 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 	switch event {
 	case request.GROUP_CREATE_EVENT, request.GROUP_CHANGE_EVENT:
 		{
-			group, err := c.DataStorage.GetGroup(groupid)
-			if err != nil {
-				logger.ERROR("[#ctrl#] set cluster groupevent %s %s, error:%s", groupid, event, err.Error())
-				return
+			if groups := c.getClusterGroupStoreData(groupid); groups != nil {
+				logger.INFO("[#ctrl#] get cluster groups:%d", len(groups))
+				for _, group := range groups {
+					c.Cluster.SetGroup(group.ID, group.Servers, group.Owners)
+				}
 			}
-			c.Cluster.SetGroup(group.ID, group.Servers, group.Owners)
 		}
 	case request.GROUP_REMOVE_EVENT:
 		{

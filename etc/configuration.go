@@ -13,6 +13,7 @@ type Configuration struct {
 	//base options
 	Version string `yaml:"version"`
 	PIDFile string `yaml:"pidfile"`
+	SiteAPI string `yaml:"siteapi"`
 
 	Cluster struct {
 		//driver opts
@@ -24,13 +25,6 @@ type Configuration struct {
 			Heartbeat string `yaml:"heartbeat"`
 		} `yaml:"discovery"`
 	} `yaml:"cluster"`
-
-	//storage options
-	Storage struct {
-		Mongodb struct {
-			URIs string `yaml:"uris"`
-		} `yaml:"mongodb,omitempty"`
-	} `yaml:"storage"`
 
 	//api options
 	API struct {

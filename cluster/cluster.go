@@ -29,9 +29,9 @@ type pendingContainer struct {
 // Servers: cluster server ips, correspond engines's key.
 // Owners: cluster group owners name.
 type Group struct {
-	ID      string
-	Servers []string
-	Owners  []string
+	ID      string   `json:"ID"`
+	Servers []string `json:"Servers"`
+	Owners  []string `json:"Owners"`
 }
 
 // Cluster is exported
