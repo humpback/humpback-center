@@ -1,7 +1,10 @@
 package response
 
-import "github.com/humpback/humpback-center/cluster"
-import "github.com/humpback/humpback-center/cluster/types"
+import (
+	"github.com/humpback/humpback-agent/models"
+	"github.com/humpback/humpback-center/cluster"
+	"github.com/humpback/humpback-center/cluster/types"
+)
 
 /*
 GroupAllContainersResponse is exported
@@ -44,15 +47,34 @@ GroupContainersMetaBaseResponse is exported
 Method:  GET
 Route:   /v1/groups/collections/{metaid}/base
 */
+
+type ContainersMetaBase struct {
+	GroupID   string `json:"GroupId"`
+	MetaID    string `json:"MetaId"`
+	Instances int    `json:"Instances"`
+	WebHook   string `json:"WebHook"`
+	ImageTag  string `json:"ImageTag"`
+	models.Container
+}
+
 type GroupContainersMetaBaseResponse struct {
-	MetaBase *cluster.MetaBase `json:"MetaBase"`
+	MetaBase *ContainersMetaBase `json:"MetaBase"`
 }
 
 // NewGroupContainersMetaBaseResponse is exported
 func NewGroupContainersMetaBaseResponse(metaBase *cluster.MetaBase) *GroupContainersMetaBaseResponse {
 
+	containersMetaBase := &ContainersMetaBase{
+		GroupID:   metaBase.GroupID,
+		MetaID:    metaBase.MetaID,
+		Instances: metaBase.Instances,
+		WebHook:   metaBase.WebHook,
+		ImageTag:  metaBase.ImageTag,
+		Container: metaBase.Config,
+	}
+
 	return &GroupContainersMetaBaseResponse{
-		MetaBase: metaBase,
+		MetaBase: containersMetaBase,
 	}
 }
 
