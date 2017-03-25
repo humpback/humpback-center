@@ -3,45 +3,66 @@ package cluster
 import "github.com/humpback/humpback-agent/models"
 import "github.com/humpback/gounits/logger"
 
+// WeightedEngine is exported
 type WeightedEngine struct {
-	Engine *Engine
-	Weight int64
+	engine *Engine
+	weight int64
 }
 
-type weightedEngineList []*WeightedEngine
+// Containers is exported
+// Return engine's containers
+func (weighted *WeightedEngine) Containers() Containers {
 
-func (weight weightedEngineList) Len() int {
-
-	return len(weight)
-}
-
-func (weight weightedEngineList) Swap(i, j int) {
-
-	weight[i], weight[j] = weight[j], weight[i]
-}
-
-func (weight weightedEngineList) Less(i, j int) bool {
-
-	var iengine = weight[i]
-	var jengine = weight[j]
-	if iengine.Weight == jengine.Weight {
-		return len(iengine.Engine.Containers("")) < len(jengine.Engine.Containers(""))
+	if weighted.engine != nil {
+		return weighted.engine.Containers("")
 	}
-	return iengine.Weight < jengine.Weight
+	return Containers{}
 }
 
-func (weight weightedEngineList) Engines() []*Engine {
+// Engine is exported
+func (weighted *WeightedEngine) Engine() *Engine {
 
-	engines := []*Engine{}
-	for _, it := range weight {
-		engines = append(engines, it.Engine)
+	return weighted.engine
+}
+
+// Weight is exported
+func (weighted *WeightedEngine) Weight() int64 {
+
+	return weighted.weight
+}
+
+type weightedEngines []*WeightedEngine
+
+func (engines weightedEngines) Len() int {
+
+	return len(engines)
+}
+
+func (engines weightedEngines) Swap(i, j int) {
+
+	engines[i], engines[j] = engines[j], engines[i]
+}
+
+func (engines weightedEngines) Less(i, j int) bool {
+
+	if engines[i].Weight() == engines[j].Weight() {
+		return len(engines[i].Containers()) < len(engines[j].Containers())
 	}
-	return engines
+	return engines[i].Weight() < engines[j].Weight()
 }
 
-func weightEngines(engines []*Engine, config models.Container) weightedEngineList {
+func (engines weightedEngines) Engines() []*Engine {
 
-	weightedEngines := weightedEngineList{}
+	out := []*Engine{}
+	for _, weightedEngine := range engines {
+		out = append(out, weightedEngine.Engine())
+	}
+	return out
+}
+
+func selectWeightdEngines(engines []*Engine, config models.Container) weightedEngines {
+
+	out := weightedEngines{}
 	for _, engine := range engines {
 		totalCpus := engine.TotalCpus()
 		totalMemory := engine.TotalMemory()
@@ -63,11 +84,11 @@ func weightEngines(engines []*Engine, config models.Container) weightedEngineLis
 
 		//logger.INFO("[#cluster#] weighted engine %s cpuScore:%d memorySocre:%d weight:%d", engine.IP, cpuScore, memoryScore, cpuScore+memoryScore)
 		if cpuScore <= 100 && memoryScore <= 100 {
-			weightedEngines = append(weightedEngines, &WeightedEngine{
-				Engine: engine,
-				Weight: cpuScore + memoryScore,
+			out = append(out, &WeightedEngine{
+				engine: engine,
+				weight: cpuScore + memoryScore,
 			})
 		}
 	}
-	return weightedEngines
+	return out
 }

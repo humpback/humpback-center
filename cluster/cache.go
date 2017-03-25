@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -20,6 +21,24 @@ type ContainerBaseConfig struct {
 	Index int `json:"Index"`
 	models.Container
 	MetaData *MetaData `json:"-"`
+}
+
+// SortContainerBaseConfigs is exported
+type SortContainerBaseConfigs []*ContainerBaseConfig
+
+func (containers SortContainerBaseConfigs) Len() int {
+
+	return len(containers)
+}
+
+func (containers SortContainerBaseConfigs) Swap(i, j int) {
+
+	containers[i], containers[j] = containers[j], containers[i]
+}
+
+func (containers SortContainerBaseConfigs) Less(i, j int) bool {
+
+	return containers[i].Index < containers[j].Index
 }
 
 // MetaBase is exported
@@ -105,6 +124,36 @@ func (cache *ContainersConfigCache) MakeUniqueMetaID() string {
 		break
 	}
 	return metaid
+}
+
+// MakeContainerIdleIndex is exported
+// Return a baseContainerConfig idle index
+func (cache *ContainersConfigCache) MakeContainerIdleIndex(metaid string) int {
+
+	cache.Lock()
+	defer cache.Unlock()
+	metaData, ret := cache.data[metaid]
+	if !ret {
+		return -1
+	}
+
+	index := 1
+	sortContainerBaseConfigs := SortContainerBaseConfigs(metaData.BaseConfigs)
+	if len(sortContainerBaseConfigs) == 0 {
+		return index
+	}
+
+	sort.Sort(sortContainerBaseConfigs)
+	for {
+		for i := 0; i < len(sortContainerBaseConfigs); i++ {
+			if sortContainerBaseConfigs[i].Index != index {
+				return index
+			}
+			index++
+		}
+		break
+	}
+	return index
 }
 
 // SetImageTag is exported

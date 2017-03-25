@@ -557,9 +557,9 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhook s
 	if len(engines) > 0 {
 		originalInstances := len(metaData.BaseConfigs)
 		if originalInstances < instances {
-			cluster.createContainers(metaData, originalInstances+1, instances-originalInstances, metaData.Config)
+			cluster.createContainers(metaData, instances-originalInstances, metaData.Config)
 		} else {
-			cluster.reduceContainers(metaData, engines, originalInstances-instances)
+			cluster.reduceContainers(metaData, originalInstances-instances)
 		}
 	}
 
@@ -597,7 +597,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhook 
 	}
 
 	metaData := cluster.configCache.CreateMetaData(groupid, instances, webhook, config)
-	createdContainers := cluster.createContainers(metaData, 1, instances, config)
+	createdContainers := cluster.createContainers(metaData, instances, config)
 	if len(createdContainers) == 0 {
 		cluster.configCache.RemoveMetaData(metaData.MetaID)
 		return "", nil, ErrClusterCreateContainerFailure
@@ -606,7 +606,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhook 
 }
 
 // reduceContainers is exported
-func (cluster *Cluster) reduceContainers(metaData *MetaData, engines []*Engine, instances int) {
+func (cluster *Cluster) reduceContainers(metaData *MetaData, instances int) {
 
 	cluster.Lock()
 	cluster.pendingContainers[metaData.Config.Name] = &pendingContainer{
@@ -616,19 +616,9 @@ func (cluster *Cluster) reduceContainers(metaData *MetaData, engines []*Engine, 
 	}
 	cluster.Unlock()
 
-	containers := reduceContainers{}
-	for _, engine := range engines {
-		if engine.IsHealthy() {
-			containers = append(containers, engine.Containers(metaData.MetaID)...)
-		}
-	}
-
-	sort.Sort(containers)
-	for i := 0; i < len(containers) && i < instances; i++ {
-		engine := containers[i].Engine
-		if err := engine.RemoveContainer(containers[i].Info.ID); err != nil {
-			logger.ERROR("[#cluster#] engine %s, remove container error:%s", engine.IP, err.Error())
-			break
+	for ; instances > 0; instances-- {
+		if _, _, err := cluster.reduceContainer(metaData); err != nil {
+			logger.ERROR("[#cluster#] reduce container %s, error:%s", metaData.Config.Name, err.Error())
 		}
 	}
 
@@ -637,8 +627,31 @@ func (cluster *Cluster) reduceContainers(metaData *MetaData, engines []*Engine, 
 	cluster.Unlock()
 }
 
+// reduceContainer is exported
+func (cluster *Cluster) reduceContainer(metaData *MetaData) (*Engine, *Container, error) {
+
+	engines := cluster.GetGroupEngines(metaData.GroupID)
+	if engines == nil || len(engines) == 0 {
+		return nil, nil, ErrClusterNoEngineAvailable
+	}
+
+	reduceEngines := selectReduceEngines(metaData.MetaID, engines)
+	if len(reduceEngines) == 0 {
+		return nil, nil, ErrClusterNoEngineAvailable
+	}
+
+	sort.Sort(reduceEngines)
+	reduceEngine := reduceEngines[0]
+	engine := reduceEngine.Engine()
+	container := reduceEngine.ReduceContainer()
+	if err := engine.RemoveContainer(container.Info.ID); err != nil {
+		return nil, nil, err
+	}
+	return engine, container, nil
+}
+
 // createContainers is exported
-func (cluster *Cluster) createContainers(metaData *MetaData, index int, instances int, config models.Container) types.CreatedContainers {
+func (cluster *Cluster) createContainers(metaData *MetaData, instances int, config models.Container) types.CreatedContainers {
 
 	cluster.Lock()
 	cluster.pendingContainers[config.Name] = &pendingContainer{
@@ -651,6 +664,10 @@ func (cluster *Cluster) createContainers(metaData *MetaData, index int, instance
 	createdContainers := types.CreatedContainers{}
 	ipList := []string{}
 	for ; instances > 0; instances-- {
+		index := cluster.configCache.MakeContainerIdleIndex(metaData.MetaID)
+		if index < 0 {
+			continue
+		}
 		indexStr := strconv.Itoa(index)
 		containerConfig := config
 		containerConfig.Name = metaData.GroupID[:8] + "-" + containerConfig.Name + "-" + indexStr
@@ -682,7 +699,6 @@ func (cluster *Cluster) createContainers(metaData *MetaData, index int, instance
 		}
 		ipList = filterAppendIPList(engine, ipList)
 		createdContainers = createdContainers.SetCreatedPair(engine.IP, container.Config.Container)
-		index++
 	}
 
 	cluster.Lock()
@@ -724,7 +740,7 @@ func (cluster *Cluster) selectEngines(engines []*Engine, ipList []string, config
 		return selectEngines //return empty engines
 	}
 
-	weightedEngines := weightEngines(selectEngines, config)
+	weightedEngines := selectWeightdEngines(selectEngines, config)
 	if len(weightedEngines) > 0 {
 		sort.Sort(weightedEngines)
 		selectEngines = weightedEngines.Engines()
