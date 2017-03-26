@@ -2,6 +2,7 @@ package cluster
 
 import "github.com/humpback/gounits/system"
 import "github.com/humpback/gounits/rand"
+import "github.com/humpback/humpback-center/cluster/types"
 import "github.com/humpback/humpback-agent/models"
 
 import (
@@ -46,7 +47,7 @@ type MetaBase struct {
 	GroupID   string           `json:"GroupId"`
 	MetaID    string           `json:"MetaId"`
 	Instances int              `json:"Instances"`
-	WebHook   string           `json:"WebHook"`
+	WebHooks  types.WebHooks   `json:"WebHooks"`
 	ImageTag  string           `json:"ImageTag"`
 	Config    models.Container `json:"Config"`
 }
@@ -243,13 +244,13 @@ func (cache *ContainersConfigCache) GetGroupMetaData(groupid string) []*MetaData
 }
 
 // SetMetaData is exported
-func (cache *ContainersConfigCache) SetMetaData(metaid string, instances int, webhook string) {
+func (cache *ContainersConfigCache) SetMetaData(metaid string, instances int, webhooks types.WebHooks) {
 
 	cache.Lock()
 	defer cache.Unlock()
 	if metaData, ret := cache.data[metaid]; ret {
 		metaData.Instances = instances
-		metaData.WebHook = webhook
+		metaData.WebHooks = webhooks
 		cache.writeMetaData(metaData)
 	}
 }
@@ -287,7 +288,7 @@ func (cache *ContainersConfigCache) RemoveGroupMetaData(groupid string) bool {
 }
 
 // CreateMetaData is exported
-func (cache *ContainersConfigCache) CreateMetaData(groupid string, instances int, webhook string, config models.Container) *MetaData {
+func (cache *ContainersConfigCache) CreateMetaData(groupid string, instances int, webhooks types.WebHooks, config models.Container) *MetaData {
 
 	cache.Lock()
 	defer cache.Unlock()
@@ -303,7 +304,7 @@ func (cache *ContainersConfigCache) CreateMetaData(groupid string, instances int
 			GroupID:   groupid,
 			MetaID:    metaid,
 			Instances: instances,
-			WebHook:   webhook,
+			WebHooks:  webhooks,
 			ImageTag:  imageTag,
 			Config:    config,
 		},

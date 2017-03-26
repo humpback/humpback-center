@@ -13,7 +13,7 @@ type EngineContainer struct {
 type GroupContainer struct {
 	MetaID     string             `json:"MetaId"`
 	Instances  int                `json:"Instances"`
-	WebHook    string             `json:"WebHook"`
+	WebHooks   WebHooks           `json:"WebHooks"`
 	Config     models.Container   `json:"Config"`
 	Containers []*EngineContainer `json:"Containers"`
 }

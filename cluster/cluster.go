@@ -25,13 +25,19 @@ type pendingContainer struct {
 	Config  models.Container
 }
 
+type Server struct {
+	Name string
+	IP   string
+}
+
 // Group is exported
 // Servers: cluster server ips, correspond engines's key.
 // Owners: cluster group owners name.
 type Group struct {
-	ID      string   `json:"ID"`
-	Servers []string `json:"Servers"`
-	Owners  []string `json:"Owners"`
+	ID          string   `json:"ID"`
+	Servers     []string `json:"Servers"`
+	Owners      []string `json:"Owners"`
+	ContactInfo string   `json:"ContactInfo"`
 }
 
 // Cluster is exported
@@ -240,7 +246,7 @@ func (cluster *Cluster) GetGroupContainers(metaid string) *types.GroupContainer 
 	groupContainer := &types.GroupContainer{
 		MetaID:     metaData.MetaID,
 		Instances:  metaData.Instances,
-		WebHook:    metaData.WebHook,
+		WebHooks:   metaData.WebHooks,
 		Config:     metaData.Config,
 		Containers: make([]*types.EngineContainer, 0),
 	}
@@ -535,7 +541,7 @@ func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*ty
 }
 
 // UpdateContainers is exported
-func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhook string) (*types.CreatedContainers, error) {
+func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks types.WebHooks) (*types.CreatedContainers, error) {
 
 	if instances <= 0 {
 		logger.ERROR("[#cluster#] update containers %s error, %s", metaid, ErrClusterContainersInstancesInvalid)
@@ -553,7 +559,7 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhook s
 		return nil, ErrClusterContainersSetting
 	}
 
-	cluster.configCache.SetMetaData(metaid, instances, webhook)
+	cluster.configCache.SetMetaData(metaid, instances, webhooks)
 	if len(engines) > 0 {
 		originalInstances := len(metaData.BaseConfigs)
 		if originalInstances < instances {
@@ -574,7 +580,7 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhook s
 }
 
 // CreateContainers is exported
-func (cluster *Cluster) CreateContainers(groupid string, instances int, webhook string, config models.Container) (string, *types.CreatedContainers, error) {
+func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks types.WebHooks, config models.Container) (string, *types.CreatedContainers, error) {
 
 	if instances <= 0 {
 		return "", nil, ErrClusterContainersInstancesInvalid
@@ -596,7 +602,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhook 
 		return "", nil, ErrClusterCreateContainerNameConflict
 	}
 
-	metaData := cluster.configCache.CreateMetaData(groupid, instances, webhook, config)
+	metaData := cluster.configCache.CreateMetaData(groupid, instances, webhooks, config)
 	createdContainers := cluster.createContainers(metaData, instances, config)
 	if len(createdContainers) == 0 {
 		cluster.configCache.RemoveMetaData(metaData.MetaID)

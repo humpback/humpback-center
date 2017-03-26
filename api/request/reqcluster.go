@@ -2,6 +2,7 @@ package request
 
 import "github.com/gorilla/mux"
 import "github.com/humpback/humpback-agent/models"
+import "github.com/humpback/humpback-center/cluster/types"
 
 import (
 	"bytes"
@@ -176,7 +177,7 @@ Route:   /v1/groups/collections
 type GroupCreateContainersRequest struct {
 	GroupID   string           `json:"GroupId"`
 	Instances int              `json:"Instances"`
-	WebHook   string           `json:"WebHook"`
+	WebHooks  types.WebHooks   `json:"WebHooks"`
 	Config    models.Container `json:"Config"`
 }
 
@@ -213,9 +214,9 @@ Method:  PUT
 Route:   /v1/groups/collections
 */
 type GroupUpdateContainersRequest struct {
-	MetaID    string `json:"MetaId"`
-	Instances int    `json:"Instances"`
-	WebHook   string `json:"WebHook"`
+	MetaID    string         `json:"MetaId"`
+	Instances int            `json:"Instances"`
+	WebHooks  types.WebHooks `json:"WebHooks"`
 }
 
 // ResolveGroupUpdateContainersRequest is exported

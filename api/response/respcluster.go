@@ -42,21 +42,21 @@ func NewGroupContainersResponse(container *types.GroupContainer) *GroupContainer
 	}
 }
 
+// ContainersMetaBase is exported
+type ContainersMetaBase struct {
+	GroupID   string         `json:"GroupId"`
+	MetaID    string         `json:"MetaId"`
+	Instances int            `json:"Instances"`
+	WebHooks  types.WebHooks `json:"WebHooks"`
+	ImageTag  string         `json:"ImageTag"`
+	models.Container
+}
+
 /*
 GroupContainersMetaBaseResponse is exported
 Method:  GET
 Route:   /v1/groups/collections/{metaid}/base
 */
-
-type ContainersMetaBase struct {
-	GroupID   string `json:"GroupId"`
-	MetaID    string `json:"MetaId"`
-	Instances int    `json:"Instances"`
-	WebHook   string `json:"WebHook"`
-	ImageTag  string `json:"ImageTag"`
-	models.Container
-}
-
 type GroupContainersMetaBaseResponse struct {
 	MetaBase *ContainersMetaBase `json:"MetaBase"`
 }
@@ -68,7 +68,7 @@ func NewGroupContainersMetaBaseResponse(metaBase *cluster.MetaBase) *GroupContai
 		GroupID:   metaBase.GroupID,
 		MetaID:    metaBase.MetaID,
 		Instances: metaBase.Instances,
-		WebHook:   metaBase.WebHook,
+		WebHooks:  metaBase.WebHooks,
 		ImageTag:  metaBase.ImageTag,
 		Container: metaBase.Config,
 	}

@@ -163,14 +163,14 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 	}
 }
 
-func (c *Controller) CreateClusterContainers(groupid string, instances int, webhook string, config models.Container) (string, *types.CreatedContainers, error) {
+func (c *Controller) CreateClusterContainers(groupid string, instances int, webhooks types.WebHooks, config models.Container) (string, *types.CreatedContainers, error) {
 
-	return c.Cluster.CreateContainers(groupid, instances, webhook, config)
+	return c.Cluster.CreateContainers(groupid, instances, webhooks, config)
 }
 
-func (c *Controller) UpdateClusterContainers(metaid string, instances int, webhook string) (*types.CreatedContainers, error) {
+func (c *Controller) UpdateClusterContainers(metaid string, instances int, webhooks types.WebHooks) (*types.CreatedContainers, error) {
 
-	return c.Cluster.UpdateContainers(metaid, instances, webhook)
+	return c.Cluster.UpdateContainers(metaid, instances, webhooks)
 }
 
 func (c *Controller) OperateContainers(metaid string, action string) (*types.OperatedContainers, error) {
