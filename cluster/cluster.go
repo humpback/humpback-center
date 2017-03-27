@@ -253,13 +253,15 @@ func (cluster *Cluster) GetGroupContainers(metaid string) *types.GroupContainer 
 
 	for _, baseConfig := range metaData.BaseConfigs {
 		for _, engine := range engines {
-			if container := engine.Container(baseConfig.ID); container != nil {
-				groupContainer.Containers = append(groupContainer.Containers, &types.EngineContainer{
-					IP:        engine.IP,
-					HostName:  engine.Name,
-					Container: container.Config.Container,
-				})
-				break
+			if engine.IsHealthy() {
+				if container := engine.Container(baseConfig.ID); container != nil {
+					groupContainer.Containers = append(groupContainer.Containers, &types.EngineContainer{
+						IP:        engine.IP,
+						HostName:  engine.Name,
+						Container: container.Config.Container,
+					})
+					break
+				}
 			}
 		}
 	}
@@ -571,9 +573,11 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 
 	createdContainers := types.CreatedContainers{}
 	for _, engine := range engines {
-		containers := engine.Containers(metaData.MetaID)
-		for _, container := range containers {
-			createdContainers = createdContainers.SetCreatedPair(engine.IP, container.Config.Container)
+		if engine.IsHealthy() {
+			containers := engine.Containers(metaData.MetaID)
+			for _, container := range containers {
+				createdContainers = createdContainers.SetCreatedPair(engine.IP, container.Config.Container)
+			}
 		}
 	}
 	return &createdContainers, nil
