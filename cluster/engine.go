@@ -1,6 +1,7 @@
 package cluster
 
 import "github.com/docker/docker/api/types"
+import gocontainer "github.com/humpback/gounits/container"
 import "github.com/humpback/gounits/convert"
 import "github.com/humpback/gounits/http"
 import "github.com/humpback/gounits/logger"
@@ -164,6 +165,23 @@ func (engine *Engine) State() string {
 	engine.RLock()
 	defer engine.RUnlock()
 	return stateText[engine.state]
+}
+
+// MetaIds is exported
+// Return a engine all metaids array.
+func (engine *Engine) MetaIds() []string {
+
+	ids := []string{}
+	engine.RLock()
+	for _, container := range engine.containers {
+		if metaid := container.MetaID(); metaid != "" {
+			if ret := gocontainer.Contains(metaid, ids); !ret {
+				ids = append(ids, container.MetaID())
+			}
+		}
+	}
+	engine.RUnlock()
+	return ids
 }
 
 // Containers is exported

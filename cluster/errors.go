@@ -22,6 +22,8 @@ var (
 	ErrClusterCreateContainerFailure = errors.New("cluster create containers failure")
 	//cluster containers is upgrading
 	ErrClusterContainersUpgrading = errors.New("cluster containers state is upgrading")
+	//cluster containers is migrating
+	ErrClusterContainersMigrating = errors.New("cluster containers state is migrating")
 	//cluster containers is setting
 	ErrClusterContainersSetting = errors.New("cluster containers state is setting")
 	//cluster containers instances no change

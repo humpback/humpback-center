@@ -2,7 +2,7 @@ version: 1.0.0
 pidfile: ./humpback-center.pid
 siteapi: http://192.168.2.80:8181/api
 cluster:
-    opts: ["cacheroot=./cache", overcommit=0.08", "createretry=1", "upgradedelay=1s"]
+    opts: ["cacheroot=./cache", overcommit=0.08", "createretry=1", "upgradedelay=1s", "migratedelay=30s"]
     discovery:
         uris: zk://192.168.2.80:2181,192.168.2.81:2181,192.168.2.82:2181
         cluster: humpback/center

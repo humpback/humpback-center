@@ -154,48 +154,48 @@ func (upgrader *Upgrader) Start() {
 
 type UpgraderHandlerFunc func(upgrader *Upgrader, errMsgs []string)
 
-type UpgradeContainers struct {
+type UpgradeContainersCache struct {
 	sync.RWMutex
 	delayInterval time.Duration
 	configCache   *ContainersConfigCache
 	upgraders     map[string]*Upgrader
 }
 
-func NewUpgradeContainers(upgradeDelay time.Duration, configCache *ContainersConfigCache) *UpgradeContainers {
+func NewUpgradeContainersCache(upgradeDelay time.Duration, configCache *ContainersConfigCache) *UpgradeContainersCache {
 
-	return &UpgradeContainers{
+	return &UpgradeContainersCache{
 		delayInterval: upgradeDelay,
 		configCache:   configCache,
 		upgraders:     make(map[string]*Upgrader),
 	}
 }
 
-func (upgradeContainers *UpgradeContainers) Upgrade(metaid string, imageTag string, containers Containers) {
+func (cache *UpgradeContainersCache) Upgrade(metaid string, imageTag string, containers Containers) {
 
-	upgradeContainers.Lock()
-	if _, ret := upgradeContainers.upgraders[metaid]; !ret {
-		upgrader := NewUpgrader(metaid, imageTag, containers, upgradeContainers.delayInterval, upgradeContainers.configCache, upgradeContainers.UpgraderHandlerFunc)
+	cache.Lock()
+	if _, ret := cache.upgraders[metaid]; !ret {
+		upgrader := NewUpgrader(metaid, imageTag, containers, cache.delayInterval, cache.configCache, cache.UpgraderHandlerFunc)
 		if upgrader != nil {
-			upgradeContainers.upgraders[metaid] = upgrader
+			cache.upgraders[metaid] = upgrader
 			logger.INFO("[#cluster] upgrade start %s > %s", metaid, imageTag)
 			go upgrader.Start()
 		}
 	}
-	upgradeContainers.Unlock()
+	cache.Unlock()
 }
 
-func (upgradeContainers *UpgradeContainers) Contains(metaid string) bool {
+func (cache *UpgradeContainersCache) Contains(metaid string) bool {
 
-	upgradeContainers.RLock()
-	defer upgradeContainers.RUnlock()
-	_, ret := upgradeContainers.upgraders[metaid]
+	cache.RLock()
+	defer cache.RUnlock()
+	_, ret := cache.upgraders[metaid]
 	return ret
 }
 
-func (upgradeContainers *UpgradeContainers) UpgraderHandlerFunc(upgrader *Upgrader, errMsgs []string) {
+func (cache *UpgradeContainersCache) UpgraderHandlerFunc(upgrader *Upgrader, errMsgs []string) {
 
 	logger.INFO("[#cluster] upgrade done %s > %s", upgrader.MetaID, upgrader.NewImageTag)
-	upgradeContainers.Lock()
-	delete(upgradeContainers.upgraders, upgrader.MetaID)
-	upgradeContainers.Unlock()
+	cache.Lock()
+	delete(cache.upgraders, upgrader.MetaID)
+	cache.Unlock()
 }
