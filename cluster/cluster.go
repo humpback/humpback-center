@@ -45,7 +45,8 @@ type Group struct {
 // overcommitRatio: engine overcommit ratio, cpus & momery resources.
 // createRetry: create container retry count.
 // configCache: container config metadata cache.
-// upgradeContainers: upgrading containers.
+// upgradeContainers: upgrading containers cache.
+// migtateContainers: migrating containers cache.
 // pendingContainers: createing containers.
 // engines: map[ip]*Engine
 // groups:  map[groupid]*Group
@@ -57,7 +58,8 @@ type Cluster struct {
 	createRetry       int64
 	randSeed          *rand.Rand
 	configCache       *ContainersConfigCache
-	upgradeContainers *UpgradeContainers
+	upgradeContainers *UpgradeContainersCache
+	migtateContainers *MigrateContainersCache
 	pendingContainers map[string]*pendingContainer
 	engines           map[string]*Engine
 	groups            map[string]*Group
@@ -110,18 +112,29 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		return nil, err
 	}
 
-	return &Cluster{
+	migratedelay := 30 * time.Second
+	if val, ret := driverOpts.String("migratedelay", ""); ret {
+		if dur, err := time.ParseDuration(val); err == nil {
+			migratedelay = dur
+		}
+	}
+
+	migrateContainersCache := NewMigrateContainersCache(migratedelay)
+	cluster := &Cluster{
 		Discovery:         discovery,
 		overcommitRatio:   overcommitratio,
 		createRetry:       createretry,
 		randSeed:          rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
 		configCache:       configCache,
-		upgradeContainers: NewUpgradeContainers(upgradedelay, configCache),
+		upgradeContainers: NewUpgradeContainersCache(upgradedelay, configCache),
+		migtateContainers: migrateContainersCache,
 		pendingContainers: make(map[string]*pendingContainer),
 		engines:           make(map[string]*Engine),
 		groups:            make(map[string]*Group),
 		stopCh:            make(chan struct{}),
-	}, nil
+	}
+	migrateContainersCache.SetCluster(cluster)
+	return cluster, nil
 }
 
 // Start is exported
@@ -178,10 +191,16 @@ func (cluster *Cluster) GetMetaDataEngines(metaid string) (*MetaData, []*Engine,
 	return metaData, engines, nil
 }
 
+// GetMetaData is exported
+func (cluster *Cluster) GetMetaData(metaid string) *MetaData {
+
+	return cluster.configCache.GetMetaData(metaid)
+}
+
 // GetMetaBase is exported
 func (cluster *Cluster) GetMetaBase(metaid string) *MetaBase {
 
-	if metaData := cluster.configCache.GetMetaData(metaid); metaData != nil {
+	if metaData := cluster.GetMetaData(metaid); metaData != nil {
 		return &metaData.MetaBase
 	}
 	return nil
@@ -355,9 +374,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		}
 		logger.INFO("[#cluster#] discovery service removed:%s %s.", entry.Key, opts.Addr)
 		if engine := cluster.removeEngine(ip); engine != nil {
-			//containers := engine.Containers()
 			engine.Close()
-			//cluster.migrateContainers(engine, containers)
 			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
 		}
 	}
@@ -375,7 +392,6 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		logger.INFO("[#cluster#] discovery service added:%s.", entry.Key)
 		if engine := cluster.addEngine(ip); engine != nil {
 			engine.Open(opts.Addr)
-			//cluster.recoverContainers(engine)
 			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
 		}
 	}
@@ -430,7 +446,7 @@ func (cluster *Cluster) OperateContainer(containerid string, action string) (str
 // if containerid is empty string so operate metaid's all containers
 func (cluster *Cluster) OperateContainers(metaid string, containerid string, action string) (*types.OperatedContainers, error) {
 
-	metaData, engines, err := cluster.validateMetaData(metaid)
+	metaData, engines, err := cluster.validatedMetaData(metaid)
 	if err != nil {
 		logger.ERROR("[#cluster#] %s containers %s error, %s", action, metaid, err.Error())
 		return nil, err
@@ -467,7 +483,7 @@ func (cluster *Cluster) OperateContainers(metaid string, containerid string, act
 // UpgradeContainers is exported
 func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) error {
 
-	metaData, engines, err := cluster.validateMetaData(metaid)
+	metaData, engines, err := cluster.validatedMetaData(metaid)
 	if err != nil {
 		logger.ERROR("[#cluster#] upgrade containers %s error, %s", metaid, err.Error())
 		return err
@@ -502,7 +518,7 @@ func (cluster *Cluster) RemoveContainer(containerid string) (string, *types.Remo
 // if containerid is empty string so remove metaid's all containers
 func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*types.RemovedContainers, error) {
 
-	metaData, engines, err := cluster.validateMetaData(metaid)
+	metaData, engines, err := cluster.validatedMetaData(metaid)
 	if err != nil {
 		logger.ERROR("[#cluster#] remove containers %s error, %s", metaid, err.Error())
 		return nil, err
@@ -550,7 +566,7 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 		return nil, ErrClusterContainersInstancesInvalid
 	}
 
-	metaData, engines, err := cluster.validateMetaData(metaid)
+	metaData, engines, err := cluster.validatedMetaData(metaid)
 	if err != nil {
 		logger.ERROR("[#cluster#] update containers %s error, %s", metaid, err.Error())
 		return nil, err
@@ -795,10 +811,14 @@ func (cluster *Cluster) cehckContainerNameUniqueness(groupid string, name string
 	return true
 }
 
-func (cluster *Cluster) validateMetaData(metaid string) (*MetaData, []*Engine, error) {
+func (cluster *Cluster) validatedMetaData(metaid string) (*MetaData, []*Engine, error) {
 
 	if ret := cluster.upgradeContainers.Contains(metaid); ret {
 		return nil, nil, ErrClusterContainersUpgrading
+	}
+
+	if ret := cluster.migtateContainers.Contains(metaid); ret {
+		return nil, nil, ErrClusterContainersMigrating
 	}
 
 	metaData, engines, err := cluster.GetMetaDataEngines(metaid)

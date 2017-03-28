@@ -70,13 +70,13 @@ type Upgrader struct {
 	OriginalImageTag string
 	NewImageTag      string
 	delayInterval    time.Duration
-	callback         UpgraderHandlerFunc
+	callback         UpgraderHandleFunc
 	configCache      *ContainersConfigCache
 	containers       []*UpgradeContainer
 }
 
 func NewUpgrader(metaid string, imageTag string, containers Containers, upgradeDelay time.Duration,
-	configCache *ContainersConfigCache, callback UpgraderHandlerFunc) *Upgrader {
+	configCache *ContainersConfigCache, callback UpgraderHandleFunc) *Upgrader {
 
 	metaData := configCache.GetMetaData(metaid)
 	if metaData == nil {
@@ -152,7 +152,7 @@ func (upgrader *Upgrader) Start() {
 	upgrader.callback(upgrader, errMsgs)
 }
 
-type UpgraderHandlerFunc func(upgrader *Upgrader, errMsgs []string)
+type UpgraderHandleFunc func(upgrader *Upgrader, errMsgs []string)
 
 type UpgradeContainersCache struct {
 	sync.RWMutex
@@ -174,7 +174,7 @@ func (cache *UpgradeContainersCache) Upgrade(metaid string, imageTag string, con
 
 	cache.Lock()
 	if _, ret := cache.upgraders[metaid]; !ret {
-		upgrader := NewUpgrader(metaid, imageTag, containers, cache.delayInterval, cache.configCache, cache.UpgraderHandlerFunc)
+		upgrader := NewUpgrader(metaid, imageTag, containers, cache.delayInterval, cache.configCache, cache.UpgraderHandleFunc)
 		if upgrader != nil {
 			cache.upgraders[metaid] = upgrader
 			logger.INFO("[#cluster] upgrade start %s > %s", metaid, imageTag)
@@ -192,7 +192,7 @@ func (cache *UpgradeContainersCache) Contains(metaid string) bool {
 	return ret
 }
 
-func (cache *UpgradeContainersCache) UpgraderHandlerFunc(upgrader *Upgrader, errMsgs []string) {
+func (cache *UpgradeContainersCache) UpgraderHandleFunc(upgrader *Upgrader, errMsgs []string) {
 
 	logger.INFO("[#cluster] upgrade done %s > %s", upgrader.MetaID, upgrader.NewImageTag)
 	cache.Lock()
