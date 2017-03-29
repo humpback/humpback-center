@@ -87,7 +87,6 @@ func (mContainer *MigrateContainer) Execute(cluster *Cluster) {
 	mContainer.Lock()
 	mContainer.New = container
 	mContainer.state = MigrateCompleted
-	cluster.configCache.RemoveContainerBaseConfig(baseConfig.MetaData.MetaID, mContainer.Original.Info.ID)
 	logger.ERROR("[#cluster] migrator container %s > %s to %s", mContainer.Original.Info.ID[:12], mContainer.New.Info.ID[:12], engine.IP)
 	mContainer.Unlock()
 	return
@@ -226,6 +225,9 @@ func (migrator *Migrator) Start() {
 		mContainer := migrator.selectMigrateContainer()
 		if mContainer != nil {
 			mContainer.Execute(migrator.Cluster)
+			if mContainer.GetState() == MigrateCompleted {
+				migrator.Cluster.configCache.RemoveContainerBaseConfig(migrator.MetaID, mContainer.Original.Info.ID)
+			}
 			continue
 		}
 
