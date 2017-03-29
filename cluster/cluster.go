@@ -394,6 +394,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		if engine := cluster.addEngine(ip); engine != nil {
 			engine.Open(opts.Addr)
 			cluster.migtateContainers.Cancel(engine)
+			cluster.validateContainers(engine)
 			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
 		}
 	}
@@ -448,7 +449,7 @@ func (cluster *Cluster) OperateContainer(containerid string, action string) (str
 // if containerid is empty string so operate metaid's all containers
 func (cluster *Cluster) OperateContainers(metaid string, containerid string, action string) (*types.OperatedContainers, error) {
 
-	metaData, engines, err := cluster.validatedMetaData(metaid)
+	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
 		logger.ERROR("[#cluster#] %s containers %s error, %s", action, metaid, err.Error())
 		return nil, err
@@ -485,7 +486,7 @@ func (cluster *Cluster) OperateContainers(metaid string, containerid string, act
 // UpgradeContainers is exported
 func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) error {
 
-	metaData, engines, err := cluster.validatedMetaData(metaid)
+	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
 		logger.ERROR("[#cluster#] upgrade containers %s error, %s", metaid, err.Error())
 		return err
@@ -520,7 +521,7 @@ func (cluster *Cluster) RemoveContainer(containerid string) (string, *types.Remo
 // if containerid is empty string so remove metaid's all containers
 func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*types.RemovedContainers, error) {
 
-	metaData, engines, err := cluster.validatedMetaData(metaid)
+	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
 		logger.ERROR("[#cluster#] remove containers %s error, %s", metaid, err.Error())
 		return nil, err
@@ -568,7 +569,7 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 		return nil, ErrClusterContainersInstancesInvalid
 	}
 
-	metaData, engines, err := cluster.validatedMetaData(metaid)
+	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
 		logger.ERROR("[#cluster#] update containers %s error, %s", metaid, err.Error())
 		return nil, err
@@ -813,7 +814,7 @@ func (cluster *Cluster) cehckContainerNameUniqueness(groupid string, name string
 	return true
 }
 
-func (cluster *Cluster) validatedMetaData(metaid string) (*MetaData, []*Engine, error) {
+func (cluster *Cluster) validateMetaData(metaid string) (*MetaData, []*Engine, error) {
 
 	if ret := cluster.upgradeContainers.Contains(metaid); ret {
 		return nil, nil, ErrClusterContainersUpgrading
@@ -830,70 +831,5 @@ func (cluster *Cluster) validatedMetaData(metaid string) (*MetaData, []*Engine, 
 	return metaData, engines, nil
 }
 
-/*
-func (cluster *Cluster) migrateContainers(engine *Engine, containers Containers) {
-
-	//分配的原始engine记录在baseConfig中，当原始engine启动后，需删除上次迁移成功的engine上的容器.
-	//非原始engine启动，需要还原？或不做迁移,防止抖动.
-	//迁移流程会触发多协程并发掉线情况，可考虑做一个迁移任务池，逐步处理迁移工作.
-	// add to container pool, 迁移池考虑按groupid分组.
-	// go migrate containers.
-	// 掉线节点考虑将容器加入池中，上线节点先启动本地，然后若池中存在则删除，放弃迁移.
-	logger.INFO("[#cluster#] migrate containers %s", engine.IP)
-	for _, container := range containers {
-		if container.BaseConfig == nil {
-			continue
-		}
-		groupid := container.BaseConfig.GroupID
-		engines := cluster.GetGroupEngines(groupid)
-		if engines == nil || len(engines) == 0 {
-			continue
-		}
-		ipList := []string{}
-		_, c, err := cluster.createContainer(engines, ipList, *container.BaseConfig.Config)
-		if err != nil {
-			continue
-		}
-		if err := cluster.configCache.Set(c.ID, groupid, container.BaseConfig.IP, container.BaseConfig.Name, container.BaseConfig.Config); err != nil {
-			logger.INFO("[#cluster#] config cache error:%s", err.Error())
-		}
-		logger.INFO("[#cluster#] migrate successed.")
-	}
+func (cluster *Cluster) validateContainers(engine *Engine) {
 }
-
-func (cluster *Cluster) recoverContainers(engine *Engine) {
-
-	logger.INFO("[#cluster#] recover containers %s", engine.IP)
-	time.Sleep(time.Second * 3)
-	containers := engine.Containers()
-	for _, container := range containers {
-		if container.BaseConfig == nil {
-			continue
-		}
-
-		engines := cluster.GetGroupEngines(container.BaseConfig.GroupID)
-		if engines == nil || len(engines) == 0 {
-			continue
-		}
-
-		for _, e := range engines {
-			if e.IP != engine.IP {
-				cs := e.Containers()
-				for _, c := range cs {
-					if c.BaseConfig != nil && c.BaseConfig.Config.Name == container.BaseConfig.Config.Name {
-						if container.BaseConfig.IP == engine.IP {
-							e.RemoveContainer(c.BaseConfig.ID, c.BaseConfig.Config.Name)
-							cluster.configCache.Remove(c.BaseConfig.ID)
-						} else {
-							engine.RemoveContainer(container.BaseConfig.ID, container.BaseConfig.Name)
-							cluster.configCache.Remove(container.BaseConfig.ID)
-						}
-
-					}
-				}
-			}
-		}
-	}
-	logger.INFO("[#cluster#] recover containers successed")
-}
-*/
