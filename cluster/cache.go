@@ -58,17 +58,6 @@ type MetaData struct {
 	BaseConfigs []*ContainerBaseConfig `json:"BaseConfigs"`
 }
 
-// GetContainerBaseConfig is exported
-func (metaData *MetaData) GetContainerBaseConfig(containerid string) *ContainerBaseConfig {
-
-	for _, baseConfig := range metaData.BaseConfigs {
-		if baseConfig.ID == containerid {
-			return baseConfig
-		}
-	}
-	return nil
-}
-
 // ContainersConfigCache is exported
 type ContainersConfigCache struct {
 	sync.RWMutex
@@ -333,7 +322,11 @@ func (cache *ContainersConfigCache) GetContainerBaseConfig(metaid string, contai
 	defer cache.RUnlock()
 	metaData, ret := cache.data[metaid]
 	if ret {
-		return metaData.GetContainerBaseConfig(containerid)
+		for _, baseConfig := range metaData.BaseConfigs {
+			if baseConfig.ID == containerid {
+				return baseConfig
+			}
+		}
 	}
 	return nil
 }
@@ -368,6 +361,18 @@ func (cache *ContainersConfigCache) RemoveContainerBaseConfig(metaid string, con
 				break
 			}
 		}
+	}
+	cache.Unlock()
+}
+
+// ClearContainerBaseConfig is exported
+func (cache *ContainersConfigCache) ClearContainerBaseConfig(metaid string) {
+
+	cache.Lock()
+	metaData, ret := cache.data[metaid]
+	if ret {
+		metaData.BaseConfigs = []*ContainerBaseConfig{}
+		cache.writeMetaData(metaData)
 	}
 	cache.Unlock()
 }

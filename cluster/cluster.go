@@ -374,6 +374,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		}
 		logger.INFO("[#cluster#] discovery service removed:%s %s.", entry.Key, opts.Addr)
 		if engine := cluster.removeEngine(ip); engine != nil {
+			cluster.migtateContainers.Start(engine)
 			engine.Close()
 			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
 		}
@@ -392,6 +393,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		logger.INFO("[#cluster#] discovery service added:%s.", entry.Key)
 		if engine := cluster.addEngine(ip); engine != nil {
 			engine.Open(opts.Addr)
+			cluster.migtateContainers.Cancel(engine)
 			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
 		}
 	}
