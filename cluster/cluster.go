@@ -14,7 +14,6 @@ import (
 	"net"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -374,9 +373,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		}
 		logger.INFO("[#cluster#] discovery service removed:%s %s.", entry.Key, opts.Addr)
 		if engine := cluster.removeEngine(ip); engine != nil {
-
-			//cluster.migtatorCache.Start(engine)
-
+			cluster.migtatorCache.Start(engine)
 			engine.Close()
 			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
 		}
@@ -395,10 +392,10 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		logger.INFO("[#cluster#] discovery service added:%s.", entry.Key)
 		if engine := cluster.addEngine(ip); engine != nil {
 			engine.Open(opts.Addr)
-			//engine.RefreshContainers()
-			//cluster.migtatorCache.Cancel(engine)
-			//cluster.validateEngineContainers(engine)
-
+			engine.RefreshContainers()
+			cluster.migtatorCache.Cancel(engine)
+			//检查meta实例数，若不对应，则创建差值
+			//丢给缓存创建，避免并发上线同时处理
 			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
 		}
 	}
@@ -833,42 +830,4 @@ func (cluster *Cluster) validateMetaData(metaid string) (*MetaData, []*Engine, e
 		return nil, nil, err
 	}
 	return metaData, engines, nil
-}
-
-func (cluster *Cluster) validateEngineContainers(engine *Engine) {
-
-	//改名失效作废的容器
-	containers := engine.Containers("")
-	expelContainers := Containers{}
-	for _, container := range containers {
-		if !container.ValidateConfig() {
-			expelContainers = append(expelContainers, container)
-			operate := models.ContainerOperate{
-				Action:    "rename",
-				Container: container.Info.ID,
-				NewName:   strings.TrimSuffix(container.Info.Name, "-expel") + "-expel",
-			}
-			if err := engine.OperateContainer(operate); err != nil {
-				logger.ERROR("[#cluster#] engine %s container %s expel, rename error:%s", engine.IP, container.Info.ID[:12], err.Error())
-				continue
-			}
-			logger.WARN("[#cluster#] engine %s container %s expel, rename to %s.", engine.IP, container.Info.ID[:12], operate.NewName)
-		}
-	}
-
-	//检查meta实例数，若不对应，则创建差值
-	//丢给缓存创建，避免并发上线同时处理
-
-	//删除失效作废的容器，丢给缓存逐步处理，避免同时上线
-	if len(expelContainers) > 0 {
-		go func() {
-			for _, container := range expelContainers {
-				if err := engine.RemoveContainer(container.Info.ID); err != nil {
-					logger.WARN("[#cluster#] engine %s container %s expel, remove error %s.", engine.IP, container.Info.ID[:12], err.Error())
-					continue
-				}
-				logger.WARN("[#cluster#] engine %s container %s expel, remove.", engine.IP, container.Info.ID[:12])
-			}
-		}()
-	}
 }

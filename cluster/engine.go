@@ -113,6 +113,7 @@ func (engine *Engine) Open(addr string) {
 		go func() {
 			engine.updateSpecs()
 			engine.RefreshContainers()
+			engine.ValidateContainers()
 			engine.refreshLoop()
 		}()
 	}
@@ -182,6 +183,47 @@ func (engine *Engine) MetaIds() []string {
 	}
 	engine.RUnlock()
 	return ids
+}
+
+// ValidateContainers is exported
+// remove a engine invalid cluster containers
+func (engine *Engine) ValidateContainers() {
+
+	//get expel containers
+	expelContainers := Containers{}
+	containers := engine.Containers("")
+	for _, container := range containers {
+		if !container.ValidateConfig() {
+			expelContainers = append(expelContainers, container)
+		}
+	}
+
+	if len(expelContainers) == 0 {
+		return
+	}
+
+	// rename all expel containers, prevent container name conflicts.
+	for _, container := range expelContainers {
+		operate := models.ContainerOperate{
+			Action:    "rename",
+			Container: container.Info.ID,
+			NewName:   strings.TrimSuffix(container.Info.Name, "-expel") + "-expel",
+		}
+		if err := engine.OperateContainer(operate); err != nil {
+			logger.ERROR("[#cluster#] engine %s container %s expel, rename error:%s", engine.IP, container.Info.ID[:12], err.Error())
+			continue
+		}
+		logger.WARN("[#cluster#] engine %s container %s expel, rename to %s.", engine.IP, container.Info.ID[:12], operate.NewName)
+	}
+
+	// remove all expel containers
+	for _, container := range expelContainers {
+		if err := engine.RemoveContainer(container.Info.ID); err != nil {
+			logger.WARN("[#cluster#] engine %s container %s expel, remove error %s.", engine.IP, container.Info.ID[:12], err.Error())
+			continue
+		}
+		logger.WARN("[#cluster#] engine %s container %s expel, remove.", engine.IP, container.Info.ID[:12])
+	}
 }
 
 // Containers is exported
