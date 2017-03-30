@@ -68,6 +68,24 @@ func (c *Container) OriginalName() string {
 	return ""
 }
 
+// ValidateConfig is exported
+func (c *Container) ValidateConfig() bool {
+
+	configEnvMap := convert.ConvertKVStringSliceToMap(c.Info.Config.Env)
+	groupID := configEnvMap["HUMPBACK_CLUSTER_GROUPID"]
+	metaID := configEnvMap["HUMPBACK_CLUSTER_METAID"]
+	if len(groupID) == 0 && len(metaID) == 0 {
+		return true //true, general container that do not called scheduling of cluster.
+	}
+
+	if len(groupID) > 0 || len(metaID) > 0 {
+		if c.BaseConfig != nil { // valid cluster container
+			return true
+		}
+	}
+	return false // invalid cluster container
+}
+
 // update is exported
 // update container info and config
 func (c *Container) update(engine *Engine, containerJSON *types.ContainerJSON) {
@@ -77,6 +95,7 @@ func (c *Container) update(engine *Engine, containerJSON *types.ContainerJSON) {
 	containerConfig := &ContainerConfig{
 		Container: *config,
 	}
+
 	c.Config = containerConfig
 	containerJSON.HostConfig.CPUShares = containerJSON.HostConfig.CPUShares * engine.Cpus / 1024.0
 	startAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.StartedAt)
@@ -84,20 +103,15 @@ func (c *Container) update(engine *Engine, containerJSON *types.ContainerJSON) {
 	containerJSON.State.StartedAt = startAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
 	containerJSON.State.FinishedAt = finishedAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
 	c.Info = *containerJSON
-	c.BaseConfig = readConainerBaseConfig(containerJSON.ID, engine.configCache, containerJSON.Config.Env)
-}
 
-// readConainerBaseConfig is exported
-// read container metadata baseConfig
-func readConainerBaseConfig(containerid string, configCache *ContainersConfigCache, configEnv []string) *ContainerBaseConfig {
-
-	configEnvMap := convert.ConvertKVStringSliceToMap(configEnv)
+	configEnvMap := convert.ConvertKVStringSliceToMap(containerJSON.Config.Env)
 	groupID := configEnvMap["HUMPBACK_CLUSTER_GROUPID"]
 	metaID := configEnvMap["HUMPBACK_CLUSTER_METAID"]
 	if len(groupID) > 0 && len(metaID) > 0 {
-		return configCache.GetContainerBaseConfig(metaID, containerid)
+		c.BaseConfig = engine.configCache.GetContainerBaseConfig(metaID, containerJSON.ID)
+	} else {
+		c.BaseConfig = nil
 	}
-	return nil
 }
 
 // Containers represents a list of containers

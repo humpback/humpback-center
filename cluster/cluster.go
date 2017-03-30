@@ -14,6 +14,7 @@ import (
 	"net"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -36,7 +37,6 @@ type Server struct {
 type Group struct {
 	ID          string   `json:"ID"`
 	Servers     []string `json:"Servers"`
-	Owners      []string `json:"Owners"`
 	ContactInfo string   `json:"ContactInfo"`
 }
 
@@ -45,8 +45,8 @@ type Group struct {
 // overcommitRatio: engine overcommit ratio, cpus & momery resources.
 // createRetry: create container retry count.
 // configCache: container config metadata cache.
-// upgradeContainers: upgrading containers cache.
-// migtateContainers: migrating containers cache.
+// upgraderCache: upgrading containers cache.
+// migtatorCache: migrating containers cache.
 // pendingContainers: createing containers.
 // engines: map[ip]*Engine
 // groups:  map[groupid]*Group
@@ -58,8 +58,8 @@ type Cluster struct {
 	createRetry       int64
 	randSeed          *rand.Rand
 	configCache       *ContainersConfigCache
-	upgradeContainers *UpgradeContainersCache
-	migtateContainers *MigrateContainersCache
+	upgraderCache     *UpgradeContainersCache
+	migtatorCache     *MigrateContainersCache
 	pendingContainers map[string]*pendingContainer
 	engines           map[string]*Engine
 	groups            map[string]*Group
@@ -126,8 +126,8 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		createRetry:       createretry,
 		randSeed:          rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
 		configCache:       configCache,
-		upgradeContainers: NewUpgradeContainersCache(upgradedelay, configCache),
-		migtateContainers: migrateContainersCache,
+		upgraderCache:     NewUpgradeContainersCache(upgradedelay, configCache),
+		migtatorCache:     migrateContainersCache,
 		pendingContainers: make(map[string]*pendingContainer),
 		engines:           make(map[string]*Engine),
 		groups:            make(map[string]*Group),
@@ -300,19 +300,19 @@ func (cluster *Cluster) GetGroups() []*Group {
 }
 
 // SetGroup is exported
-func (cluster *Cluster) SetGroup(groupid string, servers []string, owners []string) {
+func (cluster *Cluster) SetGroup(groupid string, servers []string, contactinfo string) {
 
 	cluster.Lock()
 	removes := []string{}
 	group, ret := cluster.groups[groupid]
 	if !ret {
-		group = &Group{ID: groupid, Servers: servers, Owners: owners}
+		group = &Group{ID: groupid, Servers: servers, ContactInfo: contactinfo}
 		cluster.groups[groupid] = group
 		logger.INFO("[#cluster#] created group %s(%d)", groupid, len(servers))
 	} else {
 		origin := group.Servers
 		group.Servers = servers
-		group.Owners = owners
+		group.ContactInfo = contactinfo
 		for _, oldip := range origin {
 			found := false
 			for _, newip := range group.Servers {
@@ -374,7 +374,9 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		}
 		logger.INFO("[#cluster#] discovery service removed:%s %s.", entry.Key, opts.Addr)
 		if engine := cluster.removeEngine(ip); engine != nil {
-			cluster.migtateContainers.Start(engine)
+
+			//cluster.migtatorCache.Start(engine)
+
 			engine.Close()
 			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
 		}
@@ -393,8 +395,10 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		logger.INFO("[#cluster#] discovery service added:%s.", entry.Key)
 		if engine := cluster.addEngine(ip); engine != nil {
 			engine.Open(opts.Addr)
-			cluster.migtateContainers.Cancel(engine)
-			cluster.validateContainers(engine)
+			//engine.RefreshContainers()
+			//cluster.migtatorCache.Cancel(engine)
+			//cluster.validateEngineContainers(engine)
+
 			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
 		}
 	}
@@ -501,7 +505,7 @@ func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) error 
 	}
 
 	if len(upgradecontainers) > 0 {
-		cluster.upgradeContainers.Upgrade(metaData.MetaID, imagetag, upgradecontainers)
+		cluster.upgraderCache.Upgrade(metaData.MetaID, imagetag, upgradecontainers)
 	}
 	return nil
 }
@@ -816,11 +820,11 @@ func (cluster *Cluster) cehckContainerNameUniqueness(groupid string, name string
 
 func (cluster *Cluster) validateMetaData(metaid string) (*MetaData, []*Engine, error) {
 
-	if ret := cluster.upgradeContainers.Contains(metaid); ret {
+	if ret := cluster.upgraderCache.Contains(metaid); ret {
 		return nil, nil, ErrClusterContainersUpgrading
 	}
 
-	if ret := cluster.migtateContainers.Contains(metaid); ret {
+	if ret := cluster.migtatorCache.Contains(metaid); ret {
 		return nil, nil, ErrClusterContainersMigrating
 	}
 
@@ -831,5 +835,40 @@ func (cluster *Cluster) validateMetaData(metaid string) (*MetaData, []*Engine, e
 	return metaData, engines, nil
 }
 
-func (cluster *Cluster) validateContainers(engine *Engine) {
+func (cluster *Cluster) validateEngineContainers(engine *Engine) {
+
+	//改名失效作废的容器
+	containers := engine.Containers("")
+	expelContainers := Containers{}
+	for _, container := range containers {
+		if !container.ValidateConfig() {
+			expelContainers = append(expelContainers, container)
+			operate := models.ContainerOperate{
+				Action:    "rename",
+				Container: container.Info.ID,
+				NewName:   strings.TrimSuffix(container.Info.Name, "-expel") + "-expel",
+			}
+			if err := engine.OperateContainer(operate); err != nil {
+				logger.ERROR("[#cluster#] engine %s container %s expel, rename error:%s", engine.IP, container.Info.ID[:12], err.Error())
+				continue
+			}
+			logger.WARN("[#cluster#] engine %s container %s expel, rename to %s.", engine.IP, container.Info.ID[:12], operate.NewName)
+		}
+	}
+
+	//检查meta实例数，若不对应，则创建差值
+	//丢给缓存创建，避免并发上线同时处理
+
+	//删除失效作废的容器，丢给缓存逐步处理，避免同时上线
+	if len(expelContainers) > 0 {
+		go func() {
+			for _, container := range expelContainers {
+				if err := engine.RemoveContainer(container.Info.ID); err != nil {
+					logger.WARN("[#cluster#] engine %s container %s expel, remove error %s.", engine.IP, container.Info.ID[:12], err.Error())
+					continue
+				}
+				logger.WARN("[#cluster#] engine %s container %s expel, remove.", engine.IP, container.Info.ID[:12])
+			}
+		}()
+	}
 }

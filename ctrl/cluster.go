@@ -51,7 +51,7 @@ func (c *Controller) initCluster() {
 	if groups := c.getClusterGroupStoreData(""); groups != nil {
 		logger.INFO("[#ctrl#] init cluster groups:%d", len(groups))
 		for _, group := range groups {
-			c.Cluster.SetGroup(group.ID, group.Servers, group.Owners)
+			c.Cluster.SetGroup(group.ID, group.Servers, group.ContactInfo)
 		}
 	}
 }
@@ -152,7 +152,7 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 			if groups := c.getClusterGroupStoreData(groupid); groups != nil {
 				logger.INFO("[#ctrl#] get cluster groups:%d", len(groups))
 				for _, group := range groups {
-					c.Cluster.SetGroup(group.ID, group.Servers, group.Owners)
+					c.Cluster.SetGroup(group.ID, group.Servers, group.ContactInfo)
 				}
 			}
 		}

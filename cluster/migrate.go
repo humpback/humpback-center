@@ -35,10 +35,10 @@ func (state MigrateState) String() string {
 // MigrateContainer is exported
 type MigrateContainer struct {
 	sync.RWMutex
-	ContainerID string
-	metaData    *MetaData
-	baseConfig  *ContainerBaseConfig
-	state       MigrateState
+	ID         string
+	metaData   *MetaData
+	baseConfig *ContainerBaseConfig
+	state      MigrateState
 }
 
 // NewMigrateContainer is exported
@@ -49,10 +49,10 @@ func NewMigrateContainer(containerid string, baseConfig *ContainerBaseConfig) *M
 	}
 
 	return &MigrateContainer{
-		ContainerID: containerid,
-		metaData:    baseConfig.MetaData,
-		baseConfig:  baseConfig,
-		state:       MigrateReady,
+		ID:         containerid,
+		metaData:   baseConfig.MetaData,
+		baseConfig: baseConfig,
+		state:      MigrateReady,
 	}
 }
 
@@ -79,13 +79,13 @@ func (mContainer *MigrateContainer) Execute(cluster *Cluster) {
 	engine, container, err := cluster.createContainer(mContainer.metaData, []string{}, mContainer.baseConfig.Container)
 	if err != nil {
 		mContainer.SetState(MigrateFailure)
-		logger.ERROR("[#cluster] migrator container %s error %s", mContainer.ContainerID[:12], err.Error())
+		logger.ERROR("[#cluster] migrator container %s error %s", mContainer.ID[:12], err.Error())
 		return
 	}
 
 	mContainer.Lock()
 	mContainer.state = MigrateCompleted
-	logger.INFO("[#cluster] migrator container %s > %s to %s", mContainer.ContainerID[:12], container.Info.ID[:12], engine.IP)
+	logger.INFO("[#cluster] migrator container %s > %s to %s", mContainer.ID[:12], container.Info.ID[:12], engine.IP)
 	mContainer.Unlock()
 	return
 }
@@ -193,13 +193,20 @@ func (migrator *Migrator) selectMigrateContainer() *MigrateContainer {
 func (migrator *Migrator) removeMigrateContainer(mContainer *MigrateContainer) {
 
 	migrator.Lock()
-	defer migrator.Unlock()
 	for i, pmContainer := range migrator.containers {
 		if pmContainer == mContainer {
 			migrator.containers = append(migrator.containers[:i], migrator.containers[i+1:]...)
-			return
+			break
 		}
 	}
+	migrator.Unlock()
+}
+
+func (migrator *Migrator) clearMigrateContainers() {
+
+	migrator.Lock()
+	migrator.containers = []*MigrateContainer{}
+	migrator.Unlock()
 }
 
 // Containers is exported
@@ -220,7 +227,7 @@ func (migrator *Migrator) Container(containerid string) *MigrateContainer {
 	migrator.RLock()
 	defer migrator.RUnlock()
 	for _, mContainer := range migrator.containers {
-		if mContainer.ContainerID == containerid {
+		if mContainer.ID == containerid {
 			return mContainer
 		}
 	}
@@ -242,6 +249,7 @@ func (migrator *Migrator) Start() {
 		if !migrator.isAllCompleted() {
 			if !migrator.verifyEngines() {
 				logger.INFO("[#cluster] migrator %s containers, verify engines no healthy.", migrator.MetaID)
+				migrator.clearMigrateContainers()
 				migrator.Cluster.configCache.ClearContainerBaseConfig(migrator.MetaID)
 				migrator.handler.OnMigratorNotifyHandleFunc(migrator)
 				break
@@ -252,7 +260,7 @@ func (migrator *Migrator) Start() {
 		if mContainer != nil {
 			mContainer.Execute(migrator.Cluster)
 			if mContainer.GetState() == MigrateCompleted {
-				migrator.Cluster.configCache.RemoveContainerBaseConfig(migrator.MetaID, mContainer.ContainerID)
+				migrator.Cluster.configCache.RemoveContainerBaseConfig(migrator.MetaID, mContainer.ID)
 			}
 			continue
 		}
@@ -266,7 +274,7 @@ func (migrator *Migrator) Start() {
 			migrator.Lock()
 			for _, mContainer := range migrator.containers {
 				if mContainer.GetState() == MigrateFailure {
-					migrator.Cluster.configCache.RemoveContainerBaseConfig(migrator.MetaID, mContainer.ContainerID)
+					migrator.Cluster.configCache.RemoveContainerBaseConfig(migrator.MetaID, mContainer.ID)
 				}
 			}
 			migrator.Unlock()
@@ -280,12 +288,24 @@ func (migrator *Migrator) Start() {
 		migrator.resetMigrateContainers()
 		continue
 	}
+	migrator.clearMigrateContainers()
 	migrator.handler.OnMigratorQuitHandleFunc(migrator)
 }
 
 // Update is exported
 func (migrator *Migrator) Update(metaid string, containers Containers) {
 
+	for _, container := range containers {
+		if mContainer := migrator.Container(container.Info.ID); mContainer == nil {
+			mContainer = NewMigrateContainer(container.Info.ID, container.BaseConfig)
+			if mContainer != nil {
+				migrator.Lock()
+				migrator.containers = append(migrator.containers, mContainer)
+				migrator.Unlock()
+			}
+
+		}
+	}
 }
 
 // Cancel is exported
@@ -296,8 +316,6 @@ func (migrator *Migrator) Cancel(metaid string, containers Containers) {
 			state := mContainer.GetState()
 			if state == MigrateReady || state == MigrateFailure {
 				migrator.removeMigrateContainer(mContainer)
-			} else if state == MigrateCompleted || state == Migrating {
-				go migrator.Cluster.RemoveContainer(mContainer.ContainerID)
 			}
 		}
 	}
@@ -393,7 +411,6 @@ func (cache *MigrateContainersCache) Start(engine *Engine) {
 // engine parameter is online engine pointer.
 func (cache *MigrateContainersCache) Cancel(engine *Engine) {
 
-	engine.RefreshContainers()
 	metaids := engine.MetaIds()
 	if len(metaids) == 0 {
 		return
@@ -434,6 +451,6 @@ func (cache *MigrateContainersCache) OnMigratorNotifyHandleFunc(migrator *Migrat
 	logger.INFO("[#cluster] migrator notify %s", migrator.MetaID)
 	mContainers := migrator.Containers()
 	for _, mContainer := range mContainers {
-		logger.INFO("[#cluster] migrator container %s %s", mContainer.ContainerID[:12], mContainer.state.String())
+		logger.INFO("[#cluster] migrator container %s %s", mContainer.ID[:12], mContainer.state.String())
 	}
 }
