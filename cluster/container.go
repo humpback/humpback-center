@@ -98,10 +98,10 @@ func (c *Container) update(engine *Engine, containerJSON *types.ContainerJSON) {
 
 	c.Config = containerConfig
 	containerJSON.HostConfig.CPUShares = containerJSON.HostConfig.CPUShares * engine.Cpus / 1024.0
-	startAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.StartedAt)
-	finishedAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.FinishedAt)
-	containerJSON.State.StartedAt = startAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
-	containerJSON.State.FinishedAt = finishedAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
+	//startAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.StartedAt)
+	//finishedAt, _ := time.Parse(time.RFC3339Nano, containerJSON.State.FinishedAt)
+	//containerJSON.State.StartedAt = startAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
+	//containerJSON.State.FinishedAt = finishedAt.Add(engine.DeltaDuration).Format(time.RFC3339Nano)
 	c.Info = *containerJSON
 
 	configEnvMap := convert.ConvertKVStringSliceToMap(containerJSON.Config.Env)

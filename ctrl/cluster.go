@@ -47,11 +47,10 @@ func createCluster(configuration *etc.Configuration) (*cluster.Cluster, error) {
 }
 
 func (c *Controller) initCluster() {
-
 	if groups := c.getClusterGroupStoreData(""); groups != nil {
 		logger.INFO("[#ctrl#] init cluster groups:%d", len(groups))
 		for _, group := range groups {
-			c.Cluster.SetGroup(group.ID, group.Servers, group.ContactInfo)
+			c.Cluster.SetGroup(group)
 		}
 	}
 }
@@ -101,15 +100,6 @@ func (c *Controller) getClusterGroupStoreData(groupid string) []*cluster.Group {
 	return groups
 }
 
-func (c *Controller) getEngineState(server string) string {
-
-	state := cluster.GetStateText(cluster.StateDisconnected)
-	if engine := c.Cluster.GetEngine(server); engine != nil {
-		state = engine.State()
-	}
-	return state
-}
-
 func (c *Controller) SetCluster(cluster *cluster.Cluster) {
 
 	if cluster != nil {
@@ -152,7 +142,7 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 			if groups := c.getClusterGroupStoreData(groupid); groups != nil {
 				logger.INFO("[#ctrl#] get cluster groups:%d", len(groups))
 				for _, group := range groups {
-					c.Cluster.SetGroup(group.ID, group.Servers, group.ContactInfo)
+					c.Cluster.SetGroup(group)
 				}
 			}
 		}

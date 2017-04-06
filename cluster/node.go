@@ -1,111 +1,116 @@
 package cluster
 
+import "github.com/docker/docker/client"
 import "github.com/humpback/discovery"
 import "github.com/humpback/discovery/backends"
 import "github.com/humpback/gounits/json"
+import "github.com/humpback/gounits/network"
 import "github.com/humpback/gounits/rand"
-import "github.com/humpback/humpback-center/cluster/types"
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"net"
+	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
-// NodeArgs is exported
-type NodeArgs struct {
-	APIAddr          string
+//NodeRegisterOptions is exported
+type NodeRegisterOptions struct {
+	APIPort          int
+	ClusterName      string
+	ClusterURIs      string
+	ClusterHeartBeat string
+	ClusterTTL       string
+	DockerEndPoint   string
+	DockerAPIVersion string
+}
+
+// NewNodeRegisterOptions is exported
+func NewNodeRegisterOptions(apiPort int, clusterName string, clusterURIs string, clusterHeartBeat string, clusterTTL string,
+	dockerEndPoint string, dockerAPIVersion string) *NodeRegisterOptions {
+
+	return &NodeRegisterOptions{
+		APIPort:          apiPort,
+		ClusterName:      clusterName,
+		ClusterURIs:      clusterURIs,
+		ClusterHeartBeat: clusterHeartBeat,
+		ClusterTTL:       clusterTTL,
+		DockerEndPoint:   dockerEndPoint,
+		DockerAPIVersion: dockerAPIVersion,
+	}
+}
+
+//NodeClusterOptions is exported
+type NodeClusterOptions struct {
 	ClusterName      string
 	ClusterURIs      string
 	ClusterHeartBeat time.Duration
 	ClusterTTL       time.Duration
 }
 
-func NewNodeArgs(apiPort int, clusterName, clusterURIs, clusterHeartBeat, clusterTTL string) (*NodeArgs, error) {
-
-	portStr := strconv.Itoa(apiPort)
-	apiAddr := net.JoinHostPort("", portStr)
-
-	heartbeat, err := time.ParseDuration(clusterHeartBeat)
-	if err != nil {
-		return nil, err
-	}
-
-	ttl, err := time.ParseDuration(clusterTTL)
-	if err != nil {
-		return nil, err
-	}
-
-	return &NodeArgs{
-		APIAddr:          apiAddr,
-		ClusterName:      clusterName,
-		ClusterURIs:      clusterURIs,
-		ClusterHeartBeat: heartbeat,
-		ClusterTTL:       ttl,
-	}, nil
+//NodeData is exported
+type NodeData struct {
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	IP              string   `json:"ip"`
+	APIAddr         string   `json:"apiaddr"`
+	Cpus            int64    `json:"cpus"`
+	Memory          int64    `json:"memory"`
+	Driver          string   `json:"driver"`
+	KernelVersion   string   `json:"kernelversion"`
+	OperatingSystem string   `json:"operatingsystem"`
+	Labels          []string `json:"lables"`
 }
+
+// NodeOptions is exported
+type NodeOptions struct {
+	NodeData
+	NodeClusterOptions
+}
+
+var node *Node
 
 // Node is exported
 type Node struct {
 	Key       string
 	Cluster   string
 	discovery *discovery.Discovery
+	data      *NodeData
 	stopCh    chan struct{}
 	quitCh    chan struct{}
 }
 
-// cluster node
-var node *Node
-
-// createNode is exported, create cluster discovery node
-func createNode(args *NodeArgs) (*Node, error) {
-
-	key, err := rand.UUIDFile("./humpback-agent.key")
-	if err != nil {
-		return nil, err
-	}
-
-	clusterName := args.ClusterName
-	configOpts := map[string]string{"kv.path": clusterName}
-	d, err := discovery.New(args.ClusterURIs, args.ClusterHeartBeat, args.ClusterTTL, configOpts)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Node{
-		Key:       key,
-		Cluster:   clusterName,
-		discovery: d,
-		stopCh:    make(chan struct{}),
-		quitCh:    make(chan struct{}),
-	}, nil
-}
-
-// Register is exported, register to cluster discovery
-func Register(args *NodeArgs) error {
+// GetNodeData is exported
+func GetNodeData() *NodeData {
 
 	if node != nil {
-		return fmt.Errorf("cluster node is register already.")
+		return node.data
 	}
+	return nil
+}
 
-	var err error
-	if node, err = createNode(args); err != nil {
-		return err
-	}
+// NodeRegister is exported
+// register to cluster discovery
+func NodeRegister(options *NodeRegisterOptions) error {
 
-	registOpts, err := types.NewClusterRegistOptions(args.APIAddr)
+	nodeOptions, err := createNodeOptions(options)
 	if err != nil {
 		return err
 	}
 
-	buf, err := json.EnCodeObjectToBuffer(registOpts)
+	if _, err := createNode(nodeOptions); err != nil {
+		return err
+	}
+
+	buf, err := json.EnCodeObjectToBuffer(&nodeOptions.NodeData)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("register to cluster - %s %s [addr:%s]\n", node.Cluster, node.Key, registOpts.Addr)
+	log.Printf("register to cluster - %s %s [addr:%s]\n", node.Cluster, node.Key, nodeOptions.NodeData.APIAddr)
 	node.discovery.Register(node.Key, buf, node.stopCh, func(key string, err error) {
 		log.Printf("discovery register %s error:%s\n", key, err.Error())
 		if err == backends.ErrRegistLoopQuit {
@@ -115,8 +120,9 @@ func Register(args *NodeArgs) error {
 	return nil
 }
 
-// Close is exported, register close
-func Close() {
+// NodeClose is exported
+// register close
+func NodeClose() {
 
 	if node != nil {
 		close(node.stopCh) //close register loop
@@ -124,4 +130,143 @@ func Close() {
 		node = nil
 		log.Printf("register closed.\n")
 	}
+}
+
+// createNode is exported
+// create cluster discovery node
+func createNode(nodeOptions *NodeOptions) (*Node, error) {
+
+	if node == nil {
+		key, err := rand.UUIDFile("./humpback-agent.key")
+		if err != nil {
+			return nil, err
+		}
+		clusterName := nodeOptions.ClusterName
+		configOpts := map[string]string{"kv.path": clusterName}
+		d, err := discovery.New(nodeOptions.ClusterURIs, nodeOptions.ClusterHeartBeat, nodeOptions.ClusterTTL, configOpts)
+		if err != nil {
+			return nil, err
+		}
+		node = &Node{
+			Key:       key,
+			Cluster:   clusterName,
+			discovery: d,
+			data:      &nodeOptions.NodeData,
+			stopCh:    make(chan struct{}),
+			quitCh:    make(chan struct{}),
+		}
+	}
+	return node, nil
+}
+
+// createNodeOptions is exported
+// create cluster node options
+func createNodeOptions(options *NodeRegisterOptions) (*NodeOptions, error) {
+
+	heartbeat, err := time.ParseDuration(options.ClusterHeartBeat)
+	if err != nil {
+		return nil, err
+	}
+
+	ttl, err := time.ParseDuration(options.ClusterTTL)
+	if err != nil {
+		return nil, err
+	}
+
+	hostIP := network.GetDefaultIP()
+	if _, err := net.ResolveIPAddr("ip4", hostIP); err != nil {
+		return nil, err
+	}
+
+	apiAddr := hostIP + net.JoinHostPort("", strconv.Itoa(options.APIPort))
+	defaultHeaders := map[string]string{"User-Agent": "engine-api-cli-1.0"}
+	dockerClient, err := client.NewClient(options.DockerEndPoint, options.DockerAPIVersion, nil, defaultHeaders)
+	if err != nil {
+		return nil, err
+	}
+
+	engineInfo, err := dockerClient.Info(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	hostName, err := os.Hostname()
+	if err != nil {
+		hostName = engineInfo.Name
+	}
+
+	return &NodeOptions{
+		NodeData: NodeData{
+			ID:              engineInfo.ID,
+			Name:            hostName,
+			IP:              hostIP,
+			APIAddr:         apiAddr,
+			Cpus:            (int64)(engineInfo.NCPU),
+			Memory:          engineInfo.MemTotal,
+			Driver:          engineInfo.Driver,
+			KernelVersion:   engineInfo.KernelVersion,
+			OperatingSystem: engineInfo.OperatingSystem,
+			Labels:          engineInfo.Labels,
+		},
+		NodeClusterOptions: NodeClusterOptions{
+			ClusterName:      options.ClusterName,
+			ClusterURIs:      options.ClusterURIs,
+			ClusterHeartBeat: heartbeat,
+			ClusterTTL:       ttl,
+		},
+	}, nil
+}
+
+// NodeCache is exported
+type NodeCache struct {
+	sync.RWMutex
+	nodes map[string]*NodeData
+}
+
+// NewNodeCache is exported
+func NewNodeCache() *NodeCache {
+
+	return &NodeCache{
+		nodes: make(map[string]*NodeData),
+	}
+}
+
+// Add is exported
+// nodeCache add online nodeData.
+func (cache *NodeCache) Add(key string, nodeData *NodeData) {
+
+	cache.Lock()
+	if _, ret := cache.nodes[key]; !ret {
+		cache.nodes[key] = nodeData
+	}
+	cache.Unlock()
+}
+
+// Remove is exported
+// nodeCache remove offline nodeData.
+func (cache *NodeCache) Remove(key string) {
+
+	cache.Lock()
+	delete(cache.nodes, key)
+	cache.Unlock()
+}
+
+// Get is exported
+// nodeCache get nodeData of server ip or server hostname
+func (cache *NodeCache) Get(IPOrName string) *NodeData {
+
+	cache.RLock()
+	defer cache.RUnlock()
+	for _, nodeData := range cache.nodes {
+		if nodeData.IP == IPOrName {
+			return nodeData
+		}
+	}
+
+	for _, nodeData := range cache.nodes {
+		if nodeData.Name == IPOrName {
+			return nodeData
+		}
+	}
+	return nil
 }

@@ -21,14 +21,10 @@ import (
 )
 
 const (
-	// engine send request timeout min value
-	requestMinTimeout = 15 * time.Second
-	// engine send request timeout max value
-	requestMaxTimeout = 45 * time.Second
+	// engine send request timeout
+	requestTimeout = 15 * time.Second
 	// engine refresh loop interval
-	refreshInterval = 20 * time.Second
-	// threshold of delta duration between humpback-center and humpback-agent's systime
-	thresholdTime = 2 * time.Second
+	refreshInterval = 30 * time.Second
 )
 
 // Engine state define
@@ -36,7 +32,7 @@ type engineState int
 
 // State enum value
 const (
-	//pending: engine added to cluster, but not been validated.
+	//pending: engine added to cluster engines pool, but not been validated.
 	StatePending engineState = iota
 	//unhealthy: engine is unreachable.
 	StateUnhealthy
@@ -46,7 +42,7 @@ const (
 	StateDisconnected
 )
 
-// Engine state mapping
+// Engine state content mapping
 var stateText = map[engineState]string{
 	StatePending:      "Pending",
 	StateUnhealthy:    "Unhealthy",
@@ -62,15 +58,14 @@ func GetStateText(state engineState) string {
 // Engine is exported
 type Engine struct {
 	sync.RWMutex
-	ID            string            `json:"ID"`
-	Name          string            `json:"Name"`
-	IP            string            `json:"IP"`
-	Addr          string            `json:"Addr"`
-	Cpus          int64             `json:"Cpus"`
-	Memory        int64             `json:"Memory"`
-	Labels        map[string]string `json:"Labels"` //docker daemon labels
-	StateText     string            `json:"StateText"`
-	DeltaDuration time.Duration     `json:"DeltaDuration"` //humpback-center's systime - humpback-agent's systime
+	ID        string            `json:"ID"`
+	Name      string            `json:"Name"`
+	IP        string            `json:"IP"`
+	APIAddr   string            `json:"APIAddr"`
+	Cpus      int64             `json:"Cpus"`
+	Memory    int64             `json:"Memory"`
+	Labels    map[string]string `json:"Labels"`
+	StateText string            `json:"StateText"`
 
 	overcommitRatio int64
 	configCache     *ContainersConfigCache
@@ -80,39 +75,60 @@ type Engine struct {
 }
 
 // NewEngine is exported
-// Make new engine object
-func NewEngine(ip string, overcommitRatio float64, configCache *ContainersConfigCache) (*Engine, error) {
+func NewEngine(nodeData *NodeData, overcommitRatio float64, configCache *ContainersConfigCache) (*Engine, error) {
 
-	ipAddr, err := net.ResolveIPAddr("ip4", ip)
+	ipAddr, err := net.ResolveIPAddr("ip4", nodeData.IP)
 	if err != nil {
 		return nil, err
 	}
 
+	labels := map[string]string{}
+	if nodeData.Driver != "" {
+		labels["storagedirver"] = nodeData.Driver
+	}
+
+	if nodeData.KernelVersion != "" {
+		labels["kernelversion"] = nodeData.KernelVersion
+	}
+
+	if nodeData.OperatingSystem != "" {
+		labels["operatingsystem"] = nodeData.OperatingSystem
+	}
+
+	for _, label := range nodeData.Labels {
+		kv := strings.SplitN(label, "=", 2)
+		if len(kv) == 2 {
+			labels[kv[0]] = kv[1]
+		}
+	}
+
 	return &Engine{
+		ID:              nodeData.ID,
+		Name:            nodeData.Name,
 		IP:              ipAddr.IP.String(),
+		APIAddr:         nodeData.APIAddr,
+		Cpus:            nodeData.Cpus,
+		Memory:          int64(math.Ceil(float64(nodeData.Memory) / 1024.0 / 1024.0)),
+		Labels:          labels,
+		StateText:       stateText[StatePending],
 		overcommitRatio: int64(overcommitRatio * 100),
-		Labels:          make(map[string]string),
-		StateText:       stateText[StateDisconnected],
-		containers:      make(map[string]*Container),
 		configCache:     configCache,
-		state:           StateDisconnected,
+		containers:      make(map[string]*Container),
+		state:           StatePending,
 	}, nil
 }
 
 // Open is exported
-// Open a engine refresh loop, update engine and refresh containers.
-func (engine *Engine) Open(addr string) {
+// Engine start refresh containers loop
+func (engine *Engine) Open() {
 
 	engine.Lock()
-	engine.Addr = addr
 	if engine.state != StateHealthy {
 		engine.state = StateHealthy
 		engine.StateText = stateText[engine.state]
 		engine.stopCh = make(chan struct{})
 		logger.INFO("[#cluster#] engine %s open.", engine.IP)
 		go func() {
-			engine.updateSpecs()
-			engine.RefreshContainers()
 			engine.ValidateContainers()
 			engine.refreshLoop()
 		}()
@@ -121,27 +137,21 @@ func (engine *Engine) Open(addr string) {
 }
 
 // Close is exported
-// Close a engine, reset engine info.
+// Engine stop refresh containers loop
 func (engine *Engine) Close() {
 
-	engine.cleanupContainers()
 	engine.Lock()
-	defer engine.Unlock()
-	if engine.state == StateDisconnected {
-		return
+	if engine.state == StateHealthy {
+		close(engine.stopCh)
+		engine.state = StateDisconnected
+		engine.StateText = stateText[engine.state]
+		logger.INFO("[#cluster#] engine %s closed.", engine.IP)
 	}
-	close(engine.stopCh) //quit refreshLoop.
-	engine.ID = ""
-	engine.Name = ""
-	engine.Addr = ""
-	engine.Labels = make(map[string]string)
-	engine.state = StateDisconnected
-	engine.StateText = stateText[engine.state]
-	logger.INFO("[#cluster#] engine %s closed.", engine.IP)
+	engine.Unlock()
 }
 
 // IsHealthy is exported
-// Return a engine ishealthy status bool result.
+// Determine if the engine is in healthy state
 func (engine *Engine) IsHealthy() bool {
 
 	engine.RLock()
@@ -149,14 +159,22 @@ func (engine *Engine) IsHealthy() bool {
 	return engine.state == StateHealthy
 }
 
-// SetState is exported
-// Set a engine status.
-func (engine *Engine) SetState(state engineState) {
+// IsPending is exported
+// Determine if the engine is in pending state
+func (engine *Engine) IsPending() bool {
 
-	engine.Lock()
-	engine.state = state
-	engine.StateText = stateText[state]
-	engine.Unlock()
+	engine.RLock()
+	defer engine.RUnlock()
+	return engine.state == StatePending
+}
+
+// IsDisconnected is exported
+// Determine if the engine is in disconnected state
+func (engine *Engine) IsDisconnected() bool {
+
+	engine.RLock()
+	defer engine.RUnlock()
+	return engine.state == StateDisconnected
 }
 
 // State is exported
@@ -168,8 +186,18 @@ func (engine *Engine) State() string {
 	return stateText[engine.state]
 }
 
+// SetState is exported
+// Set engine state.
+func (engine *Engine) SetState(state engineState) {
+
+	engine.Lock()
+	engine.state = state
+	engine.StateText = stateText[state]
+	engine.Unlock()
+}
+
 // MetaIds is exported
-// Return a engine all metaids array.
+// Return engine containers all metaids array.
 func (engine *Engine) MetaIds() []string {
 
 	ids := []string{}
@@ -177,7 +205,7 @@ func (engine *Engine) MetaIds() []string {
 	for _, container := range engine.containers {
 		if metaid := container.MetaID(); metaid != "" {
 			if ret := gocontainer.Contains(metaid, ids); !ret {
-				ids = append(ids, container.MetaID())
+				ids = append(ids, metaid)
 			}
 		}
 	}
@@ -185,49 +213,8 @@ func (engine *Engine) MetaIds() []string {
 	return ids
 }
 
-// ValidateContainers is exported
-// remove a engine invalid cluster containers
-func (engine *Engine) ValidateContainers() {
-
-	//get expel containers
-	expelContainers := Containers{}
-	containers := engine.Containers("")
-	for _, container := range containers {
-		if !container.ValidateConfig() {
-			expelContainers = append(expelContainers, container)
-		}
-	}
-
-	if len(expelContainers) == 0 {
-		return
-	}
-
-	// rename all expel containers, prevent container name conflicts.
-	for _, container := range expelContainers {
-		operate := models.ContainerOperate{
-			Action:    "rename",
-			Container: container.Info.ID,
-			NewName:   strings.TrimSuffix(container.Info.Name, "-expel") + "-expel",
-		}
-		if err := engine.OperateContainer(operate); err != nil {
-			logger.ERROR("[#cluster#] engine %s container %s expel, rename error:%s", engine.IP, container.Info.ID[:12], err.Error())
-			continue
-		}
-		logger.WARN("[#cluster#] engine %s container %s expel, rename to %s.", engine.IP, container.Info.ID[:12], operate.NewName)
-	}
-
-	// remove all expel containers
-	for _, container := range expelContainers {
-		if err := engine.RemoveContainer(container.Info.ID); err != nil {
-			logger.WARN("[#cluster#] engine %s container %s expel, remove error %s.", engine.IP, container.Info.ID[:12], err.Error())
-			continue
-		}
-		logger.WARN("[#cluster#] engine %s container %s expel, remove.", engine.IP, container.Info.ID[:12])
-	}
-}
-
 // Containers is exported
-// Return a engine containers.
+// Return engine containers.
 // if metaid is empty string so return engine's all containers
 func (engine *Engine) Containers(metaid string) Containers {
 
@@ -243,7 +230,7 @@ func (engine *Engine) Containers(metaid string) Containers {
 }
 
 // Container is exported
-// Return a engine container.
+// Return engine container of containerid.
 func (engine *Engine) Container(containerid string) *Container {
 
 	engine.RLock()
@@ -257,33 +244,33 @@ func (engine *Engine) Container(containerid string) *Container {
 }
 
 // UsedMemory is exported
-// Return a engine all containers used memory size.
+// Return engine all containers used memory size.
 func (engine *Engine) UsedMemory() int64 {
 
 	var used int64
 	engine.RLock()
-	for _, c := range engine.containers {
-		used += c.Info.HostConfig.Memory
+	for _, container := range engine.containers {
+		used += container.Info.HostConfig.Memory
 	}
 	engine.RUnlock()
 	return used
 }
 
 // UsedCpus is exported
-// Return a engine all containers used cpus size.
+// Return engine all containers used cpus size.
 func (engine *Engine) UsedCpus() int64 {
 
 	var used int64
 	engine.RLock()
-	for _, c := range engine.containers {
-		used += c.Info.HostConfig.CPUShares
+	for _, container := range engine.containers {
+		used += container.Info.HostConfig.CPUShares
 	}
 	engine.RUnlock()
 	return used
 }
 
 // TotalMemory is exported
-// Return a engine total memory size.
+// Return engine total memory size.
 func (engine *Engine) TotalMemory() int64 {
 
 	engine.RLock()
@@ -292,7 +279,7 @@ func (engine *Engine) TotalMemory() int64 {
 }
 
 // TotalCpus is exported
-// Return a engine total cpus size.
+// Return engine total cpus size.
 func (engine *Engine) TotalCpus() int64 {
 
 	engine.RLock()
@@ -301,7 +288,7 @@ func (engine *Engine) TotalCpus() int64 {
 }
 
 // CreateContainer is exported
-// Engine create a container.
+// Engine create a container
 func (engine *Engine) CreateContainer(config models.Container) (*Container, error) {
 
 	buf := bytes.NewBuffer([]byte{})
@@ -310,7 +297,7 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
-	respCreated, err := http.NewWithTimeout(requestMaxTimeout).Post("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	respCreated, err := http.NewWithTimeout(requestTimeout).Post("http://"+engine.APIAddr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return nil, err
 	}
@@ -338,12 +325,13 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 	}
 
 	engine.Lock()
-	defer engine.Unlock()
 	engine.containers = containers
 	container, ret := engine.containers[createContainerResponse.ID]
 	if !ret {
+		engine.Unlock()
 		return nil, fmt.Errorf("created container, update container info failure")
 	}
+	engine.Unlock()
 	return container, nil
 }
 
@@ -352,7 +340,7 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 func (engine *Engine) RemoveContainer(containerid string) error {
 
 	query := map[string][]string{"force": []string{"true"}}
-	respRemoved, err := http.NewWithTimeout(requestMinTimeout).Delete("http://"+engine.Addr+"/v1/containers/"+containerid, query, nil)
+	respRemoved, err := http.NewWithTimeout(requestTimeout).Delete("http://"+engine.APIAddr+"/v1/containers/"+containerid, query, nil)
 	if err != nil {
 		return err
 	}
@@ -382,7 +370,7 @@ func (engine *Engine) OperateContainer(operate models.ContainerOperate) error {
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
-	respOperated, err := http.NewWithTimeout(requestMinTimeout).Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	respOperated, err := http.NewWithTimeout(requestTimeout).Put("http://"+engine.APIAddr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return err
 	}
@@ -411,14 +399,14 @@ func (engine *Engine) UpgradeContainer(operate models.ContainerOperate) (*Contai
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
-	respUpgraded, err := http.NewWithTimeout(requestMaxTimeout).Put("http://"+engine.Addr+"/v1/containers", nil, buf, header)
+	respUpgraded, err := http.NewWithTimeout(requestTimeout).Put("http://"+engine.APIAddr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return nil, err
 	}
 
 	defer respUpgraded.Close()
 	if respUpgraded.StatusCode() != 200 {
-		return nil, fmt.Errorf("%s container %s failure %d", operate.Action, operate.Container[:12], respUpgraded.StatusCode())
+		return nil, fmt.Errorf("engine %s, %s container %s failure %d", engine.IP, operate.Action, operate.Container[:12], respUpgraded.StatusCode())
 	}
 
 	upgradeContainerResponse := &ctypes.UpgradeContainerResponse{}
@@ -426,17 +414,20 @@ func (engine *Engine) UpgradeContainer(operate models.ContainerOperate) (*Contai
 		return nil, err
 	}
 
-	logger.INFO("[#cluster#] engine %s %s container %s to %s", engine.IP, operate.Action, operate.Container[:12], upgradeContainerResponse.ID[:12])
-	if err := engine.RefreshContainers(); err != nil {
+	logger.INFO("[#cluster#] engine %s, %s container %s to %s", engine.IP, operate.Action, operate.Container[:12], upgradeContainerResponse.ID[:12])
+	containers, err := engine.updateContainer(upgradeContainerResponse.ID, engine.containers)
+	if err != nil {
 		return nil, err
 	}
 
 	engine.Lock()
-	defer engine.Unlock()
+	engine.containers = containers
 	container, ret := engine.containers[upgradeContainerResponse.ID]
 	if !ret {
+		engine.Unlock()
 		return nil, fmt.Errorf("upgrade container, update container info failure")
 	}
+	engine.Unlock()
 	return container, nil
 }
 
@@ -445,14 +436,14 @@ func (engine *Engine) UpgradeContainer(operate models.ContainerOperate) (*Contai
 func (engine *Engine) RefreshContainers() error {
 
 	query := map[string][]string{"all": []string{"true"}}
-	respContainers, err := http.NewWithTimeout(requestMinTimeout).Get("http://"+engine.Addr+"/v1/containers", query, nil)
+	respContainers, err := http.NewWithTimeout(requestTimeout).Get("http://"+engine.APIAddr+"/v1/containers", query, nil)
 	if err != nil {
 		return err
 	}
 
 	defer respContainers.Close()
 	if respContainers.StatusCode() != 200 {
-		return fmt.Errorf("http GET response statuscode %d", respContainers.StatusCode())
+		return fmt.Errorf("engine %s, refresh containers failure %d", engine.IP, respContainers.StatusCode())
 	}
 
 	dockerContainers := []types.Container{}
@@ -460,12 +451,12 @@ func (engine *Engine) RefreshContainers() error {
 		return err
 	}
 
-	//logger.INFO("[#cluster#] engine %s refresh containers.", engine.Addr)
+	logger.INFO("[#cluster#] engine %s %s refresh containers.", engine.IP, engine.State())
 	merged := make(map[string]*Container)
-	for _, c := range dockerContainers {
-		mergedUpdate, err := engine.updateContainer(c.ID, merged)
+	for _, container := range dockerContainers {
+		mergedUpdate, err := engine.updateContainer(container.ID, merged)
 		if err != nil {
-			logger.ERROR("[#cluster#] engine refresh containers error, %s", err.Error())
+			logger.ERROR("[#cluster#] engine %s update container error, %s", engine.IP, err.Error())
 		} else {
 			merged = mergedUpdate
 		}
@@ -477,33 +468,61 @@ func (engine *Engine) RefreshContainers() error {
 	return nil
 }
 
-func (engine *Engine) cleanupContainers() {
+// ValidateContainers is exported
+// clear engine invalid cluster containers
+func (engine *Engine) ValidateContainers() {
 
-	engine.Lock()
-	engine.containers = make(map[string]*Container)
-	engine.Unlock()
+	//get expel containers
+	expelContainers := Containers{}
+	containers := engine.Containers("")
+	for _, container := range containers {
+		if !container.ValidateConfig() {
+			expelContainers = append(expelContainers, container)
+		}
+	}
+
+	// rename all expel containers, prevent container name conflicts.
+	for _, container := range expelContainers {
+		operate := models.ContainerOperate{
+			Action:    "rename",
+			Container: container.Info.ID,
+			NewName:   strings.TrimSuffix(container.Info.Name, "-expel") + "-expel",
+		}
+		if err := engine.OperateContainer(operate); err != nil {
+			logger.ERROR("[#cluster#] engine %s container %s expel, rename error:%s", engine.IP, container.Info.ID[:12], err.Error())
+			continue
+		}
+		logger.WARN("[#cluster#] engine %s container %s expel, rename to %s.", engine.IP, container.Info.ID[:12], operate.NewName)
+	}
+
+	// remove all expel containers
+	for _, container := range expelContainers {
+		if err := engine.RemoveContainer(container.Info.ID); err != nil {
+			logger.WARN("[#cluster#] engine %s container %s expel, remove error %s.", engine.IP, container.Info.ID[:12], err.Error())
+			continue
+		}
+		logger.WARN("[#cluster#] engine %s container %s expel, remove.", engine.IP, container.Info.ID[:12])
+	}
 }
 
+// refreshLoop is exported
+// Get container information regularly and engine performance collection
 func (engine *Engine) refreshLoop() {
 
-	const specsUpdateInterval = 5 * time.Minute
-	lastSpecsUpdateAt := time.Now()
+	const perfUpdateInterval = 5 * time.Minute //engine performance collection interval
+	lastPrefUpdateAt := time.Now()
 	for {
 		runTicker := time.NewTicker(refreshInterval)
 		select {
 		case <-runTicker.C:
 			{
 				runTicker.Stop()
-				isHealthy := engine.IsHealthy()
-				if !isHealthy || time.Since(lastSpecsUpdateAt) > specsUpdateInterval {
-					if err := engine.updateSpecs(); err != nil {
-						logger.ERROR("[#cluster#] engine %s update specs error:%s", engine.Addr, err.Error())
-						continue
-					}
-					lastSpecsUpdateAt = time.Now()
+				if engine.IsHealthy() && time.Since(lastPrefUpdateAt) > perfUpdateInterval {
+					//engine.updatePerformance()
+					lastPrefUpdateAt = time.Now()
 				}
 				if err := engine.RefreshContainers(); err != nil {
-					logger.ERROR("[#cluster#] engine %s refresh containers error:%s", engine.Addr, err.Error())
+					logger.ERROR("[#cluster#] engine %s refresh containers error:%s", engine.IP, err.Error())
 				}
 			}
 		case <-engine.stopCh:
@@ -515,16 +534,17 @@ func (engine *Engine) refreshLoop() {
 	}
 }
 
+// updateSpecs exported
 func (engine *Engine) updateSpecs() error {
 
-	respSpecs, err := http.NewWithTimeout(requestMinTimeout).Get("http://"+engine.Addr+"/v1/dockerinfo", nil, nil)
+	respSpecs, err := http.NewWithTimeout(requestTimeout).Get("http://"+engine.APIAddr+"/v1/dockerinfo", nil, nil)
 	if err != nil {
 		return err
 	}
 
 	defer respSpecs.Close()
 	if respSpecs.StatusCode() != 200 {
-		return fmt.Errorf("http GET response statuscode %d", respSpecs.StatusCode())
+		return fmt.Errorf("engine %s, update specs failure %d", respSpecs.StatusCode())
 	}
 
 	dockerInfo := &types.Info{}
@@ -532,33 +552,12 @@ func (engine *Engine) updateSpecs() error {
 		return err
 	}
 
-	//logger.INFO("[#cluster#] engine %s update specs.", engine.Addr)
+	//logger.INFO("[#cluster#] engine %s update specs.", engine.IP)
 	engine.Lock()
-	defer engine.Unlock()
 	engine.ID = dockerInfo.ID
-	engine.Name = dockerInfo.Name
+	engine.Name = strings.ToUpper(dockerInfo.Name)
 	engine.Cpus = int64(dockerInfo.NCPU)
 	engine.Memory = int64(math.Ceil(float64(dockerInfo.MemTotal) / 1024.0 / 1024.0))
-
-	var delta time.Duration
-	if dockerInfo.SystemTime != "" {
-		engineSystime, _ := time.Parse(time.RFC3339Nano, dockerInfo.SystemTime)
-		delta = time.Now().UTC().Sub(engineSystime)
-	} else {
-		delta = time.Duration(0)
-	}
-
-	absDelta := delta
-	if delta.Seconds() < 0 {
-		absDelta = time.Duration(-1*delta.Seconds()) * time.Second
-	}
-
-	if absDelta < thresholdTime {
-		engine.DeltaDuration = 0
-	} else {
-		engine.DeltaDuration = delta
-	}
-
 	if dockerInfo.Driver != "" {
 		engine.Labels["storagedirver"] = dockerInfo.Driver
 	}
@@ -578,9 +577,11 @@ func (engine *Engine) updateSpecs() error {
 		}
 		engine.Labels[kv[0]] = kv[1]
 	}
+	engine.Unlock()
 	return nil
 }
 
+// updateContainer exported
 func (engine *Engine) updateContainer(containerid string, containers map[string]*Container) (map[string]*Container, error) {
 
 	var container *Container
@@ -595,7 +596,7 @@ func (engine *Engine) updateContainer(containerid string, containers map[string]
 	engine.RUnlock()
 
 	query := map[string][]string{"originaldata": []string{"true"}}
-	respContainer, err := http.NewWithTimeout(requestMinTimeout).Get("http://"+engine.Addr+"/v1/containers/"+containerid, query, nil)
+	respContainer, err := http.NewWithTimeout(requestTimeout).Get("http://"+engine.APIAddr+"/v1/containers/"+containerid, query, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -609,7 +610,6 @@ func (engine *Engine) updateContainer(containerid string, containers map[string]
 	if err := respContainer.JSON(containerJSON); err != nil {
 		return nil, err
 	}
-
 	engine.Lock()
 	container.update(engine, containerJSON)
 	containers[containerid] = container

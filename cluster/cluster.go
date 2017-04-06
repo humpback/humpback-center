@@ -11,7 +11,6 @@ import "github.com/humpback/humpback-center/cluster/types"
 import (
 	"fmt"
 	"math/rand"
-	"net"
 	"sort"
 	"strconv"
 	"sync"
@@ -25,30 +24,22 @@ type pendingContainer struct {
 	Config  models.Container
 }
 
+// Server is exported
 type Server struct {
-	Name string
-	IP   string
+	Name string `json:"Name"`
+	IP   string `json:"IP"`
 }
 
 // Group is exported
-// Servers: cluster server ips, correspond engines's key.
-// Owners: cluster group owners name.
+// Servers: cluster group's servers.
+// ContactInfo: cluster manager contactinfo.
 type Group struct {
 	ID          string   `json:"ID"`
-	Servers     []string `json:"Servers"`
+	Servers     []Server `json:"Servers"`
 	ContactInfo string   `json:"ContactInfo"`
 }
 
 // Cluster is exported
-// Discovery: discovery service
-// overcommitRatio: engine overcommit ratio, cpus & momery resources.
-// createRetry: create container retry count.
-// configCache: container config metadata cache.
-// upgraderCache: upgrading containers cache.
-// migtatorCache: migrating containers cache.
-// pendingContainers: createing containers.
-// engines: map[ip]*Engine
-// groups:  map[groupid]*Group
 type Cluster struct {
 	sync.RWMutex
 	Discovery *discovery.Discovery
@@ -56,9 +47,11 @@ type Cluster struct {
 	overcommitRatio   float64
 	createRetry       int64
 	randSeed          *rand.Rand
+	nodeCache         *NodeCache
 	configCache       *ContainersConfigCache
 	upgraderCache     *UpgradeContainersCache
 	migtatorCache     *MigrateContainersCache
+	pendEngines       *PendEngines
 	pendingContainers map[string]*pendingContainer
 	engines           map[string]*Engine
 	groups            map[string]*Group
@@ -66,7 +59,6 @@ type Cluster struct {
 }
 
 // NewCluster is exported
-// Make cluster object, set options and discovery service.
 func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*Cluster, error) {
 
 	if discovery == nil {
@@ -94,21 +86,11 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		}
 	}
 
-	cacheRoot := ""
-	if val, ret := driverOpts.String("cacheroot", ""); ret {
-		cacheRoot = val
-	}
-
 	upgradedelay := 10 * time.Second
 	if val, ret := driverOpts.String("upgradedelay", ""); ret {
 		if dur, err := time.ParseDuration(val); err == nil {
 			upgradedelay = dur
 		}
-	}
-
-	configCache, err := NewContainersConfigCache(cacheRoot)
-	if err != nil {
-		return nil, err
 	}
 
 	migratedelay := 30 * time.Second
@@ -118,31 +100,46 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		}
 	}
 
+	cacheRoot := ""
+	if val, ret := driverOpts.String("cacheroot", ""); ret {
+		cacheRoot = val
+	}
+
+	pendEngines := NewPendEngines()
 	migrateContainersCache := NewMigrateContainersCache(migratedelay)
+	configCache, err := NewContainersConfigCache(cacheRoot)
+	if err != nil {
+		return nil, err
+	}
+
 	cluster := &Cluster{
 		Discovery:         discovery,
 		overcommitRatio:   overcommitratio,
 		createRetry:       createretry,
 		randSeed:          rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
+		nodeCache:         NewNodeCache(),
 		configCache:       configCache,
 		upgraderCache:     NewUpgradeContainersCache(upgradedelay, configCache),
 		migtatorCache:     migrateContainersCache,
+		pendEngines:       pendEngines,
 		pendingContainers: make(map[string]*pendingContainer),
 		engines:           make(map[string]*Engine),
 		groups:            make(map[string]*Group),
 		stopCh:            make(chan struct{}),
 	}
+
+	pendEngines.SetCluster(cluster)
 	migrateContainersCache.SetCluster(cluster)
 	return cluster, nil
 }
 
 // Start is exported
-// Cluster start, open discovery service
+// Cluster start, init container config cache watch open discovery service
 func (cluster *Cluster) Start() error {
 
 	cluster.configCache.Init()
-	logger.INFO("[#cluster#] discovery service watching...")
 	if cluster.Discovery != nil {
+		logger.INFO("[#cluster#] discovery service watching...")
 		cluster.Discovery.Watch(cluster.stopCh, cluster.watchDiscoveryHandleFunc)
 		return nil
 	}
@@ -150,35 +147,20 @@ func (cluster *Cluster) Start() error {
 }
 
 // Stop is exported
-// Cluster stop, close discovery service
+// Cluster stop
+// close discovery service
+// stop pendEngines loop
 func (cluster *Cluster) Stop() {
 
 	close(cluster.stopCh)
+	cluster.pendEngines.Close()
 	logger.INFO("[#cluster#] discovery service closed.")
-}
-
-// GroupsEngineContains is exported
-func (cluster *Cluster) GroupsEngineContains(engine *Engine) bool {
-
-	ret := false
-	groups := cluster.GetGroups()
-	for _, group := range groups {
-		if !ret {
-			for _, ip := range group.Servers {
-				if ip == engine.IP {
-					ret = true
-					break
-				}
-			}
-		}
-	}
-	return ret
 }
 
 // GetMetaDataEngines is exported
 func (cluster *Cluster) GetMetaDataEngines(metaid string) (*MetaData, []*Engine, error) {
 
-	metaData := cluster.configCache.GetMetaData(metaid)
+	metaData := cluster.GetMetaData(metaid)
 	if metaData == nil {
 		return nil, nil, ErrClusterMetaDataNotFound
 	}
@@ -226,12 +208,48 @@ func (cluster *Cluster) GetGroupEngines(groupid string) []*Engine {
 	if !ret {
 		return nil
 	}
-	for _, ip := range group.Servers {
-		if engine, ret := cluster.engines[ip]; ret {
-			engines = append(engines, engine)
+
+	for _, server := range group.Servers {
+		if server.IP != "" {
+			for _, engine := range cluster.engines {
+				if server.IP == engine.IP {
+					engines = append(engines, engine)
+					break
+				}
+			}
+		} else if server.Name != "" {
+			for _, engine := range cluster.engines {
+				if server.Name == engine.Name {
+					engines = append(engines, engine)
+					break
+				}
+			}
 		}
 	}
+	engines = removeDuplicatesEngines(engines)
 	return engines
+}
+
+// InGroupsContains is exported
+func (cluster *Cluster) InGroupsContains(ip string, name string) bool {
+
+	cluster.RLock()
+	defer cluster.RUnlock()
+	for _, group := range cluster.groups {
+		for _, server := range group.Servers {
+			if server.IP != "" && server.IP == ip {
+				return true
+			}
+		}
+	}
+	for _, group := range cluster.groups {
+		for _, server := range group.Servers {
+			if server.Name != "" && server.Name == name {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // GetGroupAllContainers is exported
@@ -286,153 +304,119 @@ func (cluster *Cluster) GetGroupContainers(metaid string) *types.GroupContainer 
 	return groupContainer
 }
 
-// GetGroups is exported
-func (cluster *Cluster) GetGroups() []*Group {
-
-	groups := []*Group{}
-	cluster.RLock()
-	for _, group := range cluster.groups {
-		groups = append(groups, group)
-	}
-	cluster.RUnlock()
-	return groups
-}
-
 // SetGroup is exported
-func (cluster *Cluster) SetGroup(groupid string, servers []string, contactinfo string) {
+func (cluster *Cluster) SetGroup(group *Group) {
 
+	addServers := []Server{}
+	removeServers := []Server{}
 	cluster.Lock()
-	removes := []string{}
-	group, ret := cluster.groups[groupid]
+	pGroup, ret := cluster.groups[group.ID]
 	if !ret {
-		group = &Group{ID: groupid, Servers: servers, ContactInfo: contactinfo}
-		cluster.groups[groupid] = group
-		logger.INFO("[#cluster#] created group %s(%d)", groupid, len(servers))
+		pGroup = group
+		cluster.groups[group.ID] = pGroup
+		logger.INFO("[#cluster#] group created %s(%d)", pGroup.ID, len(pGroup.Servers))
+		for _, server := range pGroup.Servers {
+			ipOrName := selectIPOrName(server.IP, server.Name)
+			if nodeData := cluster.nodeCache.Get(ipOrName); nodeData != nil {
+				addServers = append(addServers, server)
+			}
+		}
 	} else {
-		origin := group.Servers
-		group.Servers = servers
-		group.ContactInfo = contactinfo
-		for _, oldip := range origin {
+		origins := pGroup.Servers
+		pGroup.Servers = group.Servers
+		logger.INFO("[#cluster#] group changed %s(%d)", pGroup.ID, len(pGroup.Servers))
+		for _, originServer := range origins {
 			found := false
-			for _, newip := range group.Servers {
-				if oldip == newip {
+			for _, newServer := range group.Servers {
+				if ret := compareRemoveServers(cluster.nodeCache, originServer, newServer); ret {
 					found = true
 					break
 				}
 			}
 			if !found {
-				removes = append(removes, oldip)
+				removeServers = append(removeServers, originServer)
 			}
 		}
-		logger.INFO("[#cluster#] changed group %s(%d)", groupid, len(servers))
+		for _, newServer := range group.Servers {
+			found := false
+			for _, originServer := range origins {
+				if ret := compareAddServers(cluster.nodeCache, originServer, newServer); ret {
+					found = true
+					break
+				}
+			}
+			if !found {
+				addServers = append(addServers, newServer)
+			}
+		}
 	}
 	cluster.Unlock()
 
-	for _, ip := range servers {
-		cluster.addEngine(ip)
+	for _, server := range removeServers {
+		if nodeData := cluster.nodeCache.Get(selectIPOrName(server.IP, server.Name)); nodeData != nil {
+			if ret := cluster.InGroupsContains(nodeData.IP, nodeData.Name); !ret {
+				logger.INFO("[#cluster#] group changed, remove to pendengines %s\t%s", server.IP, server.Name)
+				cluster.pendEngines.RemoveEngine(server.IP, server.Name)
+			}
+		}
 	}
 
-	for _, ip := range removes {
-		cluster.removeEngine(ip)
+	for _, server := range addServers {
+		logger.INFO("[#cluster#] group changed, append to pendengines %s\t%s", server.IP, server.Name)
+		cluster.pendEngines.AddEngine(server.IP, server.Name)
 	}
 }
 
 // RemoveGroup is exported
 func (cluster *Cluster) RemoveGroup(groupid string) bool {
 
-	cluster.Lock()
-	defer cluster.Unlock()
-	group, ret := cluster.groups[groupid]
-	if !ret {
-		logger.WARN("[#cluster#] remove group %s not found.", groupid)
-		return false
-	}
-	logger.INFO("[#cluster#] removed group %s(%d)", groupid, len(group.Servers))
-	delete(cluster.groups, groupid)
-	return true
+	//根据groupid删除组的所有容器
+	//删除baseconfig metaData
+	//从groups中删除组
+	return false
+	/*
+		cluster.Lock()
+		defer cluster.Unlock()
+		group, ret := cluster.groups[groupid]
+		if !ret {
+			logger.WARN("[#cluster#] remove group %s not found.", groupid)
+			return false
+		}
+		logger.INFO("[#cluster#] removed group %s(%d)", groupid, len(group.Servers))
+		delete(cluster.groups, groupid)
+		return true
+	*/
 }
 
 func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed backends.Entries, err error) {
 
 	if err != nil {
-		logger.ERROR("[#cluster#] discovery service watch error:%s", err.Error())
+		logger.ERROR("[#cluster#] discovery watch error:%s", err.Error())
 		return
 	}
 
-	logger.INFO("[#cluster#] discovery service handlefunc removed:%d added:%d.", len(removed), len(added))
-	opts := &types.ClusterRegistOptions{}
+	logger.INFO("[#cluster#] discovery watch removed:%d added:%d.", len(removed), len(added))
 	for _, entry := range removed {
-		if err := json.DeCodeBufferToObject(entry.Data, opts); err != nil {
-			logger.ERROR("[#cluster#] discovery service handlefunc removed decode error: %s", err.Error())
+		nodeData := &NodeData{}
+		if err := json.DeCodeBufferToObject(entry.Data, nodeData); err != nil {
+			logger.ERROR("[#cluster#] discovery watch removed decode error: %s", err.Error())
 			continue
 		}
-		ip, _, err := net.SplitHostPort(opts.Addr)
-		if err != nil {
-			logger.ERROR("[#cluster#] discovery service handlefunc removed resolve addr error: %s", err.Error())
-			continue
-		}
-		logger.INFO("[#cluster#] discovery service removed:%s %s.", entry.Key, opts.Addr)
-		if engine := cluster.removeEngine(ip); engine != nil {
-			cluster.migtatorCache.Start(engine)
-			engine.Close()
-			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
-		}
+		logger.INFO("[#cluster#] discovery watch, remove to pendengines %s\t%s", nodeData.IP, nodeData.Name)
+		cluster.pendEngines.RemoveEngine(nodeData.IP, nodeData.Name)
+		cluster.nodeCache.Remove(entry.Key)
 	}
 
 	for _, entry := range added {
-		if err := json.DeCodeBufferToObject(entry.Data, opts); err != nil {
-			logger.ERROR("[#cluster#] discovery service handlefunc added decode error: %s", err.Error())
+		nodeData := &NodeData{}
+		if err := json.DeCodeBufferToObject(entry.Data, nodeData); err != nil {
+			logger.ERROR("[#cluster#] discovery service watch added decode error: %s", err.Error())
 			continue
 		}
-		ip, _, err := net.SplitHostPort(opts.Addr)
-		if err != nil {
-			logger.ERROR("[#cluster#] discovery service handlefunc added resolve addr error: %s", err.Error())
-			continue
-		}
-		logger.INFO("[#cluster#] discovery service added:%s.", entry.Key)
-		if engine := cluster.addEngine(ip); engine != nil {
-			engine.Open(opts.Addr)
-			engine.RefreshContainers()
-			cluster.migtatorCache.Cancel(engine)
-			//检查meta实例数，若不对应，则创建差值
-			//丢给缓存创建，避免并发上线同时处理
-			logger.INFO("[#cluster#] set engine %s %s", engine.IP, engine.State())
-		}
+		logger.INFO("[#cluster#] discovery watch, append to pendengines %s\t%s", nodeData.IP, nodeData.Name)
+		cluster.nodeCache.Add(entry.Key, nodeData)
+		cluster.pendEngines.AddEngine(nodeData.IP, nodeData.Name)
 	}
-}
-
-func (cluster *Cluster) addEngine(ip string) *Engine {
-
-	engine := cluster.GetEngine(ip)
-	if engine == nil {
-		var err error
-		if engine, err = NewEngine(ip, cluster.overcommitRatio, cluster.configCache); err != nil {
-			logger.ERROR("[#cluster#] add engine %s error:%s", ip, err.Error())
-			return nil
-		}
-		cluster.Lock()
-		cluster.engines[ip] = engine
-		cluster.Unlock()
-		logger.INFO("[#cluster#] add engine %s", ip)
-	}
-	return engine
-}
-
-func (cluster *Cluster) removeEngine(ip string) *Engine {
-
-	engine := cluster.GetEngine(ip)
-	if engine == nil {
-		logger.WARN("[#cluster#] remove engine, not found:%s", ip)
-		return nil
-	}
-
-	if ret := cluster.GroupsEngineContains(engine); !ret {
-		cluster.Lock()
-		delete(cluster.engines, engine.IP)
-		cluster.Unlock()
-		logger.INFO("[#cluster#] remove engine %s", engine.IP)
-	}
-	return engine
 }
 
 // OperateContainer is exported
@@ -737,6 +721,7 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 	return createdContainers
 }
 
+// createContainer is exported
 func (cluster *Cluster) createContainer(metaData *MetaData, ipList []string, config models.Container) (*Engine, *Container, error) {
 
 	engines := cluster.GetGroupEngines(metaData.GroupID)
@@ -757,6 +742,7 @@ func (cluster *Cluster) createContainer(metaData *MetaData, ipList []string, con
 	return engine, container, nil
 }
 
+// selectEngines is exported
 func (cluster *Cluster) selectEngines(engines []*Engine, ipList []string, config models.Container) []*Engine {
 
 	selectEngines := []*Engine{}
@@ -790,6 +776,7 @@ func (cluster *Cluster) selectEngines(engines []*Engine, ipList []string, config
 	return selectEngines
 }
 
+// containsPendingContainers is exported
 func (cluster *Cluster) containsPendingContainers(groupid string, name string) bool {
 
 	cluster.RLock()
@@ -802,6 +789,7 @@ func (cluster *Cluster) containsPendingContainers(groupid string, name string) b
 	return false
 }
 
+// cehckContainerNameUniqueness is exported
 func (cluster *Cluster) cehckContainerNameUniqueness(groupid string, name string) bool {
 
 	if ret := cluster.containsPendingContainers(groupid, name); ret {
@@ -815,6 +803,7 @@ func (cluster *Cluster) cehckContainerNameUniqueness(groupid string, name string
 	return true
 }
 
+// validateMetaData is exported
 func (cluster *Cluster) validateMetaData(metaid string) (*MetaData, []*Engine, error) {
 
 	if ret := cluster.upgraderCache.Contains(metaid); ret {
