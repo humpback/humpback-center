@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -318,6 +319,11 @@ func (cluster *Cluster) GetGroup(groupid string) *Group {
 // SetGroup is exported
 func (cluster *Cluster) SetGroup(group *Group) {
 
+	nSize := len(group.Servers)
+	for i := 0; i < nSize; i++ {
+		group.Servers[i].Name = strings.ToUpper(group.Servers[i].Name)
+	}
+
 	addServers := []Server{}
 	removeServers := []Server{}
 	cluster.Lock()
@@ -422,6 +428,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 			logger.ERROR("[#cluster#] discovery watch removed decode error: %s", err.Error())
 			continue
 		}
+		nodeData.Name = strings.ToUpper(nodeData.Name)
 		logger.INFO("[#cluster#] discovery watch, remove to pendengines %s\t%s", nodeData.IP, nodeData.Name)
 		cluster.pendEngines.RemoveEngine(nodeData.IP, nodeData.Name)
 		cluster.nodeCache.Remove(entry.Key)
@@ -433,6 +440,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 			logger.ERROR("[#cluster#] discovery service watch added decode error: %s", err.Error())
 			continue
 		}
+		nodeData.Name = strings.ToUpper(nodeData.Name)
 		logger.INFO("[#cluster#] discovery watch, append to pendengines %s\t%s", nodeData.IP, nodeData.Name)
 		cluster.nodeCache.Add(entry.Key, nodeData)
 		cluster.pendEngines.AddEngine(nodeData.IP, nodeData.Name)
