@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -63,6 +64,32 @@ type NodeData struct {
 	KernelVersion   string   `json:"kernelversion"`
 	OperatingSystem string   `json:"operatingsystem"`
 	Labels          []string `json:"lables"`
+}
+
+// MapLabels is exported
+// covert nodedata's labels []string to map
+func (nodeData *NodeData) MapLabels() map[string]string {
+
+	labels := map[string]string{}
+	if nodeData.Driver != "" {
+		labels["storagedirver"] = nodeData.Driver
+	}
+
+	if nodeData.KernelVersion != "" {
+		labels["kernelversion"] = nodeData.KernelVersion
+	}
+
+	if nodeData.OperatingSystem != "" {
+		labels["operatingsystem"] = nodeData.OperatingSystem
+	}
+
+	for _, label := range nodeData.Labels {
+		kv := strings.SplitN(label, "=", 2)
+		if len(kv) == 2 {
+			labels[kv[0]] = kv[1]
+		}
+	}
+	return labels
 }
 
 // NodeOptions is exported

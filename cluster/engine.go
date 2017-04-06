@@ -82,26 +82,6 @@ func NewEngine(nodeData *NodeData, overcommitRatio float64, configCache *Contain
 		return nil, err
 	}
 
-	labels := map[string]string{}
-	if nodeData.Driver != "" {
-		labels["storagedirver"] = nodeData.Driver
-	}
-
-	if nodeData.KernelVersion != "" {
-		labels["kernelversion"] = nodeData.KernelVersion
-	}
-
-	if nodeData.OperatingSystem != "" {
-		labels["operatingsystem"] = nodeData.OperatingSystem
-	}
-
-	for _, label := range nodeData.Labels {
-		kv := strings.SplitN(label, "=", 2)
-		if len(kv) == 2 {
-			labels[kv[0]] = kv[1]
-		}
-	}
-
 	return &Engine{
 		ID:              nodeData.ID,
 		Name:            nodeData.Name,
@@ -109,7 +89,7 @@ func NewEngine(nodeData *NodeData, overcommitRatio float64, configCache *Contain
 		APIAddr:         nodeData.APIAddr,
 		Cpus:            nodeData.Cpus,
 		Memory:          int64(math.Ceil(float64(nodeData.Memory) / 1024.0 / 1024.0)),
-		Labels:          labels,
+		Labels:          nodeData.MapLabels(),
 		StateText:       stateText[StatePending],
 		overcommitRatio: int64(overcommitRatio * 100),
 		configCache:     configCache,
@@ -147,6 +127,20 @@ func (engine *Engine) Close() {
 		engine.StateText = stateText[engine.state]
 		logger.INFO("[#cluster#] engine %s closed.", engine.IP)
 	}
+	engine.Unlock()
+}
+
+// Update is exported
+// Engine update info
+func (engine *Engine) Update(nodeData *NodeData) {
+
+	engine.Lock()
+	engine.ID = nodeData.ID
+	engine.Name = nodeData.Name
+	engine.APIAddr = nodeData.APIAddr
+	engine.Cpus = nodeData.Cpus
+	engine.Memory = int64(math.Ceil(float64(nodeData.Memory) / 1024.0 / 1024.0))
+	engine.Labels = nodeData.MapLabels()
 	engine.Unlock()
 }
 
@@ -451,7 +445,7 @@ func (engine *Engine) RefreshContainers() error {
 		return err
 	}
 
-	logger.INFO("[#cluster#] engine %s %s refresh containers.", engine.IP, engine.State())
+	//logger.INFO("[#cluster#] engine %s %s refresh containers.", engine.IP, engine.State())
 	merged := make(map[string]*Container)
 	for _, container := range dockerContainers {
 		mergedUpdate, err := engine.updateContainer(container.ID, merged)

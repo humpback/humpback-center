@@ -52,7 +52,7 @@ type Cluster struct {
 	configCache       *ContainersConfigCache
 	upgraderCache     *UpgradeContainersCache
 	migtatorCache     *MigrateContainersCache
-	pendEngines       *PendEngines
+	enginesPool       *EnginesPool
 	pendingContainers map[string]*pendingContainer
 	engines           map[string]*Engine
 	groups            map[string]*Group
@@ -106,7 +106,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		cacheRoot = val
 	}
 
-	pendEngines := NewPendEngines()
+	enginesPool := NewEnginesPool()
 	migrateContainersCache := NewMigrateContainersCache(migratedelay)
 	configCache, err := NewContainersConfigCache(cacheRoot)
 	if err != nil {
@@ -122,14 +122,14 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		configCache:       configCache,
 		upgraderCache:     NewUpgradeContainersCache(upgradedelay, configCache),
 		migtatorCache:     migrateContainersCache,
-		pendEngines:       pendEngines,
+		enginesPool:       enginesPool,
 		pendingContainers: make(map[string]*pendingContainer),
 		engines:           make(map[string]*Engine),
 		groups:            make(map[string]*Group),
 		stopCh:            make(chan struct{}),
 	}
 
-	pendEngines.SetCluster(cluster)
+	enginesPool.SetCluster(cluster)
 	migrateContainersCache.SetCluster(cluster)
 	return cluster, nil
 }
@@ -154,7 +154,7 @@ func (cluster *Cluster) Start() error {
 func (cluster *Cluster) Stop() {
 
 	close(cluster.stopCh)
-	cluster.pendEngines.Close()
+	cluster.enginesPool.Release()
 	logger.INFO("[#cluster#] discovery service closed.")
 }
 
@@ -373,14 +373,14 @@ func (cluster *Cluster) SetGroup(group *Group) {
 		if nodeData := cluster.nodeCache.Get(selectIPOrName(server.IP, server.Name)); nodeData != nil {
 			if ret := cluster.InGroupsContains(nodeData.IP, nodeData.Name); !ret {
 				logger.INFO("[#cluster#] group changed, remove to pendengines %s\t%s", server.IP, server.Name)
-				cluster.pendEngines.RemoveEngine(server.IP, server.Name)
+				cluster.enginesPool.RemoveEngine(server.IP, server.Name)
 			}
 		}
 	}
 
 	for _, server := range addServers {
 		logger.INFO("[#cluster#] group changed, append to pendengines %s\t%s", server.IP, server.Name)
-		cluster.pendEngines.AddEngine(server.IP, server.Name)
+		cluster.enginesPool.AddEngine(server.IP, server.Name)
 	}
 }
 
@@ -430,7 +430,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		}
 		nodeData.Name = strings.ToUpper(nodeData.Name)
 		logger.INFO("[#cluster#] discovery watch, remove to pendengines %s\t%s", nodeData.IP, nodeData.Name)
-		cluster.pendEngines.RemoveEngine(nodeData.IP, nodeData.Name)
+		cluster.enginesPool.RemoveEngine(nodeData.IP, nodeData.Name)
 		cluster.nodeCache.Remove(entry.Key)
 	}
 
@@ -443,7 +443,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		nodeData.Name = strings.ToUpper(nodeData.Name)
 		logger.INFO("[#cluster#] discovery watch, append to pendengines %s\t%s", nodeData.IP, nodeData.Name)
 		cluster.nodeCache.Add(entry.Key, nodeData)
-		cluster.pendEngines.AddEngine(nodeData.IP, nodeData.Name)
+		cluster.enginesPool.AddEngine(nodeData.IP, nodeData.Name)
 	}
 }
 
