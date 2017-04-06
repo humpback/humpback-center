@@ -66,7 +66,7 @@ func (engines rdEngines) Less(i, j int) bool {
 // removeDuplicatesEngines is exported
 func removeDuplicatesEngines(engines []*Engine) []*Engine {
 
-	ret := []*Engine{}
+	out := []*Engine{}
 	pEngines := rdEngines(engines)
 	sort.Sort(pEngines)
 	nLen := len(pEngines)
@@ -74,7 +74,39 @@ func removeDuplicatesEngines(engines []*Engine) []*Engine {
 		if i > 0 && pEngines[i-1].IP == pEngines[i].IP {
 			continue
 		}
-		ret = append(ret, pEngines[i])
+		out = append(out, pEngines[i])
 	}
-	return ret
+	return out
+}
+
+type rdGroups []*Group
+
+func (groups rdGroups) Len() int {
+
+	return len(groups)
+}
+
+func (groups rdGroups) Swap(i, j int) {
+
+	groups[i], groups[j] = groups[j], groups[i]
+}
+
+func (groups rdGroups) Less(i, j int) bool {
+
+	return groups[i].ID < groups[j].ID
+}
+
+func removeDuplicatesGroups(groups []*Group) []*Group {
+
+	out := []*Group{}
+	pGroups := rdGroups(groups)
+	sort.Sort(pGroups)
+	nLen := len(pGroups)
+	for i := 0; i < nLen; i++ {
+		if i > 0 && pGroups[i-1].ID == pGroups[i].ID {
+			continue
+		}
+		out = append(out, pGroups[i])
+	}
+	return out
 }

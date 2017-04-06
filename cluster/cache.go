@@ -218,6 +218,18 @@ func (cache *ContainersConfigCache) GetMetaDataOfContainer(containerid string) *
 	return nil
 }
 
+// GetMetaDataBaseConfigsCount is exported
+// result < 0, not found metadata
+func (cache *ContainersConfigCache) GetMetaDataBaseConfigsCount(metaid string) int {
+
+	cache.RLock()
+	defer cache.RUnlock()
+	if metaData, ret := cache.data[metaid]; ret {
+		return len(metaData.BaseConfigs)
+	}
+	return -1
+}
+
 // ContainsMetaData is exported
 // Return bool, find metadata name
 func (cache *ContainersConfigCache) ContainsMetaData(groupid string, name string) bool {

@@ -199,6 +199,32 @@ func (cluster *Cluster) GetEngine(ip string) *Engine {
 	return nil
 }
 
+// GetEngineGroups is exported
+func (cluster *Cluster) GetEngineGroups(engine *Engine) []*Group {
+
+	cluster.RLock()
+	defer cluster.RUnlock()
+	groups := []*Group{}
+	for _, group := range cluster.groups {
+		for _, server := range group.Servers {
+			if server.IP != "" && server.IP == engine.IP {
+				groups = append(groups, group)
+				break
+			}
+		}
+	}
+	for _, group := range cluster.groups {
+		for _, server := range group.Servers {
+			if server.Name != "" && server.Name == engine.Name {
+				groups = append(groups, group)
+				break
+			}
+		}
+	}
+	groups = removeDuplicatesGroups(groups)
+	return groups
+}
+
 // GetGroupEngines is exported
 func (cluster *Cluster) GetGroupEngines(groupid string) []*Engine {
 
@@ -210,6 +236,7 @@ func (cluster *Cluster) GetGroupEngines(groupid string) []*Engine {
 		return nil
 	}
 
+	//priority ip
 	for _, server := range group.Servers {
 		if server.IP != "" {
 			for _, engine := range cluster.engines {
@@ -572,6 +599,33 @@ func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*ty
 		}
 	}
 	return &removedContainers, nil
+}
+
+// RecoveryContainers is exported
+func (cluster *Cluster) RecoveryContainers(metaid string) error {
+
+	metaData, engines, err := cluster.validateMetaData(metaid)
+	if err != nil {
+		logger.ERROR("[#cluster#] recovery containers %s error, %s", metaid, err.Error())
+		return err
+	}
+
+	if ret := cluster.containsPendingContainers(metaData.GroupID, metaData.Config.Name); ret {
+		logger.ERROR("[#cluster#] recovery containers %s error, %s", metaData.MetaID, ErrClusterContainersSetting)
+		return ErrClusterContainersSetting
+	}
+
+	if len(engines) > 0 {
+		baseConfigsCount := cluster.configCache.GetMetaDataBaseConfigsCount(metaData.MetaID)
+		if baseConfigsCount != -1 && metaData.Instances != baseConfigsCount {
+			if metaData.Instances > baseConfigsCount {
+				cluster.createContainers(metaData, metaData.Instances-baseConfigsCount, metaData.Config)
+			} else {
+				cluster.reduceContainers(metaData, baseConfigsCount-metaData.Instances)
+			}
+		}
+	}
+	return nil
 }
 
 // UpdateContainers is exported
