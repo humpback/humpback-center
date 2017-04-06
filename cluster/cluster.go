@@ -255,11 +255,10 @@ func (cluster *Cluster) InGroupsContains(ip string, name string) bool {
 // GetGroupAllContainers is exported
 func (cluster *Cluster) GetGroupAllContainers(groupid string) *types.GroupContainers {
 
-	cluster.RLock()
-	if _, ret := cluster.groups[groupid]; !ret {
+	group := cluster.GetGroup(groupid)
+	if group == nil {
 		return nil
 	}
-	cluster.RUnlock()
 
 	groupContainers := types.GroupContainers{}
 	groupMetaData := cluster.configCache.GetGroupMetaData(groupid)
@@ -302,6 +301,18 @@ func (cluster *Cluster) GetGroupContainers(metaid string) *types.GroupContainer 
 		}
 	}
 	return groupContainer
+}
+
+// GetGroup is exported
+func (cluster *Cluster) GetGroup(groupid string) *Group {
+
+	cluster.RLock()
+	defer cluster.RUnlock()
+	group, ret := cluster.groups[groupid]
+	if !ret {
+		return nil
+	}
+	return group
 }
 
 // SetGroup is exported
@@ -370,22 +381,31 @@ func (cluster *Cluster) SetGroup(group *Group) {
 // RemoveGroup is exported
 func (cluster *Cluster) RemoveGroup(groupid string) bool {
 
-	//根据groupid删除组的所有容器
-	//删除baseconfig metaData
-	//从groups中删除组
-	return false
-	/*
-		cluster.Lock()
-		defer cluster.Unlock()
-		group, ret := cluster.groups[groupid]
-		if !ret {
-			logger.WARN("[#cluster#] remove group %s not found.", groupid)
-			return false
+	engines := cluster.GetGroupEngines(groupid)
+	if engines == nil {
+		logger.WARN("[#cluster#] remove group %s not found.", groupid)
+		return false
+	}
+
+	groupMetaData := cluster.configCache.GetGroupMetaData(groupid)
+	for _, metaData := range groupMetaData {
+		for _, engine := range engines {
+			if engine.IsHealthy() {
+				containers := engine.Containers(metaData.MetaID)
+				for _, container := range containers {
+					if err := engine.RemoveContainer(container.Info.ID); err != nil {
+						logger.ERROR("[#cluster#] engine %s, remove container error:%s", engine.IP, err.Error())
+					}
+				}
+			}
 		}
-		logger.INFO("[#cluster#] removed group %s(%d)", groupid, len(group.Servers))
-		delete(cluster.groups, groupid)
-		return true
-	*/
+	}
+	cluster.configCache.RemoveGroupMetaData(groupid)
+	cluster.Lock()
+	delete(cluster.groups, groupid)
+	logger.INFO("[#cluster#] removed group %s", groupid)
+	cluster.Unlock()
+	return true
 }
 
 func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed backends.Entries, err error) {
@@ -796,8 +816,8 @@ func (cluster *Cluster) cehckContainerNameUniqueness(groupid string, name string
 		return false
 	}
 
-	metaData := cluster.configCache.GetMetaDataOfName(name)
-	if metaData != nil && metaData.GroupID == groupid {
+	metaData := cluster.configCache.GetMetaDataOfName(groupid, name)
+	if metaData != nil {
 		return false
 	}
 	return true

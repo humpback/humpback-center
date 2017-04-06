@@ -190,12 +190,12 @@ func (cache *ContainersConfigCache) GetMetaData(metaid string) *MetaData {
 
 // GetMetaDataOfName is exported
 // Return name of a metadata
-func (cache *ContainersConfigCache) GetMetaDataOfName(name string) *MetaData {
+func (cache *ContainersConfigCache) GetMetaDataOfName(groupid string, name string) *MetaData {
 
 	cache.RLock()
 	defer cache.RUnlock()
 	for _, metaData := range cache.data {
-		if metaData.Config.Name == name {
+		if metaData.GroupID == groupid && metaData.Config.Name == name {
 			return metaData
 		}
 	}
@@ -220,10 +220,10 @@ func (cache *ContainersConfigCache) GetMetaDataOfContainer(containerid string) *
 
 // ContainsMetaData is exported
 // Return bool, find metadata name
-func (cache *ContainersConfigCache) ContainsMetaData(name string) bool {
+func (cache *ContainersConfigCache) ContainsMetaData(groupid string, name string) bool {
 
 	if len(strings.TrimSpace(name)) > 0 {
-		metaData := cache.GetMetaDataOfName(name)
+		metaData := cache.GetMetaDataOfName(groupid, name)
 		return metaData != nil
 	}
 	return false
