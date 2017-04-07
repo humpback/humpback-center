@@ -53,6 +53,7 @@ type Cluster struct {
 	upgraderCache     *UpgradeContainersCache
 	migtatorCache     *MigrateContainersCache
 	enginesPool       *EnginesPool
+	restorer          *Restorer
 	pendingContainers map[string]*pendingContainer
 	engines           map[string]*Engine
 	groups            map[string]*Group
@@ -106,6 +107,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		cacheRoot = val
 	}
 
+	restorer := NewRestorer()
 	enginesPool := NewEnginesPool()
 	migrateContainersCache := NewMigrateContainersCache(migratedelay)
 	configCache, err := NewContainersConfigCache(cacheRoot)
@@ -123,12 +125,14 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		upgraderCache:     NewUpgradeContainersCache(upgradedelay, configCache),
 		migtatorCache:     migrateContainersCache,
 		enginesPool:       enginesPool,
+		restorer:          restorer,
 		pendingContainers: make(map[string]*pendingContainer),
 		engines:           make(map[string]*Engine),
 		groups:            make(map[string]*Group),
 		stopCh:            make(chan struct{}),
 	}
 
+	restorer.SetCluster(cluster)
 	enginesPool.SetCluster(cluster)
 	migrateContainersCache.SetCluster(cluster)
 	return cluster, nil
