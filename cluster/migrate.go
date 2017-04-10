@@ -449,6 +449,8 @@ func (cache *MigrateContainersCache) OnMigratorQuitHandleFunc(migrator *Migrator
 func (cache *MigrateContainersCache) OnMigratorNotifyHandleFunc(migrator *Migrator) {
 
 	logger.INFO("[#cluster] migrator notify %s", migrator.MetaID)
+	metaData := cache.Cluster.GetMetaData(migrator.MetaID)
+	cache.Cluster.hooksProcessor.Hook(metaData, MigrateMetaEvent)
 	mContainers := migrator.Containers()
 	for _, mContainer := range mContainers {
 		logger.INFO("[#cluster] migrator container %s %s", mContainer.ID[:12], mContainer.state.String())

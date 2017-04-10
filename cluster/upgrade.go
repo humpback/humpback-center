@@ -42,6 +42,7 @@ func (upgradeContainer *UpgradeContainer) Execute(imageTag string) error {
 	}
 	upgradeContainer.New = newContainer
 	upgradeContainer.State = UpgradeCompleted
+	engine.RefreshContainers()
 	return nil
 }
 
@@ -61,6 +62,7 @@ func (upgradeContainer *UpgradeContainer) Recovery(imageTag string) error {
 	}
 	upgradeContainer.Original = newContainer
 	upgradeContainer.State = UpgradeRecovery
+	engine.RefreshContainers()
 	return nil
 }
 
@@ -103,7 +105,7 @@ func NewUpgrader(metaid string, imageTag string, containers Containers, upgradeD
 	}
 }
 
-func (upgrader *Upgrader) Start() {
+func (upgrader *Upgrader) Start(upgradeCh chan<- bool) {
 
 	upgrader.Lock()
 	defer upgrader.Unlock()
@@ -150,6 +152,7 @@ func (upgrader *Upgrader) Start() {
 		}
 	}
 	upgrader.callback(upgrader, errMsgs)
+	upgradeCh <- true
 }
 
 type UpgraderHandleFunc func(upgrader *Upgrader, errMsgs []string)
@@ -170,7 +173,7 @@ func NewUpgradeContainersCache(upgradeDelay time.Duration, configCache *Containe
 	}
 }
 
-func (cache *UpgradeContainersCache) Upgrade(metaid string, imageTag string, containers Containers) {
+func (cache *UpgradeContainersCache) Upgrade(upgradeCh chan<- bool, metaid string, imageTag string, containers Containers) {
 
 	cache.Lock()
 	if _, ret := cache.upgraders[metaid]; !ret {
@@ -178,7 +181,7 @@ func (cache *UpgradeContainersCache) Upgrade(metaid string, imageTag string, con
 		if upgrader != nil {
 			cache.upgraders[metaid] = upgrader
 			logger.INFO("[#cluster] upgrade start %s > %s", metaid, imageTag)
-			go upgrader.Start()
+			go upgrader.Start(upgradeCh)
 		}
 	}
 	cache.Unlock()

@@ -273,7 +273,8 @@ func putGroupUpgradeContainers(c *Context) error {
 	}
 
 	logger.INFO("[#api#] %s resolve upgrade containers request successed. %+v", c.ID, req)
-	if err := c.Controller.UpgradeContainers(req.MetaID, req.ImageTag); err != nil {
+	upgradeContainers, err := c.Controller.UpgradeContainers(req.MetaID, req.ImageTag)
+	if err != nil {
 		logger.ERROR("[#api#] %s upgrade containers to meta %s error: %s", c.ID, req.MetaID, err.Error())
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())
 		if err == cluster.ErrClusterMetaDataNotFound || err == cluster.ErrClusterGroupNotFound {
@@ -282,10 +283,10 @@ func putGroupUpgradeContainers(c *Context) error {
 		return c.JSON(http.StatusInternalServerError, result)
 	}
 
-	resp := response.NewGroupUpgradeContainersResponse(req.MetaID, "upgrade containers accepted")
+	resp := response.NewGroupUpgradeContainersResponse(req.MetaID, "upgrade", upgradeContainers)
 	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "upgrade containers response")
 	result.SetResponse(resp)
-	return c.JSON(http.StatusAccepted, result)
+	return c.JSON(http.StatusOK, result)
 }
 
 func deleteGroupRemoveContainers(c *Context) error {

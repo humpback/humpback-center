@@ -211,19 +211,20 @@ func NewGroupOperateContainersResponse(metaid string, action string, containers 
 GroupUpgradeContainersResponse is exported
 Method:  PUT
 Route:   /v1/groups/collections/upgrade
-MetaID:  containers metaid
 */
 type GroupUpgradeContainersResponse struct {
-	MetaID  string `json:"MetaId"`
-	Upgrade string `json:"Upgrade"`
+	MetaID     string                   `json:"MetaId"`
+	Upgrade    string                   `json:"Upgrade"`
+	Containers *types.UpgradeContainers `json:"Containers"`
 }
 
 // NewGroupUpgradeContainersResponse is exported
-func NewGroupUpgradeContainersResponse(metaid string, upgrade string) *GroupUpgradeContainersResponse {
+func NewGroupUpgradeContainersResponse(metaid string, upgrade string, containers *types.UpgradeContainers) *GroupUpgradeContainersResponse {
 
 	return &GroupUpgradeContainersResponse{
-		MetaID:  metaid,
-		Upgrade: upgrade,
+		MetaID:     metaid,
+		Upgrade:    upgrade,
+		Containers: containers,
 	}
 }
 

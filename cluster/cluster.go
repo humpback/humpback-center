@@ -314,6 +314,12 @@ func (cluster *Cluster) GetGroupContainers(metaid string) *types.GroupContainer 
 		return nil
 	}
 
+	for _, engine := range engines {
+		if engine.IsHealthy() {
+			engine.RefreshContainers()
+		}
+	}
+
 	groupContainer := &types.GroupContainer{
 		MetaID:     metaData.MetaID,
 		Instances:  metaData.Instances,
@@ -440,6 +446,7 @@ func (cluster *Cluster) RemoveGroup(groupid string) bool {
 				}
 			}
 		}
+		cluster.hooksProcessor.Hook(metaData, RemoveMetaEvent)
 	}
 	cluster.configCache.RemoveGroupMetaData(groupid)
 	cluster.Lock()
@@ -528,30 +535,43 @@ func (cluster *Cluster) OperateContainers(metaid string, containerid string, act
 			}
 		}
 	}
+	cluster.hooksProcessor.Hook(metaData, OperateMetaEvent)
 	return &operatedContainers, nil
 }
 
 // UpgradeContainers is exported
-func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) error {
+func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) (*types.UpgradeContainers, error) {
 
 	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
 		logger.ERROR("[#cluster#] upgrade containers %s error, %s", metaid, err.Error())
-		return err
+		return nil, err
 	}
 
-	upgradecontainers := Containers{}
+	containers := Containers{}
 	for _, engine := range engines {
-		containers := engine.Containers(metaData.MetaID)
-		for _, container := range containers {
-			upgradecontainers = append(upgradecontainers, container)
+		for _, container := range engine.Containers(metaData.MetaID) {
+			containers = append(containers, container)
 		}
 	}
 
-	if len(upgradecontainers) > 0 {
-		cluster.upgraderCache.Upgrade(metaData.MetaID, imagetag, upgradecontainers)
+	upgradeContainers := types.UpgradeContainers{}
+	if len(containers) > 0 {
+		upgradeCh := make(chan bool)
+		cluster.upgraderCache.Upgrade(upgradeCh, metaData.MetaID, imagetag, containers)
+		<-upgradeCh
+		close(upgradeCh)
+		cluster.hooksProcessor.Hook(metaData, UpgradeMetaEvent)
+		for _, engine := range engines {
+			if engine.IsHealthy() {
+				containers := engine.Containers(metaData.MetaID)
+				for _, container := range containers {
+					upgradeContainers = upgradeContainers.SetUpgradePair(engine.IP, engine.Name, container.Config.Container)
+				}
+			}
+		}
 	}
-	return nil
+	return &upgradeContainers, nil
 }
 
 // RemoveContainer is exported
@@ -632,6 +652,7 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 			} else {
 				cluster.reduceContainers(metaData, baseConfigsCount-metaData.Instances)
 			}
+			cluster.hooksProcessor.Hook(metaData, RecoveryMetaEvent)
 		}
 	}
 	return nil

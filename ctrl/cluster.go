@@ -173,7 +173,7 @@ func (c *Controller) OperateContainer(containerid string, action string) (string
 	return c.Cluster.OperateContainer(containerid, action)
 }
 
-func (c *Controller) UpgradeContainers(metaid string, imagetag string) error {
+func (c *Controller) UpgradeContainers(metaid string, imagetag string) (*types.UpgradeContainers, error) {
 
 	return c.Cluster.UpgradeContainers(metaid, imagetag)
 }

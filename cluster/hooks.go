@@ -21,6 +21,7 @@ const (
 	UpdateMetaEvent
 	UpgradeMetaEvent
 	MigrateMetaEvent
+	RecoveryMetaEvent
 )
 
 func (event HookEvent) String() string {
@@ -38,6 +39,8 @@ func (event HookEvent) String() string {
 		return "UpgradeMetaEvent"
 	case MigrateMetaEvent:
 		return "MigrateMetaEvent"
+	case RecoveryMetaEvent:
+		return "RecoveryMetaEvent"
 	}
 	return ""
 }
@@ -69,11 +72,13 @@ func NewHook(cluster *Cluster, metaData *MetaData, timeStamp int64, hookEvent Ho
 		if engine.IsHealthy() {
 			containers := engine.Containers(metaData.MetaID)
 			for _, container := range containers {
-				hookContainers = append(hookContainers, &HookContainer{
-					IP:        engine.IP,
-					Name:      engine.Name,
-					Container: container.Config.Container,
-				})
+				if stateText := StateString(container.Info.State); stateText == "Running" {
+					hookContainers = append(hookContainers, &HookContainer{
+						IP:        engine.IP,
+						Name:      engine.Name,
+						Container: container.Config.Container,
+					})
+				}
 			}
 		}
 	}

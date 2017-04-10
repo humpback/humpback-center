@@ -163,11 +163,21 @@ func (cache *ContainersConfigCache) SetImageTag(metaid string, imagetag string) 
 
 	cache.Lock()
 	defer cache.Unlock()
+	if strings.TrimSpace(imagetag) == "" {
+		imagetag = "latest"
+	}
 	if metaData, ret := cache.data[metaid]; ret {
 		originalTag := metaData.ImageTag
 		metaData.ImageTag = imagetag
+		originalImage := metaData.Config.Image
+		nPos := strings.LastIndex(originalImage, ":")
+		if nPos == -1 {
+			nPos = len(originalImage)
+		}
+		metaData.Config.Image = originalImage[:nPos] + ":" + imagetag
 		if err := cache.writeMetaData(metaData); err != nil {
 			metaData.ImageTag = originalTag
+			metaData.Config.Image = originalImage
 			return false
 		}
 		return true
