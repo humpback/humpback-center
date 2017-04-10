@@ -54,6 +54,7 @@ type Cluster struct {
 	migtatorCache     *MigrateContainersCache
 	enginesPool       *EnginesPool
 	restorer          *Restorer
+	hooksProcessor    *HooksProcessor
 	pendingContainers map[string]*pendingContainer
 	engines           map[string]*Engine
 	groups            map[string]*Group
@@ -107,6 +108,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		cacheRoot = val
 	}
 
+	hooksProcessor := NewHooksProcessor()
 	restorer := NewRestorer()
 	enginesPool := NewEnginesPool()
 	migrateContainersCache := NewMigrateContainersCache(migratedelay)
@@ -126,12 +128,14 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		migtatorCache:     migrateContainersCache,
 		enginesPool:       enginesPool,
 		restorer:          restorer,
+		hooksProcessor:    hooksProcessor,
 		pendingContainers: make(map[string]*pendingContainer),
 		engines:           make(map[string]*Engine),
 		groups:            make(map[string]*Group),
 		stopCh:            make(chan struct{}),
 	}
 
+	hooksProcessor.SetCluster(cluster)
 	restorer.SetCluster(cluster)
 	enginesPool.SetCluster(cluster)
 	migrateContainersCache.SetCluster(cluster)
@@ -516,7 +520,7 @@ func (cluster *Cluster) OperateContainers(metaid string, containerid string, act
 				} else {
 					err = fmt.Errorf("engine state is %s", engine.State())
 				}
-				operatedContainers = operatedContainers.SetOperatedPair(engine.IP, container.Info.ID, action, err)
+				operatedContainers = operatedContainers.SetOperatedPair(engine.IP, engine.Name, container.Info.ID, action, err)
 			}
 			if container.Info.ID == containerid {
 				foundContainer = true
@@ -588,7 +592,7 @@ func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*ty
 				} else {
 					err = fmt.Errorf("engine state is %s", engine.State())
 				}
-				removedContainers = removedContainers.SetRemovedPair(engine.IP, container.Info.ID, err)
+				removedContainers = removedContainers.SetRemovedPair(engine.IP, engine.Name, container.Info.ID, err)
 			}
 			if container.Info.ID == containerid {
 				foundContainer = true
@@ -597,6 +601,7 @@ func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*ty
 		}
 	}
 
+	cluster.hooksProcessor.Hook(metaData, RemoveMetaEvent)
 	if metaData := cluster.configCache.GetMetaData(metaData.MetaID); metaData != nil {
 		if len(metaData.BaseConfigs) == 0 {
 			cluster.configCache.RemoveMetaData(metaData.MetaID)
@@ -661,12 +666,13 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 		}
 	}
 
+	cluster.hooksProcessor.Hook(metaData, UpdateMetaEvent)
 	createdContainers := types.CreatedContainers{}
 	for _, engine := range engines {
 		if engine.IsHealthy() {
 			containers := engine.Containers(metaData.MetaID)
 			for _, container := range containers {
-				createdContainers = createdContainers.SetCreatedPair(engine.IP, container.Config.Container)
+				createdContainers = createdContainers.SetCreatedPair(engine.IP, engine.Name, container.Config.Container)
 			}
 		}
 	}
@@ -702,6 +708,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 		cluster.configCache.RemoveMetaData(metaData.MetaID)
 		return "", nil, ErrClusterCreateContainerFailure
 	}
+	cluster.hooksProcessor.Hook(metaData, CreateMetaEvent)
 	return metaData.MetaID, &createdContainers, nil
 }
 
@@ -770,7 +777,7 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 		}
 		indexStr := strconv.Itoa(index)
 		containerConfig := config
-		containerConfig.Name = metaData.GroupID[:8] + "-" + containerConfig.Name + "-" + indexStr
+		containerConfig.Name = "CLUSTER-" + metaData.GroupID[:8] + "-" + containerConfig.Name + "-" + indexStr
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_GROUPID="+metaData.GroupID)
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_METAID="+metaData.MetaID)
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_CONTAINER_INDEX="+indexStr)
@@ -798,7 +805,7 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 			}
 		}
 		ipList = filterAppendIPList(engine, ipList)
-		createdContainers = createdContainers.SetCreatedPair(engine.IP, container.Config.Container)
+		createdContainers = createdContainers.SetCreatedPair(engine.IP, engine.Name, container.Config.Container)
 	}
 
 	cluster.Lock()
