@@ -6,7 +6,7 @@ cluster:
     discovery:
         uris: zk://192.168.2.80:2181,192.168.2.81:2181,192.168.2.82:2181
         cluster: humpback/center
-        heartbeat: 5s
+        heartbeat: 8s
 api:
     hosts: [":8580"]
     enablecors: true
