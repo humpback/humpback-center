@@ -156,7 +156,9 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 		}
 	case request.GROUP_REMOVE_EVENT:
 		{
-			c.Cluster.RemoveGroup(groupid)
+			if c.Cluster.GetGroup(groupid) != nil {
+				c.Cluster.RemoveGroup(groupid)
+			}
 		}
 	}
 }
