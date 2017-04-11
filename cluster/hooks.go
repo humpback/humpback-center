@@ -72,13 +72,11 @@ func NewHook(cluster *Cluster, metaData *MetaData, timeStamp int64, hookEvent Ho
 		if engine.IsHealthy() {
 			containers := engine.Containers(metaData.MetaID)
 			for _, container := range containers {
-				if stateText := StateString(container.Info.State); stateText == "Running" {
-					hookContainers = append(hookContainers, &HookContainer{
-						IP:        engine.IP,
-						Name:      engine.Name,
-						Container: container.Config.Container,
-					})
-				}
+				hookContainers = append(hookContainers, &HookContainer{
+					IP:        engine.IP,
+					Name:      engine.Name,
+					Container: container.Config.Container,
+				})
 			}
 		}
 	}

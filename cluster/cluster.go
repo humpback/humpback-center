@@ -36,6 +36,7 @@ type Server struct {
 // ContactInfo: cluster manager contactinfo.
 type Group struct {
 	ID          string   `json:"ID"`
+	IsCluster   bool     `json:"IsCluster"`
 	Servers     []Server `json:"Servers"`
 	ContactInfo string   `json:"ContactInfo"`
 }

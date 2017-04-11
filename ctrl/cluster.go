@@ -141,8 +141,16 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 		{
 			if groups := c.getClusterGroupStoreData(groupid); groups != nil {
 				logger.INFO("[#ctrl#] get cluster groups:%d", len(groups))
-				for _, group := range groups {
-					c.Cluster.SetGroup(group)
+				if len(groups) > 0 {
+					for _, group := range groups {
+						if group.IsCluster {
+							c.Cluster.SetGroup(group)
+						}
+					}
+				} else { //group iscluster is false
+					if c.Cluster.GetGroup(groupid) != nil {
+						c.Cluster.RemoveGroup(groupid)
+					}
 				}
 			}
 		}
