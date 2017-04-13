@@ -1,35 +1,57 @@
 package cluster
 
-import "github.com/humpback/gounits/utils"
+import (
+	"sync"
+)
 
-func filterAppendIPList(engine *Engine, ipList []string) []string {
-
-	if engine != nil {
-		if ret := utils.Contains(engine.IP, ipList); !ret {
-			ipList = append(ipList, engine.IP)
-		}
-	}
-	return ipList
+// EnginesFilter is exported
+type EnginesFilter struct {
+	sync.Mutex
+	engines map[string]*Engine
 }
 
-func filterIPList(engines []*Engine, ipList []string) []*Engine {
+// NewEnginesFilter is exported
+func NewEnginesFilter() *EnginesFilter {
 
-	if len(ipList) == 0 {
+	return &EnginesFilter{
+		engines: make(map[string]*Engine),
+	}
+}
+
+// Size is exported
+func (filter *EnginesFilter) Size() int {
+
+	filter.Lock()
+	defer filter.Unlock()
+	return len(filter.engines)
+}
+
+// Set is exported
+func (filter *EnginesFilter) Set(engine *Engine) {
+
+	filter.Lock()
+	if engine != nil {
+		if _, ret := filter.engines[engine.IP]; !ret {
+			filter.engines[engine.IP] = engine
+		}
+	}
+	filter.Unlock()
+}
+
+// Filter is exported
+func (filter *EnginesFilter) Filter(engines []*Engine) []*Engine {
+
+	filter.Lock()
+	defer filter.Unlock()
+	if len(filter.engines) == 0 {
 		return engines
 	}
 
-	p := []*Engine{}
+	out := []*Engine{}
 	for _, engine := range engines {
-		found := false
-		for _, ip := range ipList {
-			if engine.IP == ip {
-				found = true
-				break
-			}
-		}
-		if !found {
-			p = append(p, engine)
+		if _, ret := filter.engines[engine.IP]; !ret {
+			out = append(out, engine)
 		}
 	}
-	return p
+	return out
 }

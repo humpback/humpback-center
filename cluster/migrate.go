@@ -38,7 +38,7 @@ type MigrateContainer struct {
 	ID         string
 	metaData   *MetaData
 	baseConfig *ContainerBaseConfig
-	failureIPs []string
+	filter     *EnginesFilter
 	state      MigrateState
 }
 
@@ -53,7 +53,7 @@ func NewMigrateContainer(containerid string, baseConfig *ContainerBaseConfig) *M
 		ID:         containerid,
 		metaData:   baseConfig.MetaData,
 		baseConfig: baseConfig,
-		failureIPs: []string{},
+		filter:     NewEnginesFilter(),
 		state:      MigrateReady,
 	}
 }
@@ -78,9 +78,10 @@ func (mContainer *MigrateContainer) SetState(state MigrateState) {
 func (mContainer *MigrateContainer) Execute(cluster *Cluster) {
 
 	mContainer.SetState(Migrating)
-	engine, container, err := cluster.createContainer(mContainer.metaData /*[]string{},*/, mContainer.baseConfig.Container)
+	engine, container, err := cluster.createContainer(mContainer.metaData, mContainer.filter, mContainer.baseConfig.Container)
 	if err != nil {
 		mContainer.SetState(MigrateFailure)
+		mContainer.filter.Set(engine)
 		logger.ERROR("[#cluster] migrator container %s error %s", mContainer.ID[:12], err.Error())
 		return
 	}
