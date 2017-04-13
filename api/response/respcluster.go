@@ -1,10 +1,8 @@
 package response
 
-import (
-	"github.com/humpback/humpback-agent/models"
-	"github.com/humpback/humpback-center/cluster"
-	"github.com/humpback/humpback-center/cluster/types"
-)
+import "humpback-center/cluster"
+import "humpback-center/cluster/types"
+import "common/models"
 
 /*
 GroupAllContainersResponse is exported

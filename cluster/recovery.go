@@ -1,6 +1,6 @@
 package cluster
 
-import "github.com/humpback/gounits/container"
+import "github.com/humpback/gounits/utils"
 
 import (
 	"sync"
@@ -33,7 +33,7 @@ func (restorer *Restorer) SetCluster(cluster *Cluster) {
 func (restorer *Restorer) RecoveryMetaID(metaid string) {
 
 	restorer.Lock()
-	if ret := container.Contains(metaid, restorer.metaIds); !ret {
+	if ret := utils.Contains(metaid, restorer.metaIds); !ret {
 		restorer.metaIds = append(restorer.metaIds, metaid)
 	}
 	restorer.Unlock()

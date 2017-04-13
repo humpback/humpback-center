@@ -1,11 +1,11 @@
 package cluster
 
-import "github.com/humpback/gounits/container"
+import "github.com/humpback/gounits/utils"
 
 func filterAppendIPList(engine *Engine, ipList []string) []string {
 
 	if engine != nil {
-		if ret := container.Contains(engine.IP, ipList); !ret {
+		if ret := utils.Contains(engine.IP, ipList); !ret {
 			ipList = append(ipList, engine.IP)
 		}
 	}

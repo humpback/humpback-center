@@ -1,7 +1,7 @@
 package api
 
-import "github.com/humpback/humpback-center/ctrl"
 import "github.com/gorilla/mux"
+import "humpback-center/ctrl"
 
 import (
 	"net/http"

@@ -1,12 +1,12 @@
 package cluster
 
 import "github.com/docker/docker/api/types"
-import gocontainer "github.com/humpback/gounits/container"
+import "github.com/humpback/gounits/utils"
 import "github.com/humpback/gounits/convert"
 import "github.com/humpback/gounits/http"
 import "github.com/humpback/gounits/logger"
-import "github.com/humpback/humpback-agent/models"
-import ctypes "github.com/humpback/humpback-center/cluster/types"
+import ctypes "humpback-center/cluster/types"
+import "common/models"
 
 import (
 	"bytes"
@@ -198,7 +198,7 @@ func (engine *Engine) MetaIds() []string {
 	engine.RLock()
 	for _, container := range engine.containers {
 		if metaid := container.MetaID(); metaid != "" {
-			if ret := gocontainer.Contains(metaid, ids); !ret {
+			if ret := utils.Contains(metaid, ids); !ret {
 				ids = append(ids, metaid)
 			}
 		}

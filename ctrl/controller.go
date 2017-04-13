@@ -1,9 +1,9 @@
 package ctrl
 
-import "github.com/humpback/humpback-center/cluster"
-import "github.com/humpback/humpback-center/etc"
-import "github.com/humpback/humpback-center/repository"
 import "github.com/humpback/gounits/logger"
+import "humpback-center/cluster"
+import "humpback-center/etc"
+import "humpback-center/repository"
 
 // Controller is exprted
 type Controller struct {

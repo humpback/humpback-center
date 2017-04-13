@@ -5,8 +5,8 @@ import "github.com/humpback/discovery/backends"
 import "github.com/humpback/gounits/json"
 import "github.com/humpback/gounits/logger"
 import "github.com/humpback/gounits/system"
-import "github.com/humpback/humpback-agent/models"
-import "github.com/humpback/humpback-center/cluster/types"
+import "humpback-center/cluster/types"
+import "common/models"
 
 import (
 	"fmt"
@@ -791,7 +791,7 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 	cluster.Unlock()
 
 	createdContainers := types.CreatedContainers{}
-	ipList := []string{}
+	//ipList := []string{}
 	for ; instances > 0; instances-- {
 		index := cluster.configCache.MakeContainerIdleIndex(metaData.MetaID)
 		if index < 0 {
@@ -804,18 +804,18 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_METAID="+metaData.MetaID)
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_CONTAINER_INDEX="+indexStr)
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_CONTAINER_ORIGINALNAME="+containerConfig.Name)
-		engine, container, err := cluster.createContainer(metaData, ipList, containerConfig)
+		engine, container, err := cluster.createContainer(metaData /*ipList,*/, containerConfig)
 		if err != nil {
 			if err == ErrClusterNoEngineAvailable {
 				logger.ERROR("[#cluster#] create container %s, error:%s", containerConfig.Name, err.Error())
 				continue
 			}
 			logger.ERROR("[#cluster#] engine %s, create container %s, error:%s", engine.IP, containerConfig.Name, err.Error())
-			ipList = filterAppendIPList(engine, ipList)
+			//ipList = filterAppendIPList(engine, ipList)
 			var retries int64
 			for ; retries < cluster.createRetry && err != nil; retries++ {
-				engine, container, err = cluster.createContainer(metaData, ipList, containerConfig)
-				ipList = filterAppendIPList(engine, ipList)
+				engine, container, err = cluster.createContainer(metaData /*ipList,*/, containerConfig)
+				//ipList = filterAppendIPList(engine, ipList)
 			}
 			if err != nil {
 				if err == ErrClusterNoEngineAvailable {
@@ -826,7 +826,7 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 				continue
 			}
 		}
-		ipList = filterAppendIPList(engine, ipList)
+		//ipList = filterAppendIPList(engine, ipList)
 		createdContainers = createdContainers.SetCreatedPair(engine.IP, engine.Name, container.Config.Container)
 	}
 
@@ -837,12 +837,21 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 }
 
 // createContainer is exported
-func (cluster *Cluster) createContainer(metaData *MetaData, ipList []string, config models.Container) (*Engine, *Container, error) {
+func (cluster *Cluster) createContainer(metaData *MetaData, config models.Container) (*Engine, *Container, error) {
 
 	engines := cluster.GetGroupEngines(metaData.GroupID)
 	if engines == nil || len(engines) == 0 {
 		return nil, nil, ErrClusterNoEngineAvailable
 	}
+
+	//////////////////////////////////////
+	ipList := []string{}
+	for _, engine := range engines {
+		if engine.IsHealthy() && len(engine.Containers(metaData.MetaID)) > 0 {
+			ipList = filterAppendIPList(engine, ipList)
+		}
+	}
+	//////////////////////////////////////
 
 	selectEngines := cluster.selectEngines(engines, ipList, config)
 	if len(selectEngines) == 0 {

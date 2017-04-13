@@ -2,8 +2,8 @@ package cluster
 
 import "github.com/humpback/gounits/system"
 import "github.com/humpback/gounits/rand"
-import "github.com/humpback/humpback-center/cluster/types"
-import "github.com/humpback/humpback-agent/models"
+import "humpback-center/cluster/types"
+import "common/models"
 
 import (
 	"bytes"

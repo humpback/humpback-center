@@ -1,7 +1,7 @@
 package ctrl
 
-import "github.com/humpback/humpback-center/etc"
-import "github.com/humpback/humpback-center/repository"
+import "humpback-center/etc"
+import "humpback-center/repository"
 
 func createRepositoryCache(configuration *etc.Configuration) (*repository.RepositoryCache, error) {
 

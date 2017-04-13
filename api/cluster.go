@@ -1,9 +1,9 @@
 package api
 
-import "github.com/humpback/humpback-center/api/request"
-import "github.com/humpback/humpback-center/api/response"
-import "github.com/humpback/humpback-center/cluster"
 import "github.com/humpback/gounits/logger"
+import "humpback-center/api/request"
+import "humpback-center/api/response"
+import "humpback-center/cluster"
 
 import (
 	"net/http"

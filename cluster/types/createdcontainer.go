@@ -1,6 +1,6 @@
 package types
 
-import "github.com/humpback/humpback-agent/models"
+import "common/models"
 
 // CreateContainerResponse is exported
 type CreateContainerResponse struct {

@@ -2,7 +2,7 @@ package cluster
 
 import "github.com/humpback/gounits/http"
 import "github.com/humpback/gounits/logger"
-import "github.com/humpback/humpback-agent/models"
+import "common/models"
 
 import (
 	"bytes"

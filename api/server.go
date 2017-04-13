@@ -1,7 +1,7 @@
 package api
 
-import "github.com/humpback/humpback-center/api/middleware"
-import "github.com/humpback/humpback-center/ctrl"
+import "humpback-center/api/middleware"
+import "humpback-center/ctrl"
 
 import (
 	"crypto/tls"

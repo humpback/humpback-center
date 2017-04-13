@@ -1,17 +1,17 @@
 package server
 
-import "github.com/humpback/humpback-center/api"
-import "github.com/humpback/humpback-center/ctrl"
-import "github.com/humpback/humpback-center/etc"
 import "github.com/humpback/gounits/fprocess"
 import "github.com/humpback/gounits/logger"
+import "humpback-center/api"
+import "humpback-center/ctrl"
+import "humpback-center/etc"
 
 import (
 	"flag"
 )
 
 /*
-ServerCenter
+CenterService is exported
 humpback center service
 */
 type CenterService struct {

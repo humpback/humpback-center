@@ -2,9 +2,9 @@ package cluster
 
 import "github.com/docker/docker/api/types"
 import units "github.com/docker/go-units"
-import "github.com/humpback/humpback-agent/models"
 import "github.com/humpback/gounits/convert"
 import "github.com/humpback/gounits/rand"
+import "common/models"
 
 import (
 	"fmt"

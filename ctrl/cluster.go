@@ -3,11 +3,11 @@ package ctrl
 import "github.com/humpback/discovery"
 import "github.com/humpback/gounits/http"
 import "github.com/humpback/gounits/logger"
-import "github.com/humpback/humpback-agent/models"
-import "github.com/humpback/humpback-center/api/request"
-import "github.com/humpback/humpback-center/cluster"
-import "github.com/humpback/humpback-center/cluster/types"
-import "github.com/humpback/humpback-center/etc"
+import "humpback-center/api/request"
+import "humpback-center/cluster"
+import "humpback-center/cluster/types"
+import "humpback-center/etc"
+import "common/models"
 
 import (
 	"encoding/base64"
