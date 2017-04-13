@@ -81,7 +81,6 @@ func (mContainer *MigrateContainer) Execute(cluster *Cluster) {
 	engine, container, err := cluster.createContainer(mContainer.metaData, mContainer.filter, mContainer.baseConfig.Container)
 	if err != nil {
 		mContainer.SetState(MigrateFailure)
-		mContainer.filter.Set(engine)
 		logger.ERROR("[#cluster] migrator container %s error %s", mContainer.ID[:12], err.Error())
 		return
 	}

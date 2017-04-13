@@ -811,13 +811,9 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 				continue
 			}
 			logger.ERROR("[#cluster#] engine %s, create container %s, error:%s", engine.IP, containerConfig.Name, err.Error())
-			filter.Set(engine)
 			var retries int64
 			for ; retries < cluster.createRetry && err != nil; retries++ {
 				engine, container, err = cluster.createContainer(metaData, filter, containerConfig)
-				if err != nil {
-					filter.Set(engine)
-				}
 			}
 			if err != nil {
 				if err == ErrClusterNoEngineAvailable {
@@ -859,6 +855,7 @@ func (cluster *Cluster) createContainer(metaData *MetaData, filter *EnginesFilte
 	engine := selectEngines[0]
 	container, err := engine.CreateContainer(config)
 	if err != nil {
+		filter.Set(engine)
 		return engine, nil, err
 	}
 	return engine, container, nil
