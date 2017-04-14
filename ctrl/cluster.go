@@ -1,7 +1,6 @@
 package ctrl
 
 import "github.com/humpback/discovery"
-import "github.com/humpback/gounits/http"
 import "github.com/humpback/gounits/logger"
 import "humpback-center/api/request"
 import "humpback-center/cluster"
@@ -14,11 +13,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-)
-
-const (
-	// humpback-api site request timeout value
-	requestAPITimeout = 15 * time.Second
 )
 
 func createCluster(configuration *etc.Configuration) (*cluster.Cluster, error) {
@@ -80,7 +74,7 @@ func (c *Controller) getClusterGroupStoreData(groupid string) []*cluster.Group {
 	value := fmt.Sprintf("HUMPBACK_CENTER%d", t)
 	code := base64.StdEncoding.EncodeToString([]byte(value))
 	header := map[string][]string{"x-get-cluster": []string{code}}
-	respGroups, err := http.NewWithTimeout(requestAPITimeout).Get(c.Configuration.SiteAPI+"/groups/getclusters", query, header)
+	respGroups, err := c.httpClient.Get(c.Configuration.SiteAPI+"/groups/getclusters", query, header)
 	if err != nil {
 		logger.ERROR("[#ctrl#] get cluster group storedata error:%s", err.Error())
 		return nil
@@ -88,7 +82,7 @@ func (c *Controller) getClusterGroupStoreData(groupid string) []*cluster.Group {
 
 	defer respGroups.Close()
 	if respGroups.StatusCode() != 200 {
-		logger.ERROR("[#ctrl#] get cluster group storedata error:%d", respGroups.StatusCode())
+		logger.ERROR("[#ctrl#] get cluster group storedata error:%d %s", respGroups.StatusCode(), respGroups.String())
 		return nil
 	}
 

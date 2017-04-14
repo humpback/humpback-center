@@ -68,6 +68,7 @@ type Engine struct {
 	StateText string            `json:"StateText"`
 
 	overcommitRatio int64
+	client          *http.HttpClient
 	configCache     *ContainersConfigCache
 	containers      map[string]*Container
 	stopCh          chan struct{}
@@ -92,6 +93,7 @@ func NewEngine(nodeData *NodeData, overcommitRatio float64, configCache *Contain
 		Labels:          nodeData.MapLabels(),
 		StateText:       stateText[StatePending],
 		overcommitRatio: int64(overcommitRatio * 100),
+		client:          http.NewWithTimeout(requestTimeout),
 		configCache:     configCache,
 		containers:      make(map[string]*Container),
 		state:           StatePending,
@@ -125,6 +127,7 @@ func (engine *Engine) Close() {
 		close(engine.stopCh)
 		engine.state = StateDisconnected
 		engine.StateText = stateText[engine.state]
+		engine.client.Close()
 		logger.INFO("[#cluster#] engine %s closed.", engine.IP)
 	}
 	engine.Unlock()
@@ -205,6 +208,20 @@ func (engine *Engine) MetaIds() []string {
 	}
 	engine.RUnlock()
 	return ids
+}
+
+// HasMetaID is exported
+// find metaid in engine containers
+func (engine *Engine) HasMetaID(metaid string) bool {
+
+	engine.RLock()
+	defer engine.RUnlock()
+	for _, container := range engine.containers {
+		if container.MetaID() == metaid {
+			return true
+		}
+	}
+	return false
 }
 
 // Containers is exported
@@ -291,14 +308,14 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
-	respCreated, err := http.NewWithTimeout(requestTimeout).Post("http://"+engine.APIAddr+"/v1/containers", nil, buf, header)
+	respCreated, err := engine.client.Post("http://"+engine.APIAddr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return nil, err
 	}
 
 	defer respCreated.Close()
 	if respCreated.StatusCode() != 200 {
-		return nil, fmt.Errorf("engine %s, create container %s failure %d", engine.IP, config.Name, respCreated.StatusCode())
+		return nil, fmt.Errorf("engine %s, create container %s failure %d %s", engine.IP, config.Name, respCreated.StatusCode(), respCreated.String())
 	}
 
 	createContainerResponse := &ctypes.CreateContainerResponse{}
@@ -334,14 +351,14 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 func (engine *Engine) RemoveContainer(containerid string) error {
 
 	query := map[string][]string{"force": []string{"true"}}
-	respRemoved, err := http.NewWithTimeout(requestTimeout).Delete("http://"+engine.APIAddr+"/v1/containers/"+containerid, query, nil)
+	respRemoved, err := engine.client.Delete("http://"+engine.APIAddr+"/v1/containers/"+containerid, query, nil)
 	if err != nil {
 		return err
 	}
 
 	defer respRemoved.Close()
 	if respRemoved.StatusCode() != 200 {
-		return fmt.Errorf("engine %s, remove container %s failure %d", engine.IP, containerid[:12], respRemoved.StatusCode())
+		return fmt.Errorf("engine %s, remove container %s failure %d %s", engine.IP, containerid[:12], respRemoved.StatusCode(), respRemoved.String())
 	}
 
 	logger.INFO("[#cluster#] engine %s, remove container %s", engine.IP, containerid[:12])
@@ -364,14 +381,14 @@ func (engine *Engine) OperateContainer(operate models.ContainerOperate) error {
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
-	respOperated, err := http.NewWithTimeout(requestTimeout).Put("http://"+engine.APIAddr+"/v1/containers", nil, buf, header)
+	respOperated, err := engine.client.Put("http://"+engine.APIAddr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return err
 	}
 
 	defer respOperated.Close()
 	if respOperated.StatusCode() != 200 {
-		return fmt.Errorf("engine %s, %s container %s failure %d", engine.IP, operate.Action, operate.Container[:12], respOperated.StatusCode())
+		return fmt.Errorf("engine %s, %s container %s failure %d %s", engine.IP, operate.Action, operate.Container[:12], respOperated.StatusCode(), respOperated.String())
 	}
 
 	logger.INFO("[#cluster#] engine %s, %s container %s", engine.IP, operate.Action, operate.Container[:12])
@@ -393,14 +410,14 @@ func (engine *Engine) UpgradeContainer(operate models.ContainerOperate) (*Contai
 	}
 
 	header := map[string][]string{"Content-Type": []string{"application/json"}}
-	respUpgraded, err := http.NewWithTimeout(requestTimeout).Put("http://"+engine.APIAddr+"/v1/containers", nil, buf, header)
+	respUpgraded, err := engine.client.Put("http://"+engine.APIAddr+"/v1/containers", nil, buf, header)
 	if err != nil {
 		return nil, err
 	}
 
 	defer respUpgraded.Close()
 	if respUpgraded.StatusCode() != 200 {
-		return nil, fmt.Errorf("engine %s, %s container %s failure %d", engine.IP, operate.Action, operate.Container[:12], respUpgraded.StatusCode())
+		return nil, fmt.Errorf("engine %s, %s container %s failure %d %s", engine.IP, operate.Action, operate.Container[:12], respUpgraded.StatusCode(), respUpgraded.String())
 	}
 
 	upgradeContainerResponse := &ctypes.UpgradeContainerResponse{}
@@ -430,14 +447,14 @@ func (engine *Engine) UpgradeContainer(operate models.ContainerOperate) (*Contai
 func (engine *Engine) RefreshContainers() error {
 
 	query := map[string][]string{"all": []string{"true"}}
-	respContainers, err := http.NewWithTimeout(requestTimeout).Get("http://"+engine.APIAddr+"/v1/containers", query, nil)
+	respContainers, err := engine.client.Get("http://"+engine.APIAddr+"/v1/containers", query, nil)
 	if err != nil {
 		return err
 	}
 
 	defer respContainers.Close()
 	if respContainers.StatusCode() != 200 {
-		return fmt.Errorf("engine %s, refresh containers failure %d", engine.IP, respContainers.StatusCode())
+		return fmt.Errorf("engine %s, refresh containers failure %d %s", engine.IP, respContainers.StatusCode(), respContainers.String())
 	}
 
 	dockerContainers := []types.Container{}
@@ -531,14 +548,14 @@ func (engine *Engine) refreshLoop() {
 // updateSpecs exported
 func (engine *Engine) updateSpecs() error {
 
-	respSpecs, err := http.NewWithTimeout(requestTimeout).Get("http://"+engine.APIAddr+"/v1/dockerinfo", nil, nil)
+	respSpecs, err := engine.client.Get("http://"+engine.APIAddr+"/v1/dockerinfo", nil, nil)
 	if err != nil {
 		return err
 	}
 
 	defer respSpecs.Close()
 	if respSpecs.StatusCode() != 200 {
-		return fmt.Errorf("engine %s, update specs failure %d", respSpecs.StatusCode())
+		return fmt.Errorf("engine %s, update specs failure %d %s", respSpecs.StatusCode(), respSpecs.String())
 	}
 
 	dockerInfo := &types.Info{}
@@ -590,14 +607,14 @@ func (engine *Engine) updateContainer(containerid string, containers map[string]
 	engine.RUnlock()
 
 	query := map[string][]string{"originaldata": []string{"true"}}
-	respContainer, err := http.NewWithTimeout(requestTimeout).Get("http://"+engine.APIAddr+"/v1/containers/"+containerid, query, nil)
+	respContainer, err := engine.client.Get("http://"+engine.APIAddr+"/v1/containers/"+containerid, query, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	defer respContainer.Close()
 	if respContainer.StatusCode() != 200 {
-		return nil, fmt.Errorf("engine %s, update container %s failure %d", engine.IP, containerid[:12], respContainer.StatusCode())
+		return nil, fmt.Errorf("engine %s, update container %s failure %d %s", engine.IP, containerid[:12], respContainer.StatusCode(), respContainer.StatusCode())
 	}
 
 	containerJSON := &types.ContainerJSON{}

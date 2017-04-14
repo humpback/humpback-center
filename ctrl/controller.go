@@ -1,12 +1,23 @@
 package ctrl
 
+import "github.com/humpback/gounits/http"
 import "github.com/humpback/gounits/logger"
 import "humpback-center/cluster"
 import "humpback-center/etc"
 import "humpback-center/repository"
 
+import (
+	"time"
+)
+
+const (
+	// humpback-api site request timeout value
+	requestAPITimeout = 15 * time.Second
+)
+
 // Controller is exprted
 type Controller struct {
+	httpClient      *http.HttpClient
 	Configuration   *etc.Configuration
 	Cluster         *cluster.Cluster
 	RepositoryCache *repository.RepositoryCache
@@ -26,6 +37,7 @@ func NewController(configuration *etc.Configuration) (*Controller, error) {
 	}
 
 	return &Controller{
+		httpClient:      http.NewWithTimeout(requestAPITimeout),
 		Configuration:   configuration,
 		Cluster:         cluster,
 		RepositoryCache: repositorycache,

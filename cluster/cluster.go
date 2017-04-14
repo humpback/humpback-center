@@ -289,18 +289,69 @@ func (cluster *Cluster) InGroupsContains(ip string, name string) bool {
 	return false
 }
 
+// GetMetaEnginesContainers is exported
+func (cluster *Cluster) GetMetaEnginesContainers(metaData *MetaData, metaEngines map[string]*Engine) *types.GroupContainer {
+
+	groupContainer := &types.GroupContainer{
+		MetaID:     metaData.MetaID,
+		Instances:  metaData.Instances,
+		WebHooks:   metaData.WebHooks,
+		Config:     metaData.Config,
+		Containers: make([]*types.EngineContainer, 0),
+	}
+
+	for _, baseConfig := range metaData.BaseConfigs {
+		for _, engine := range metaEngines {
+			if engine.IsHealthy() && engine.HasMetaID(metaData.MetaID) {
+				if container := engine.Container(baseConfig.ID); container != nil {
+					groupContainer.Containers = append(groupContainer.Containers, &types.EngineContainer{
+						IP:        engine.IP,
+						HostName:  engine.Name,
+						Container: container.Config.Container,
+					})
+					break
+				}
+			}
+		}
+	}
+	return groupContainer
+}
+
+// RefreshEnginesContainers is exported
+func (cluster *Cluster) RefreshEnginesContainers(metaEngines map[string]*Engine) {
+
+	waitGroup := sync.WaitGroup{}
+	for _, engine := range metaEngines {
+		if engine.IsHealthy() {
+			waitGroup.Add(1)
+			go func(e *Engine) {
+				e.RefreshContainers()
+				waitGroup.Done()
+			}(engine)
+		}
+	}
+	waitGroup.Wait()
+}
+
 // GetGroupAllContainers is exported
 func (cluster *Cluster) GetGroupAllContainers(groupid string) *types.GroupContainers {
 
-	group := cluster.GetGroup(groupid)
-	if group == nil {
-		return nil
-	}
-
-	groupContainers := types.GroupContainers{}
+	metaEngines := make(map[string]*Engine)
 	groupMetaData := cluster.configCache.GetGroupMetaData(groupid)
 	for _, metaData := range groupMetaData {
-		if groupContainer := cluster.GetGroupContainers(metaData.MetaID); groupContainer != nil {
+		if _, engines, err := cluster.GetMetaDataEngines(metaData.MetaID); err == nil {
+			for _, engine := range engines {
+				if engine.IsHealthy() && engine.HasMetaID(metaData.MetaID) {
+					metaEngines[engine.IP] = engine
+				}
+			}
+		}
+	}
+
+	cluster.RefreshEnginesContainers(metaEngines)
+	groupContainers := types.GroupContainers{}
+	for _, metaData := range groupMetaData {
+		if groupContainer := cluster.GetMetaEnginesContainers(metaData, metaEngines); groupContainer != nil {
 			groupContainers = append(groupContainers, groupContainer)
 		}
 	}
@@ -315,35 +366,14 @@ func (cluster *Cluster) GetGroupContainers(metaid string) *types.GroupContainer 
 		return nil
 	}
 
+	metaEngines := make(map[string]*Engine)
 	for _, engine := range engines {
-		if engine.IsHealthy() {
-			engine.RefreshContainers()
+		if engine.IsHealthy() && engine.HasMetaID(metaid) {
+			metaEngines[engine.IP] = engine
 		}
 	}
-
-	groupContainer := &types.GroupContainer{
-		MetaID:     metaData.MetaID,
-		Instances:  metaData.Instances,
-		WebHooks:   metaData.WebHooks,
-		Config:     metaData.Config,
-		Containers: make([]*types.EngineContainer, 0),
-	}
-
-	for _, baseConfig := range metaData.BaseConfigs {
-		for _, engine := range engines {
-			if engine.IsHealthy() {
-				if container := engine.Container(baseConfig.ID); container != nil {
-					groupContainer.Containers = append(groupContainer.Containers, &types.EngineContainer{
-						IP:        engine.IP,
-						HostName:  engine.Name,
-						Container: container.Config.Container,
-					})
-					break
-				}
-			}
-		}
-	}
-	return groupContainer
+	cluster.RefreshEnginesContainers(metaEngines)
+	return cluster.GetMetaEnginesContainers(metaData, metaEngines)
 }
 
 // GetGroup is exported
@@ -842,8 +872,8 @@ func (cluster *Cluster) createContainer(metaData *MetaData, filter *EnginesFilte
 	}
 
 	for _, engine := range engines {
-		if engine.IsHealthy() && len(engine.Containers(metaData.MetaID)) > 0 {
-			filter.Set(engine)
+		if engine.IsHealthy() && engine.HasMetaID(metaData.MetaID) {
+			filter.SetAllocEngine(engine)
 		}
 	}
 
@@ -855,7 +885,7 @@ func (cluster *Cluster) createContainer(metaData *MetaData, filter *EnginesFilte
 	engine := selectEngines[0]
 	container, err := engine.CreateContainer(config)
 	if err != nil {
-		filter.Set(engine)
+		filter.SetFailEngine(engine)
 		return engine, nil, err
 	}
 	return engine, container, nil
@@ -881,11 +911,15 @@ func (cluster *Cluster) selectEngines(engines []*Engine, filter *EnginesFilter, 
 		selectEngines = weightedEngines.Engines()
 	}
 
-	if len(selectEngines) > 0 && filter.Size() > 0 {
+	if len(selectEngines) > 0 {
 		filterEngines := filter.Filter(selectEngines)
 		if len(filterEngines) > 0 {
 			selectEngines = filterEngines
 		} else {
+			filterEngines = filter.AllocEngines()
+			if len(filterEngines) > 0 {
+				selectEngines = filterEngines
+			}
 			for i := len(selectEngines) - 1; i > 0; i-- {
 				j := cluster.randSeed.Intn(i + 1)
 				selectEngines[i], selectEngines[j] = selectEngines[j], selectEngines[i]
