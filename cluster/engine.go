@@ -22,7 +22,7 @@ import (
 
 const (
 	// engine send request timeout
-	requestTimeout = 15 * time.Second
+	requestTimeout = 3 * time.Minute
 	// engine refresh loop interval
 	refreshInterval = 30 * time.Second
 )
@@ -494,16 +494,19 @@ func (engine *Engine) ValidateContainers() {
 
 	// rename all expel containers, prevent container name conflicts.
 	for _, container := range expelContainers {
-		operate := models.ContainerOperate{
-			Action:    "rename",
-			Container: container.Info.ID,
-			NewName:   strings.TrimSuffix(container.Info.Name, "-expel") + "-expel",
+		expelName := strings.TrimSuffix(container.Info.Name, "-expel") + "-expel"
+		if container.Info.Name != expelName {
+			operate := models.ContainerOperate{
+				Action:    "rename",
+				Container: container.Info.ID,
+				NewName:   expelName,
+			}
+			if err := engine.OperateContainer(operate); err != nil {
+				logger.ERROR("[#cluster#] engine %s container %s expel, rename error:%s", engine.IP, container.Info.ID[:12], err.Error())
+				continue
+			}
+			logger.WARN("[#cluster#] engine %s container %s expel, rename to %s.", engine.IP, container.Info.ID[:12], operate.NewName)
 		}
-		if err := engine.OperateContainer(operate); err != nil {
-			logger.ERROR("[#cluster#] engine %s container %s expel, rename error:%s", engine.IP, container.Info.ID[:12], err.Error())
-			continue
-		}
-		logger.WARN("[#cluster#] engine %s container %s expel, rename to %s.", engine.IP, container.Info.ID[:12], operate.NewName)
 	}
 
 	// remove all expel containers

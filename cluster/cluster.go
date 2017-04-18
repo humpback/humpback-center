@@ -54,7 +54,7 @@ type Cluster struct {
 	upgraderCache     *UpgradeContainersCache
 	migtatorCache     *MigrateContainersCache
 	enginesPool       *EnginesPool
-	restorer          *Restorer
+	metaRestorer      *MetaRestorer
 	hooksProcessor    *HooksProcessor
 	pendingContainers map[string]*pendingContainer
 	engines           map[string]*Engine
@@ -104,14 +104,21 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		}
 	}
 
+	recoveryInterval := 120 * time.Second
+	if val, ret := driverOpts.String("recoveryinterval", ""); ret {
+		if dur, err := time.ParseDuration(val); err == nil {
+			recoveryInterval = dur
+		}
+	}
+
 	cacheRoot := ""
 	if val, ret := driverOpts.String("cacheroot", ""); ret {
 		cacheRoot = val
 	}
 
 	hooksProcessor := NewHooksProcessor()
-	restorer := NewRestorer()
 	enginesPool := NewEnginesPool()
+	metaRestorer := NewMetaRestorer(recoveryInterval)
 	migrateContainersCache := NewMigrateContainersCache(migratedelay)
 	configCache, err := NewContainersConfigCache(cacheRoot)
 	if err != nil {
@@ -128,7 +135,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		upgraderCache:     NewUpgradeContainersCache(upgradedelay, configCache),
 		migtatorCache:     migrateContainersCache,
 		enginesPool:       enginesPool,
-		restorer:          restorer,
+		metaRestorer:      metaRestorer,
 		hooksProcessor:    hooksProcessor,
 		pendingContainers: make(map[string]*pendingContainer),
 		engines:           make(map[string]*Engine),
@@ -137,7 +144,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 	}
 
 	hooksProcessor.SetCluster(cluster)
-	restorer.SetCluster(cluster)
+	metaRestorer.SetCluster(cluster)
 	enginesPool.SetCluster(cluster)
 	migrateContainersCache.SetCluster(cluster)
 	return cluster, nil
@@ -151,6 +158,7 @@ func (cluster *Cluster) Start() error {
 	if cluster.Discovery != nil {
 		logger.INFO("[#cluster#] discovery service watching...")
 		cluster.Discovery.Watch(cluster.stopCh, cluster.watchDiscoveryHandleFunc)
+		cluster.metaRestorer.Start()
 		return nil
 	}
 	return ErrClusterDiscoveryInvalid
@@ -164,6 +172,7 @@ func (cluster *Cluster) Stop() {
 
 	close(cluster.stopCh)
 	cluster.enginesPool.Release()
+	cluster.metaRestorer.Stop()
 	logger.INFO("[#cluster#] discovery service closed.")
 }
 
@@ -206,6 +215,18 @@ func (cluster *Cluster) GetEngine(ip string) *Engine {
 		return engine
 	}
 	return nil
+}
+
+// GetGroups is exported
+func (cluster *Cluster) GetGroups() []*Group {
+
+	cluster.RLock()
+	defer cluster.RUnlock()
+	groups := []*Group{}
+	for _, group := range cluster.groups {
+		groups = append(groups, group)
+	}
+	return groups
 }
 
 // GetEngineGroups is exported
@@ -588,11 +609,15 @@ func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) (*type
 
 	upgradeContainers := types.UpgradeContainers{}
 	if len(containers) > 0 {
+		ret := false
 		upgradeCh := make(chan bool)
 		cluster.upgraderCache.Upgrade(upgradeCh, metaData.MetaID, imagetag, containers)
-		<-upgradeCh
+		ret = <-upgradeCh
 		close(upgradeCh)
 		cluster.hooksProcessor.Hook(metaData, UpgradeMetaEvent)
+		if !ret {
+			return nil, fmt.Errorf("upgrade containers failure to %s", imagetag)
+		}
 		for _, engine := range engines {
 			if engine.IsHealthy() {
 				containers := engine.Containers(metaData.MetaID)

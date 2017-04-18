@@ -283,7 +283,7 @@ func putGroupUpgradeContainers(c *Context) error {
 		return c.JSON(http.StatusInternalServerError, result)
 	}
 
-	resp := response.NewGroupUpgradeContainersResponse(req.MetaID, "upgrade", upgradeContainers)
+	resp := response.NewGroupUpgradeContainersResponse(req.MetaID, "upgrade containers", upgradeContainers)
 	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "upgrade containers response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)

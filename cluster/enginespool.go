@@ -137,7 +137,6 @@ func (pool *EnginesPool) doLoop() {
 								pool.Cluster.engines[engine.IP] = engine
 								pool.Cluster.Unlock()
 								logger.INFO("[#cluster#] engine %s %s %s", engine.IP, engine.Name, engine.State())
-								pool.Cluster.restorer.RecoveryEngine(engine)
 							}
 							wgroup.Done()
 						}(pendEngine)

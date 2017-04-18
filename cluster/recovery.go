@@ -1,89 +1,73 @@
 package cluster
 
-import "github.com/humpback/gounits/utils"
-
 import (
-	"sync"
+	"time"
 )
 
-// Restorer is exported
-type Restorer struct {
-	sync.RWMutex
-	Cluster  *Cluster
-	isRuning bool
-	metaIds  []string
+// MetaRestorer is exported
+type MetaRestorer struct {
+	Cluster          *Cluster
+	recoveryInterval time.Duration
+	stopCh           chan struct{}
 }
 
-// NewRestorer is exported
-func NewRestorer() *Restorer {
+// NewMetaRestorer is exported
+func NewMetaRestorer(recoveryInterval time.Duration) *MetaRestorer {
 
-	return &Restorer{
-		isRuning: false,
-		metaIds:  []string{},
+	return &MetaRestorer{
+		recoveryInterval: recoveryInterval,
+		stopCh:           make(chan struct{}),
 	}
 }
 
 // SetCluster is exported
-func (restorer *Restorer) SetCluster(cluster *Cluster) {
+func (restorer *MetaRestorer) SetCluster(cluster *Cluster) {
 
 	restorer.Cluster = cluster
 }
 
-// RecoveryMetaID is exported
-func (restorer *Restorer) RecoveryMetaID(metaid string) {
+// Start is exported
+func (restorer *MetaRestorer) Start() {
 
-	restorer.Lock()
-	if ret := utils.Contains(metaid, restorer.metaIds); !ret {
-		restorer.metaIds = append(restorer.metaIds, metaid)
-	}
-	restorer.Unlock()
-
-	restorer.RLock()
-	defer restorer.RUnlock()
-	if !restorer.isRuning {
-		go restorer.recovery()
+	if restorer.Cluster != nil {
+		go restorer.doLoop()
 	}
 }
 
-// RecoveryGroup is exported
-func (restorer *Restorer) RecoveryGroup(group *Group) {
+// Stop is exported
+func (restorer *MetaRestorer) Stop() {
 
-	groupMetaData := restorer.Cluster.configCache.GetGroupMetaData(group.ID)
-	for _, metaData := range groupMetaData {
-		restorer.RecoveryMetaID(metaData.MetaID)
-	}
+	close(restorer.stopCh)
 }
 
-// RecoveryGroups is exported
-func (restorer *Restorer) RecoveryGroups(groups []*Group) {
+// doLoop is exported
+func (restorer *MetaRestorer) doLoop() {
 
-	for _, group := range groups {
-		restorer.RecoveryGroup(group)
+	for {
+		ticker := time.NewTicker(restorer.recoveryInterval)
+		select {
+		case <-ticker.C:
+			{
+				ticker.Stop()
+				if restorer.Cluster != nil {
+					metaids := []string{}
+					groups := restorer.Cluster.GetGroups()
+					for _, group := range groups {
+						groupMetaData := restorer.Cluster.configCache.GetGroupMetaData(group.ID)
+						for _, metaData := range groupMetaData {
+							metaids = append(metaids, metaData.MetaID)
+						}
+					}
+					for _, metaid := range metaids {
+						restorer.Cluster.RecoveryContainers(metaid)
+					}
+				}
+			}
+		case <-restorer.stopCh:
+			{
+				ticker.Stop()
+				return
+			}
+		}
 	}
-}
-
-// RecoveryEngine is exported
-func (restorer *Restorer) RecoveryEngine(engine *Engine) {
-
-	groups := restorer.Cluster.GetEngineGroups(engine)
-	if len(groups) > 0 {
-		restorer.RecoveryGroups(groups)
-	}
-}
-
-func (restorer *Restorer) recovery() {
-
-	restorer.Lock()
-	defer restorer.Unlock()
-	if restorer.isRuning {
-		return
-	}
-
-	restorer.isRuning = true
-	nLen := len(restorer.metaIds)
-	for i := 0; i < nLen; i++ {
-		restorer.Cluster.RecoveryContainers(restorer.metaIds[i])
-	}
-	restorer.metaIds = []string{}
-	restorer.isRuning = false
 }
