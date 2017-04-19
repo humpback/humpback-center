@@ -321,9 +321,10 @@ func (cluster *Cluster) GetMetaEnginesContainers(metaData *MetaData, metaEngines
 		Containers: make([]*types.EngineContainer, 0),
 	}
 
-	for _, baseConfig := range metaData.BaseConfigs {
+	baseConfigs := cluster.configCache.GetMetaDataBaseConfigs(metaData.MetaID)
+	for _, baseConfig := range baseConfigs {
 		for _, engine := range metaEngines {
-			if engine.IsHealthy() && engine.HasMetaID(metaData.MetaID) {
+			if engine.IsHealthy() && engine.HasMeta(metaData.MetaID) {
 				if container := engine.Container(baseConfig.ID); container != nil {
 					groupContainer.Containers = append(groupContainer.Containers, &types.EngineContainer{
 						IP:        engine.IP,
@@ -362,7 +363,7 @@ func (cluster *Cluster) GetGroupAllContainers(groupid string) *types.GroupContai
 	for _, metaData := range groupMetaData {
 		if _, engines, err := cluster.GetMetaDataEngines(metaData.MetaID); err == nil {
 			for _, engine := range engines {
-				if engine.IsHealthy() && engine.HasMetaID(metaData.MetaID) {
+				if engine.IsHealthy() && engine.HasMeta(metaData.MetaID) {
 					metaEngines[engine.IP] = engine
 				}
 			}
@@ -389,7 +390,7 @@ func (cluster *Cluster) GetGroupContainers(metaid string) *types.GroupContainer 
 
 	metaEngines := make(map[string]*Engine)
 	for _, engine := range engines {
-		if engine.IsHealthy() && engine.HasMetaID(metaid) {
+		if engine.IsHealthy() && engine.HasMeta(metaid) {
 			metaEngines[engine.IP] = engine
 		}
 	}
@@ -700,6 +701,21 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 		return ErrClusterContainersSetting
 	}
 
+	baseConfigs := cluster.configCache.GetMetaDataBaseConfigs(metaData.MetaID)
+	for _, baseConfig := range baseConfigs {
+		found := false
+		for _, engine := range engines {
+			if engine.IsHealthy() && engine.HasContainer(baseConfig.ID) {
+				found = true
+				break
+			}
+		}
+		if !found { //clean meta invalid container.
+			cluster.configCache.RemoveContainerBaseConfig(metaData.MetaID, baseConfig.ID)
+			logger.WARN("[#cluster#] recovery containers %s remove invalid container %s", metaData.MetaID, baseConfig.ID[:12])
+		}
+	}
+
 	if len(engines) > 0 {
 		baseConfigsCount := cluster.configCache.GetMetaDataBaseConfigsCount(metaData.MetaID)
 		if baseConfigsCount != -1 && metaData.Instances != baseConfigsCount {
@@ -897,7 +913,7 @@ func (cluster *Cluster) createContainer(metaData *MetaData, filter *EnginesFilte
 	}
 
 	for _, engine := range engines {
-		if engine.IsHealthy() && engine.HasMetaID(metaData.MetaID) {
+		if engine.IsHealthy() && engine.HasMeta(metaData.MetaID) {
 			filter.SetAllocEngine(engine)
 		}
 	}

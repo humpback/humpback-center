@@ -228,6 +228,18 @@ func (cache *ContainersConfigCache) GetMetaDataOfContainer(containerid string) *
 	return nil
 }
 
+// GetMetaDataBaseConfigs is exported
+func (cache *ContainersConfigCache) GetMetaDataBaseConfigs(metaid string) []*ContainerBaseConfig {
+
+	cache.RLock()
+	defer cache.RUnlock()
+	baseConfigs := []*ContainerBaseConfig{}
+	if metaData, ret := cache.data[metaid]; ret {
+		baseConfigs = metaData.BaseConfigs
+	}
+	return baseConfigs
+}
+
 // GetMetaDataBaseConfigsCount is exported
 // result < 0, not found metadata
 func (cache *ContainersConfigCache) GetMetaDataBaseConfigsCount(metaid string) int {

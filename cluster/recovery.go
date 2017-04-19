@@ -49,24 +49,40 @@ func (restorer *MetaRestorer) doLoop() {
 		case <-ticker.C:
 			{
 				ticker.Stop()
-				if restorer.Cluster != nil {
-					metaids := []string{}
-					groups := restorer.Cluster.GetGroups()
-					for _, group := range groups {
-						groupMetaData := restorer.Cluster.configCache.GetGroupMetaData(group.ID)
-						for _, metaData := range groupMetaData {
-							metaids = append(metaids, metaData.MetaID)
-						}
-					}
-					for _, metaid := range metaids {
-						restorer.Cluster.RecoveryContainers(metaid)
-					}
-				}
+				restorer.recovery()
 			}
 		case <-restorer.stopCh:
 			{
 				ticker.Stop()
 				return
+			}
+		}
+	}
+}
+
+func (restorer *MetaRestorer) recovery() {
+
+	if restorer.Cluster != nil {
+		metaids := []string{}
+		metaEngines := make(map[string]*Engine)
+		groups := restorer.Cluster.GetGroups()
+		for _, group := range groups {
+			groupMetaData := restorer.Cluster.configCache.GetGroupMetaData(group.ID)
+			for _, metaData := range groupMetaData {
+				metaids = append(metaids, metaData.MetaID)
+				if _, engines, err := restorer.Cluster.GetMetaDataEngines(metaData.MetaID); err == nil {
+					for _, engine := range engines {
+						if engine.IsHealthy() && engine.HasMeta(metaData.MetaID) {
+							metaEngines[engine.IP] = engine
+						}
+					}
+				}
+			}
+		}
+		if len(metaids) > 0 {
+			restorer.Cluster.RefreshEnginesContainers(metaEngines)
+			for _, metaid := range metaids {
+				restorer.Cluster.RecoveryContainers(metaid)
 			}
 		}
 	}

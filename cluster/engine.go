@@ -210,14 +210,28 @@ func (engine *Engine) MetaIds() []string {
 	return ids
 }
 
-// HasMetaID is exported
+// HasMeta is exported
 // find metaid in engine containers
-func (engine *Engine) HasMetaID(metaid string) bool {
+func (engine *Engine) HasMeta(metaid string) bool {
 
 	engine.RLock()
 	defer engine.RUnlock()
 	for _, container := range engine.containers {
 		if container.MetaID() == metaid {
+			return true
+		}
+	}
+	return false
+}
+
+// HasContainer is exported
+// find containerid in engine containers
+func (engine *Engine) HasContainer(containerid string) bool {
+
+	engine.RLock()
+	defer engine.RUnlock()
+	for _, container := range engine.containers {
+		if container.Info.ID == containerid {
 			return true
 		}
 	}
