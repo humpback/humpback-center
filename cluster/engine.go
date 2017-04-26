@@ -553,6 +553,7 @@ func (engine *Engine) refreshLoop() {
 					if err := engine.RefreshContainers(); err != nil {
 						logger.ERROR("[#cluster#] engine %s refresh containers error:%s", engine.IP, err.Error())
 					}
+					engine.ValidateContainers()
 				}
 			}
 		case <-engine.stopCh:
