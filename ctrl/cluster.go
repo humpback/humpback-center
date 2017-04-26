@@ -117,9 +117,9 @@ func (c *Controller) GetClusterGroupContainersMetaBase(metaid string) *cluster.M
 	return c.Cluster.GetMetaBase(metaid)
 }
 
-func (c *Controller) GetClusterGroupEngines(groupid string) []*cluster.Engine {
+func (c *Controller) GetClusterGroupAllEngines(groupid string) []*cluster.Engine {
 
-	return c.Cluster.GetGroupEngines(groupid)
+	return c.Cluster.GetGroupAllEngines(groupid)
 }
 
 func (c *Controller) GetClusterEngine(server string) *cluster.Engine {

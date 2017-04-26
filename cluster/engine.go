@@ -329,7 +329,7 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 
 	defer respCreated.Close()
 	if respCreated.StatusCode() != 200 {
-		return nil, fmt.Errorf("engine %s, create container %s failure %d %s", engine.IP, config.Name, respCreated.StatusCode(), respCreated.String())
+		return nil, fmt.Errorf("engine %s, create container %s failure, %s", engine.IP, config.Name, ctypes.ParseHTTPResponseError(respCreated))
 	}
 
 	createContainerResponse := &ctypes.CreateContainerResponse{}
@@ -372,7 +372,7 @@ func (engine *Engine) RemoveContainer(containerid string) error {
 
 	defer respRemoved.Close()
 	if respRemoved.StatusCode() != 200 {
-		return fmt.Errorf("engine %s, remove container %s failure %d %s", engine.IP, containerid[:12], respRemoved.StatusCode(), respRemoved.String())
+		return fmt.Errorf("engine %s, remove container %s failure, %s", engine.IP, containerid[:12], ctypes.ParseHTTPResponseError(respRemoved))
 	}
 
 	logger.INFO("[#cluster#] engine %s, remove container %s", engine.IP, containerid[:12])
@@ -402,7 +402,7 @@ func (engine *Engine) OperateContainer(operate models.ContainerOperate) error {
 
 	defer respOperated.Close()
 	if respOperated.StatusCode() != 200 {
-		return fmt.Errorf("engine %s, %s container %s failure %d %s", engine.IP, operate.Action, operate.Container[:12], respOperated.StatusCode(), respOperated.String())
+		return fmt.Errorf("engine %s, %s container %s failure, %s", engine.IP, operate.Action, operate.Container[:12], ctypes.ParseHTTPResponseError(respOperated))
 	}
 
 	logger.INFO("[#cluster#] engine %s, %s container %s", engine.IP, operate.Action, operate.Container[:12])
@@ -431,7 +431,7 @@ func (engine *Engine) UpgradeContainer(operate models.ContainerOperate) (*Contai
 
 	defer respUpgraded.Close()
 	if respUpgraded.StatusCode() != 200 {
-		return nil, fmt.Errorf("engine %s, %s container %s failure %d %s", engine.IP, operate.Action, operate.Container[:12], respUpgraded.StatusCode(), respUpgraded.String())
+		return nil, fmt.Errorf("engine %s, %s container %s failure, %s", engine.IP, operate.Action, operate.Container[:12], ctypes.ParseHTTPResponseError(respUpgraded))
 	}
 
 	upgradeContainerResponse := &ctypes.UpgradeContainerResponse{}
@@ -468,7 +468,7 @@ func (engine *Engine) RefreshContainers() error {
 
 	defer respContainers.Close()
 	if respContainers.StatusCode() != 200 {
-		return fmt.Errorf("engine %s, refresh containers failure %d %s", engine.IP, respContainers.StatusCode(), respContainers.String())
+		return fmt.Errorf("engine %s, refresh containers failure, %s", engine.IP, ctypes.ParseHTTPResponseError(respContainers))
 	}
 
 	dockerContainers := []types.Container{}
@@ -545,12 +545,14 @@ func (engine *Engine) refreshLoop() {
 		case <-runTicker.C:
 			{
 				runTicker.Stop()
-				if engine.IsHealthy() && time.Since(lastPrefUpdateAt) > perfUpdateInterval {
-					//engine.updatePerformance()
-					lastPrefUpdateAt = time.Now()
-				}
-				if err := engine.RefreshContainers(); err != nil {
-					logger.ERROR("[#cluster#] engine %s refresh containers error:%s", engine.IP, err.Error())
+				if engine.IsHealthy() {
+					if time.Since(lastPrefUpdateAt) > perfUpdateInterval {
+						//engine.updatePerformance()
+						lastPrefUpdateAt = time.Now()
+					}
+					if err := engine.RefreshContainers(); err != nil {
+						logger.ERROR("[#cluster#] engine %s refresh containers error:%s", engine.IP, err.Error())
+					}
 				}
 			}
 		case <-engine.stopCh:
@@ -572,7 +574,7 @@ func (engine *Engine) updateSpecs() error {
 
 	defer respSpecs.Close()
 	if respSpecs.StatusCode() != 200 {
-		return fmt.Errorf("engine %s, update specs failure %d %s", respSpecs.StatusCode(), respSpecs.String())
+		return fmt.Errorf("engine %s, update specs failure, %s", engine.IP, ctypes.ParseHTTPResponseError(respSpecs))
 	}
 
 	dockerInfo := &types.Info{}
@@ -631,7 +633,7 @@ func (engine *Engine) updateContainer(containerid string, containers map[string]
 
 	defer respContainer.Close()
 	if respContainer.StatusCode() != 200 {
-		return nil, fmt.Errorf("engine %s, update container %s failure %d %s", engine.IP, containerid[:12], respContainer.StatusCode(), respContainer.StatusCode())
+		return nil, fmt.Errorf("engine %s, update container %s failure, %s", engine.IP, containerid[:12], ctypes.ParseHTTPResponseError(respContainer))
 	}
 
 	containerJSON := &types.ContainerJSON{}

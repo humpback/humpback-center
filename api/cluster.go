@@ -95,7 +95,7 @@ func getGroupEngines(c *Context) error {
 	}
 
 	logger.INFO("[#api#] %s resolve get group engines request successed. %+v", c.ID, req)
-	engines := c.Controller.GetClusterGroupEngines(req.GroupID)
+	engines := c.Controller.GetClusterGroupAllEngines(req.GroupID)
 	if engines == nil {
 		logger.ERROR("[#api#] %s get group engines group %s not found.", c.ID, req.GroupID)
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, "group not found")

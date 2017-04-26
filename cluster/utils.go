@@ -4,6 +4,24 @@ import (
 	"sort"
 )
 
+// searchServerOfEngines is exported
+func searchServerOfEngines(server Server, engines map[string]*Engine) *Engine {
+
+	//priority ip
+	if server.IP != "" {
+		if engine, ret := engines[server.IP]; ret {
+			return engine
+		}
+	} else if server.Name != "" {
+		for _, engine := range engines {
+			if server.Name == engine.Name {
+				return engine
+			}
+		}
+	}
+	return nil
+}
+
 // selectIPOrName is exported
 func selectIPOrName(ip string, name string) string {
 

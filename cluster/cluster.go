@@ -255,33 +255,54 @@ func (cluster *Cluster) GetEngineGroups(engine *Engine) []*Group {
 	return groups
 }
 
-// GetGroupEngines is exported
-func (cluster *Cluster) GetGroupEngines(groupid string) []*Engine {
+// GetGroupAllEngines is exported
+// Returns all engine under group and contains offline (cluster engines not exists.)
+func (cluster *Cluster) GetGroupAllEngines(groupid string) []*Engine {
 
 	cluster.RLock()
 	defer cluster.RUnlock()
-	engines := []*Engine{}
 	group, ret := cluster.groups[groupid]
 	if !ret {
 		return nil
 	}
 
-	//priority ip
+	engines := []*Engine{}
 	for _, server := range group.Servers {
-		if server.IP != "" {
-			for _, engine := range cluster.engines {
-				if server.IP == engine.IP {
-					engines = append(engines, engine)
-					break
-				}
+		engine := searchServerOfEngines(server, cluster.engines)
+		if engine == nil {
+			engine = &Engine{
+				ID:        "",
+				Name:      server.Name,
+				IP:        server.IP,
+				APIAddr:   "",
+				Cpus:      0,
+				Memory:    0,
+				Labels:    make(map[string]string),
+				StateText: stateText[StateDisconnected],
+				state:     StateDisconnected,
 			}
-		} else if server.Name != "" {
-			for _, engine := range cluster.engines {
-				if server.Name == engine.Name {
-					engines = append(engines, engine)
-					break
-				}
-			}
+		}
+		engines = append(engines, engine)
+	}
+	engines = removeDuplicatesEngines(engines)
+	return engines
+}
+
+// GetGroupEngines is exported
+// Returns pairs engine under group and cluster engines is exists
+func (cluster *Cluster) GetGroupEngines(groupid string) []*Engine {
+
+	cluster.RLock()
+	defer cluster.RUnlock()
+	group, ret := cluster.groups[groupid]
+	if !ret {
+		return nil
+	}
+
+	engines := []*Engine{}
+	for _, server := range group.Servers {
+		if engine := searchServerOfEngines(server, cluster.engines); engine != nil {
+			engines = append(engines, engine)
 		}
 	}
 	engines = removeDuplicatesEngines(engines)
@@ -435,6 +456,8 @@ func (cluster *Cluster) SetGroup(group *Group) {
 	} else {
 		origins := pGroup.Servers
 		pGroup.Servers = group.Servers
+		pGroup.IsCluster = group.IsCluster
+		pGroup.ContactInfo = group.ContactInfo
 		logger.INFO("[#cluster#] group changed %s(%d)", pGroup.ID, len(pGroup.Servers))
 		for _, originServer := range origins {
 			found := false
@@ -466,14 +489,14 @@ func (cluster *Cluster) SetGroup(group *Group) {
 	for _, server := range removeServers {
 		if nodeData := cluster.nodeCache.Get(selectIPOrName(server.IP, server.Name)); nodeData != nil {
 			if ret := cluster.InGroupsContains(nodeData.IP, nodeData.Name); !ret {
-				logger.INFO("[#cluster#] group changed, remove to pendengines %s\t%s", server.IP, server.Name)
+				logger.INFO("[#cluster#] group %s remove server to pendengines %s\t%s", pGroup.ID, server.IP, server.Name)
 				cluster.enginesPool.RemoveEngine(server.IP, server.Name)
 			}
 		}
 	}
 
 	for _, server := range addServers {
-		logger.INFO("[#cluster#] group changed, append to pendengines %s\t%s", server.IP, server.Name)
+		logger.INFO("[#cluster#] group %s append server to pendengines %s\t%s", pGroup.ID, server.IP, server.Name)
 		cluster.enginesPool.AddEngine(server.IP, server.Name)
 	}
 }
@@ -796,10 +819,14 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 	}
 
 	metaData := cluster.configCache.CreateMetaData(groupid, instances, webhooks, config)
-	createdContainers := cluster.createContainers(metaData, instances, config)
+	createdContainers, err := cluster.createContainers(metaData, instances, config)
 	if len(createdContainers) == 0 {
 		cluster.configCache.RemoveMetaData(metaData.MetaID)
-		return "", nil, ErrClusterCreateContainerFailure
+		var resultErr string
+		if err != nil {
+			resultErr = err.Error()
+		}
+		return "", nil, fmt.Errorf("%s, %s\n", ErrClusterCreateContainerFailure.Error(), resultErr)
 	}
 	cluster.hooksProcessor.Hook(metaData, CreateMetaEvent)
 	return metaData.MetaID, &createdContainers, nil
@@ -851,7 +878,7 @@ func (cluster *Cluster) reduceContainer(metaData *MetaData) (*Engine, *Container
 }
 
 // createContainers is exported
-func (cluster *Cluster) createContainers(metaData *MetaData, instances int, config models.Container) types.CreatedContainers {
+func (cluster *Cluster) createContainers(metaData *MetaData, instances int, config models.Container) (types.CreatedContainers, error) {
 
 	cluster.Lock()
 	cluster.pendingContainers[config.Name] = &pendingContainer{
@@ -861,6 +888,7 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 	}
 	cluster.Unlock()
 
+	var resultErr error
 	createdContainers := types.CreatedContainers{}
 	filter := NewEnginesFilter()
 	for ; instances > 0; instances-- {
@@ -878,6 +906,7 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 		engine, container, err := cluster.createContainer(metaData, filter, containerConfig)
 		if err != nil {
 			if err == ErrClusterNoEngineAvailable {
+				resultErr = err
 				logger.ERROR("[#cluster#] create container %s, error:%s", containerConfig.Name, err.Error())
 				continue
 			}
@@ -887,6 +916,7 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 				engine, container, err = cluster.createContainer(metaData, filter, containerConfig)
 			}
 			if err != nil {
+				resultErr = err
 				if err == ErrClusterNoEngineAvailable {
 					logger.ERROR("[#cluster#] create container %s, error:%s", containerConfig.Name, err.Error())
 				} else {
@@ -901,7 +931,7 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 	cluster.Lock()
 	delete(cluster.pendingContainers, config.Name)
 	cluster.Unlock()
-	return createdContainers
+	return createdContainers, resultErr
 }
 
 // createContainer is exported
