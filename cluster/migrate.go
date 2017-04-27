@@ -305,7 +305,6 @@ func (migrator *Migrator) Update(metaid string, containers Containers) {
 				migrator.containers = append(migrator.containers, mContainer)
 				migrator.Unlock()
 			}
-
 		}
 	}
 }

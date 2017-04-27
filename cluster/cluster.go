@@ -818,7 +818,12 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 		return "", nil, ErrClusterCreateContainerNameConflict
 	}
 
-	metaData := cluster.configCache.CreateMetaData(groupid, instances, webhooks, config)
+	metaData, err := cluster.configCache.CreateMetaData(groupid, instances, webhooks, config)
+	if err != nil {
+		logger.ERROR("[#cluster#] create containers error %s : %s", groupid, ErrClusterContainersMetaCreateFailure)
+		return "", nil, ErrClusterContainersMetaCreateFailure
+	}
+
 	createdContainers, err := cluster.createContainers(metaData, instances, config)
 	if len(createdContainers) == 0 {
 		cluster.configCache.RemoveMetaData(metaData.MetaID)

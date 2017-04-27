@@ -476,7 +476,7 @@ func (engine *Engine) RefreshContainers() error {
 		return err
 	}
 
-	//logger.INFO("[#cluster#] engine %s %s refresh containers.", engine.IP, engine.State())
+	logger.INFO("[#cluster#] engine %s %s refresh containers.", engine.IP, engine.State())
 	merged := make(map[string]*Container)
 	for _, container := range dockerContainers {
 		mergedUpdate, err := engine.updateContainer(container.ID, merged)

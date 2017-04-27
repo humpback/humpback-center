@@ -322,7 +322,7 @@ func (cache *ContainersConfigCache) RemoveGroupMetaData(groupid string) bool {
 }
 
 // CreateMetaData is exported
-func (cache *ContainersConfigCache) CreateMetaData(groupid string, instances int, webhooks types.WebHooks, config models.Container) *MetaData {
+func (cache *ContainersConfigCache) CreateMetaData(groupid string, instances int, webhooks types.WebHooks, config models.Container) (*MetaData, error) {
 
 	cache.Lock()
 	defer cache.Unlock()
@@ -344,9 +344,12 @@ func (cache *ContainersConfigCache) CreateMetaData(groupid string, instances int
 		},
 		BaseConfigs: []*ContainerBaseConfig{},
 	}
+
+	if err := cache.writeMetaData(metaData); err != nil {
+		return nil, err
+	}
 	cache.data[metaid] = metaData
-	cache.writeMetaData(metaData)
-	return metaData
+	return metaData, nil
 }
 
 // GetContainerBaseConfig is exported

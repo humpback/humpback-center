@@ -16,6 +16,8 @@ var (
 	ErrClusterNoEngineAvailable = errors.New("cluster no docker-engine available")
 	//cluster containers instances invalid.
 	ErrClusterContainersInstancesInvalid = errors.New("cluster containers instances invalid")
+	//cluster containers meta create failure
+	ErrClusterContainersMetaCreateFailure = errors.New("cluster containers meta create failure")
 	//cluster create containers name conflict
 	ErrClusterCreateContainerNameConflict = errors.New("cluster create containers name conflict, this cluster already exists")
 	//cluster create containers all failure
