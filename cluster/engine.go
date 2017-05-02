@@ -22,7 +22,7 @@ import (
 
 const (
 	// engine send request timeout
-	requestTimeout = 3 * time.Minute
+	requestTimeout = 180 * time.Second
 	// engine refresh loop interval
 	refreshInterval = 30 * time.Second
 )
@@ -418,6 +418,21 @@ func (engine *Engine) OperateContainer(operate models.ContainerOperate) error {
 // Engine upgrade a container.
 func (engine *Engine) UpgradeContainer(operate models.ContainerOperate) (*Container, error) {
 
+	validBaseConfig := false
+	baseConfig := ContainerBaseConfig{}
+	engine.RLock()
+	if container, ret := engine.containers[operate.Container]; ret {
+		if container.BaseConfig != nil {
+			baseConfig = *container.BaseConfig
+			validBaseConfig = true
+		}
+	}
+	engine.RUnlock()
+
+	if !validBaseConfig {
+		return nil, fmt.Errorf("engine %s upgrade container %s baseconfig invalid.", engine.IP, operate.Container[:12])
+	}
+
 	buf := bytes.NewBuffer([]byte{})
 	if err := json.NewEncoder(buf).Encode(operate); err != nil {
 		return nil, err
@@ -439,6 +454,11 @@ func (engine *Engine) UpgradeContainer(operate models.ContainerOperate) (*Contai
 		return nil, err
 	}
 
+	baseConfig.ID = upgradeContainerResponse.ID
+	imageNameSplit := strings.SplitN(baseConfig.Image, ":", 2)
+	baseConfig.Image = imageNameSplit[0] + ":" + operate.ImageTag
+	engine.configCache.CreateContainerBaseConfig(baseConfig.MetaData.MetaID, &baseConfig)
+	engine.configCache.RemoveContainerBaseConfig(baseConfig.MetaData.MetaID, operate.Container)
 	logger.INFO("[#cluster#] engine %s, %s container %s to %s", engine.IP, operate.Action, operate.Container[:12], upgradeContainerResponse.ID[:12])
 	containers, err := engine.updateContainer(upgradeContainerResponse.ID, engine.containers)
 	if err != nil {
@@ -502,7 +522,17 @@ func (engine *Engine) ValidateContainers() {
 	containers := engine.Containers("")
 	for _, container := range containers {
 		if !container.ValidateConfig() {
-			expelContainers = append(expelContainers, container)
+			containers, err := engine.updateContainer(container.Info.ID, engine.containers)
+			if err != nil {
+				expelContainers = append(expelContainers, container)
+				continue
+			}
+			engine.Lock()
+			engine.containers = containers
+			engine.Unlock()
+			if !container.ValidateConfig() {
+				expelContainers = append(expelContainers, container)
+			}
 		}
 	}
 

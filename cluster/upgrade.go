@@ -34,7 +34,7 @@ type UpgradeContainer struct {
 
 // Execute is exported
 // upgrade originalContainer to image new tag
-func (upgradeContainer *UpgradeContainer) Execute(imageTag string) error {
+func (upgradeContainer *UpgradeContainer) Execute(newImageTag string) error {
 
 	engine := upgradeContainer.Original.Engine
 	if !engine.IsHealthy() {
@@ -43,21 +43,20 @@ func (upgradeContainer *UpgradeContainer) Execute(imageTag string) error {
 	}
 
 	originalContainer := upgradeContainer.Original
-	operateContainer := models.ContainerOperate{Action: "upgrade", Container: originalContainer.Config.ID, ImageTag: imageTag}
-	newContainer, err := engine.UpgradeContainer(operateContainer)
+	containerOperate := models.ContainerOperate{Action: "upgrade", Container: originalContainer.Config.ID, ImageTag: newImageTag}
+	newContainer, err := engine.UpgradeContainer(containerOperate)
 	if err != nil {
 		upgradeContainer.State = UpgradeFailure
 		return fmt.Errorf("engine %s %s", engine.IP, err.Error())
 	}
 	upgradeContainer.New = newContainer
 	upgradeContainer.State = UpgradeCompleted
-	engine.RefreshContainers()
 	return nil
 }
 
 // Recovery is exported
 // upgrade container failure, recovery completed containers to original image tag
-func (upgradeContainer *UpgradeContainer) Recovery(imageTag string) error {
+func (upgradeContainer *UpgradeContainer) Recovery(originalImageTag string) error {
 
 	engine := upgradeContainer.Original.Engine
 	if !engine.IsHealthy() {
@@ -66,106 +65,86 @@ func (upgradeContainer *UpgradeContainer) Recovery(imageTag string) error {
 
 	upgradeContainer.State = UpgradeFailure
 	newContainer := upgradeContainer.New
-	operateContainer := models.ContainerOperate{Action: "upgrade", Container: newContainer.Config.ID, ImageTag: imageTag}
-	newContainer, err := engine.UpgradeContainer(operateContainer)
+	containerOperate := models.ContainerOperate{Action: "upgrade", Container: newContainer.Config.ID, ImageTag: originalImageTag}
+	newContainer, err := engine.UpgradeContainer(containerOperate)
 	if err != nil {
 		return fmt.Errorf("engine %s %s", engine.IP, err.Error())
 	}
 	upgradeContainer.Original = newContainer
 	upgradeContainer.State = UpgradeRecovery
-	engine.RefreshContainers()
 	return nil
 }
 
 // Upgrader is exported
 type Upgrader struct {
 	sync.RWMutex
-	MetaID           string
-	OriginalImageTag string
-	NewImageTag      string
-	delayInterval    time.Duration
-	callback         UpgraderHandleFunc
-	configCache      *ContainersConfigCache
-	containers       []*UpgradeContainer
+	MetaID        string
+	OriginalTag   string
+	NewTag        string
+	configCache   *ContainersConfigCache
+	delayInterval time.Duration
+	callback      UpgraderHandleFunc
+	containers    []*UpgradeContainer
 }
 
 // NewUpgrader is exported
-func NewUpgrader(metaid string, imageTag string, containers Containers, upgradeDelay time.Duration,
+func NewUpgrader(metaid string, originalTag string, newTag string, containers Containers, upgradeDelay time.Duration,
 	configCache *ContainersConfigCache, callback UpgraderHandleFunc) *Upgrader {
-
-	metaData := configCache.GetMetaData(metaid)
-	if metaData == nil {
-		return nil
-	}
 
 	upgradeContainers := []*UpgradeContainer{}
 	for _, container := range containers {
-		upgradeContainers = append(upgradeContainers, &UpgradeContainer{
-			Original: container,
-			New:      nil,
-			State:    UpgradeReady,
-		})
+		if container.BaseConfig != nil && container.Engine != nil {
+			upgradeContainers = append(upgradeContainers, &UpgradeContainer{
+				Original: container,
+				New:      nil,
+				State:    UpgradeReady,
+			})
+		}
 	}
 
 	return &Upgrader{
-		MetaID:           metaid,
-		OriginalImageTag: metaData.ImageTag,
-		NewImageTag:      imageTag,
-		delayInterval:    upgradeDelay,
-		callback:         callback,
-		configCache:      configCache,
-		containers:       upgradeContainers,
+		MetaID:        metaid,
+		OriginalTag:   originalTag,
+		NewTag:        newTag,
+		configCache:   configCache,
+		delayInterval: upgradeDelay,
+		callback:      callback,
+		containers:    upgradeContainers,
 	}
 }
 
 // Start is exported
 func (upgrader *Upgrader) Start(upgradeCh chan<- bool) {
 
+	var (
+		err     error
+		ret     bool
+		errMsgs []string
+	)
+
+	ret = true
+	errMsgs = []string{}
 	upgrader.Lock()
 	defer upgrader.Unlock()
-	var err error
-	ret := true
-	errMsgs := []string{}
-
-	upgrader.configCache.SetImageTag(upgrader.MetaID, upgrader.NewImageTag)
+	upgrader.configCache.SetImageTag(upgrader.MetaID, upgrader.NewTag)
 	for _, upgradeContainer := range upgrader.containers {
-		if err = upgradeContainer.Execute(upgrader.NewImageTag); err != nil {
+		if err = upgradeContainer.Execute(upgrader.NewTag); err != nil {
 			upgrader.configCache.RemoveContainerBaseConfig(upgrader.MetaID, upgradeContainer.Original.Config.ID)
 			errMsgs = append(errMsgs, "upgrade container execute, "+err.Error())
 			logger.ERROR("[#cluster#] upgrade container %s execute %s", upgradeContainer.Original.Config.ID[:12], err.Error())
 			break
 		}
-		if upgradeContainer.State == UpgradeCompleted {
-			baseConfig := ContainerBaseConfig{}
-			baseConfig = *(upgradeContainer.Original.BaseConfig)
-			baseConfig.ID = upgradeContainer.New.Config.ID
-			baseConfig.Image = upgradeContainer.New.Config.Image
-			upgradeContainer.New.BaseConfig = &baseConfig
-			upgrader.configCache.CreateContainerBaseConfig(upgrader.MetaID, &baseConfig)
-			upgrader.configCache.RemoveContainerBaseConfig(upgrader.MetaID, upgradeContainer.Original.Config.ID)
-			time.Sleep(upgrader.delayInterval)
-		}
 	}
 
 	if err != nil { //recovery upgrade completed containers
 		ret = false
-		upgrader.configCache.SetImageTag(upgrader.MetaID, upgrader.OriginalImageTag)
+		upgrader.configCache.SetImageTag(upgrader.MetaID, upgrader.OriginalTag)
 		for _, upgradeContainer := range upgrader.containers {
 			if upgradeContainer.State == UpgradeCompleted {
-				if err := upgradeContainer.Recovery(upgrader.OriginalImageTag); err != nil {
+				if err := upgradeContainer.Recovery(upgrader.OriginalTag); err != nil {
 					upgrader.configCache.RemoveContainerBaseConfig(upgrader.MetaID, upgradeContainer.New.Config.ID)
 					errMsgs = append(errMsgs, "upgrade container recovery, "+err.Error())
 					logger.ERROR("[#cluster#] upgrade container %s recovery %s", upgradeContainer.New.Config.ID[:12], err.Error())
-				}
-				if upgradeContainer.State == UpgradeRecovery {
-					baseConfig := ContainerBaseConfig{}
-					baseConfig = *(upgradeContainer.New.BaseConfig)
-					baseConfig.ID = upgradeContainer.Original.Config.ID
-					baseConfig.Image = upgradeContainer.Original.Config.Image
-					upgradeContainer.Original.BaseConfig = &baseConfig
-					upgrader.configCache.CreateContainerBaseConfig(upgrader.MetaID, &baseConfig)
-					upgrader.configCache.RemoveContainerBaseConfig(upgrader.MetaID, upgradeContainer.New.Config.ID)
-					time.Sleep(upgrader.delayInterval)
 				}
 			}
 		}
@@ -180,30 +159,45 @@ type UpgraderHandleFunc func(upgrader *Upgrader, errMsgs []string)
 // UpgradeContainersCache is exported
 type UpgradeContainersCache struct {
 	sync.RWMutex
+	Cluster       *Cluster
 	delayInterval time.Duration
-	configCache   *ContainersConfigCache
 	upgraders     map[string]*Upgrader
 }
 
 // NewUpgradeContainersCache is exported
-func NewUpgradeContainersCache(upgradeDelay time.Duration, configCache *ContainersConfigCache) *UpgradeContainersCache {
+func NewUpgradeContainersCache(upgradeDelay time.Duration) *UpgradeContainersCache {
 
 	return &UpgradeContainersCache{
 		delayInterval: upgradeDelay,
-		configCache:   configCache,
 		upgraders:     make(map[string]*Upgrader),
 	}
 }
 
+// SetCluster is exported
+func (cache *UpgradeContainersCache) SetCluster(cluster *Cluster) {
+
+	cache.Cluster = cluster
+}
+
 // Upgrade is exported
-func (cache *UpgradeContainersCache) Upgrade(upgradeCh chan<- bool, metaid string, imageTag string, containers Containers) {
+func (cache *UpgradeContainersCache) Upgrade(upgradeCh chan<- bool, metaid string, newTag string, containers Containers) {
+
+	if cache.Cluster == nil || cache.Cluster.configCache == nil {
+		return
+	}
+
+	configCache := cache.Cluster.configCache
+	metaData := configCache.GetMetaData(metaid)
+	if metaData == nil {
+		return
+	}
 
 	cache.Lock()
 	if _, ret := cache.upgraders[metaid]; !ret {
-		upgrader := NewUpgrader(metaid, imageTag, containers, cache.delayInterval, cache.configCache, cache.UpgraderHandleFunc)
+		upgrader := NewUpgrader(metaData.MetaID, metaData.ImageTag, newTag, containers, cache.delayInterval, configCache, cache.UpgraderHandleFunc)
 		if upgrader != nil {
-			cache.upgraders[metaid] = upgrader
-			logger.INFO("[#cluster#] upgrade start %s > %s", metaid, imageTag)
+			cache.upgraders[metaData.MetaID] = upgrader
+			logger.INFO("[#cluster#] upgrade start %s > %s", upgrader.MetaID, upgrader.NewTag)
 			go upgrader.Start(upgradeCh)
 		}
 	}
@@ -225,9 +219,20 @@ func (cache *UpgradeContainersCache) UpgraderHandleFunc(upgrader *Upgrader, errM
 	cache.Lock()
 	delete(cache.upgraders, upgrader.MetaID)
 	cache.Unlock()
+	if cache.Cluster != nil {
+		if _, engines, err := cache.Cluster.GetMetaDataEngines(upgrader.MetaID); err == nil {
+			metaEngines := make(map[string]*Engine)
+			for _, engine := range engines {
+				if engine.IsHealthy() && engine.HasMeta(upgrader.MetaID) {
+					metaEngines[engine.IP] = engine
+				}
+			}
+			cache.Cluster.RefreshEnginesContainers(metaEngines)
+		}
+	}
 	if len(errMsgs) > 0 {
-		logger.ERROR("[#cluster#] upgrade failure %s > %s", upgrader.MetaID, upgrader.NewImageTag)
+		logger.ERROR("[#cluster#] upgrade failure %s > %s", upgrader.MetaID, upgrader.NewTag)
 	} else {
-		logger.INFO("[#cluster#] upgrade done %s > %s", upgrader.MetaID, upgrader.NewImageTag)
+		logger.INFO("[#cluster#] upgrade done %s > %s", upgrader.MetaID, upgrader.NewTag)
 	}
 }

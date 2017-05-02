@@ -120,6 +120,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 	enginesPool := NewEnginesPool()
 	metaRestorer := NewMetaRestorer(recoveryInterval)
 	migrateContainersCache := NewMigrateContainersCache(migratedelay)
+	upgraderContainersCache := NewUpgradeContainersCache(upgradedelay)
 	configCache, err := NewContainersConfigCache(cacheRoot)
 	if err != nil {
 		return nil, err
@@ -132,7 +133,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		randSeed:          rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
 		nodeCache:         NewNodeCache(),
 		configCache:       configCache,
-		upgraderCache:     NewUpgradeContainersCache(upgradedelay, configCache),
+		upgraderCache:     upgraderContainersCache,
 		migtatorCache:     migrateContainersCache,
 		enginesPool:       enginesPool,
 		metaRestorer:      metaRestorer,
@@ -147,6 +148,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 	metaRestorer.SetCluster(cluster)
 	enginesPool.SetCluster(cluster)
 	migrateContainersCache.SetCluster(cluster)
+	upgraderContainersCache.SetCluster(cluster)
 	return cluster, nil
 }
 
@@ -715,12 +717,12 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 
 	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
-		logger.ERROR("[#cluster#] recovery containers %s error, %s", metaid, err.Error())
+		logger.WARN("[#cluster#] recovery containers %s error, %s", metaid, err.Error())
 		return err
 	}
 
 	if ret := cluster.containsPendingContainers(metaData.GroupID, metaData.Config.Name); ret {
-		logger.ERROR("[#cluster#] recovery containers %s error, %s", metaData.MetaID, ErrClusterContainersSetting)
+		logger.WARN("[#cluster#] recovery containers %s error, %s", metaData.MetaID, ErrClusterContainersSetting)
 		return ErrClusterContainersSetting
 	}
 
