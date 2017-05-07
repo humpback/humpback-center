@@ -49,6 +49,7 @@ func NewController(configuration *etc.Configuration) (*Controller, error) {
 func (c *Controller) Initialize() error {
 
 	logger.INFO("[#ctrl#] controller initialize.....")
+	logger.INFO("[#ctrl#] configuration %+v", c.Configuration)
 	return c.startCluster()
 }
 

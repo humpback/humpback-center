@@ -8,6 +8,7 @@ import (
 	"os"
 )
 
+// Configuration is exported
 type Configuration struct {
 
 	//base options
@@ -40,6 +41,7 @@ type Configuration struct {
 	} `yaml:"logger"`
 }
 
+// NewConfiguration is exported
 func NewConfiguration(file string) (*Configuration, error) {
 
 	fd, err := os.OpenFile(file, os.O_RDWR, 0777)
@@ -53,18 +55,23 @@ func NewConfiguration(file string) (*Configuration, error) {
 		return nil, err
 	}
 
-	configuration := &Configuration{}
-	if err := yaml.Unmarshal([]byte(data), configuration); err != nil {
+	conf := &Configuration{}
+	if err := yaml.Unmarshal([]byte(data), conf); err != nil {
 		return nil, err
 	}
-	return configuration, nil
+
+	if err := conf.ParseEnv(); err != nil {
+		return nil, err
+	}
+	return conf, nil
 }
 
-func (configuration *Configuration) GetLogger() *logger.Args {
+// GetLogger is exported
+func (conf *Configuration) GetLogger() *logger.Args {
 
 	return &logger.Args{
-		FileName: configuration.Logger.LogFile,
-		Level:    configuration.Logger.LogLevel,
-		MaxSize:  configuration.Logger.LogSize,
+		FileName: conf.Logger.LogFile,
+		Level:    conf.Logger.LogLevel,
+		MaxSize:  conf.Logger.LogSize,
 	}
 }

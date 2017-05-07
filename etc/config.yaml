@@ -15,7 +15,7 @@ cluster:
         cluster: humpback/center
         heartbeat: 8s
 api:
-    hosts: [":8580"]
+    hosts: [":8589"]
     enablecors: true
 logger:
     logfile: ./logs/humpback-center.log
