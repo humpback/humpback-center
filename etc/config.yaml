@@ -1,6 +1,6 @@
 version: 1.0.0
 pidfile: ./humpback-center.pid
-siteapi: http://192.168.2.80:8181/api
+siteapi: http://192.168.2.80:8012/api
 cluster:
     opts: [
             "cacheroot=./cache", 

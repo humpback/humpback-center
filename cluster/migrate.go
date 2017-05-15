@@ -377,34 +377,29 @@ func (cache *MigrateContainersCache) Contains(metaid string) bool {
 	return ret
 }
 
+// StartGroup is exported
+// engine remove to group, start migrate containers.
+func (cache *MigrateContainersCache) StartGroup(engine *Engine, groupid string) {
+
+	if engine.IsHealthy() {
+		metaids := []string{}
+		groupMetaData := cache.Cluster.configCache.GetGroupMetaData(groupid)
+		for _, metaData := range groupMetaData {
+			metaids = append(metaids, metaData.MetaID)
+		}
+		cache.start(engine, metaids)
+	}
+}
+
 // Start is exported
 // engine offline, start migrate containers.
 // engine parameter is offline engine pointer.
 func (cache *MigrateContainersCache) Start(engine *Engine) {
 
-	metaids := engine.MetaIds()
-	if len(metaids) == 0 {
-		return
+	if engine.IsHealthy() {
+		metaids := engine.MetaIds()
+		cache.start(engine, metaids)
 	}
-
-	cache.Lock()
-	for _, metaid := range metaids {
-		containers := engine.Containers(metaid)
-		if len(containers) == 0 {
-			continue
-		}
-		migrator, ret := cache.migrators[metaid]
-		if !ret {
-			migrator = NewMigrator(metaid, containers, cache.Cluster, cache.migrateDelay, cache)
-			cache.migrators[metaid] = migrator
-			logger.INFO("[#cluster] migrator start %s %s", engine.IP, metaid)
-			go migrator.Start()
-		} else {
-			logger.INFO("[#cluster] migrator update %s %s", engine.IP, metaid)
-			migrator.Update(metaid, containers)
-		}
-	}
-	cache.Unlock()
 }
 
 // Cancel is exported
@@ -412,29 +407,59 @@ func (cache *MigrateContainersCache) Start(engine *Engine) {
 // engine parameter is online engine pointer.
 func (cache *MigrateContainersCache) Cancel(engine *Engine) {
 
-	metaids := engine.MetaIds()
-	if len(metaids) == 0 {
-		return
+	if engine.IsHealthy() {
+		metaids := engine.MetaIds()
+		cache.cancel(engine, metaids)
 	}
 
-	cache.RLock()
-	defer cache.RUnlock()
-	waitgroup := sync.WaitGroup{}
-	for _, metaid := range metaids {
-		if migrator, ret := cache.migrators[metaid]; ret {
+}
+
+func (cache *MigrateContainersCache) start(engine *Engine, metaids []string) {
+
+	if len(metaids) > 0 {
+		cache.Lock()
+		for _, metaid := range metaids {
 			containers := engine.Containers(metaid)
 			if len(containers) == 0 {
 				continue
 			}
-			waitgroup.Add(1)
-			go func(id string, c Containers) {
-				defer waitgroup.Done()
-				logger.INFO("[#cluster] migrator cancel %s %s", engine.IP, id)
-				migrator.Cancel(id, c)
-			}(metaid, containers)
+			migrator, ret := cache.migrators[metaid]
+			if !ret {
+				migrator = NewMigrator(metaid, containers, cache.Cluster, cache.migrateDelay, cache)
+				cache.migrators[metaid] = migrator
+				logger.INFO("[#cluster] migrator start %s %s", engine.IP, metaid)
+				go migrator.Start()
+			} else {
+				logger.INFO("[#cluster] migrator update %s %s", engine.IP, metaid)
+				migrator.Update(metaid, containers)
+			}
 		}
+		cache.Unlock()
 	}
-	waitgroup.Wait()
+}
+
+func (cache *MigrateContainersCache) cancel(engine *Engine, metaids []string) {
+
+	if len(metaids) > 0 {
+		cache.RLock()
+		waitgroup := sync.WaitGroup{}
+		for _, metaid := range metaids {
+			if migrator, ret := cache.migrators[metaid]; ret {
+				containers := engine.Containers(metaid)
+				if len(containers) == 0 {
+					continue
+				}
+				waitgroup.Add(1)
+				go func(id string, c Containers) {
+					defer waitgroup.Done()
+					logger.INFO("[#cluster] migrator cancel %s %s", engine.IP, id)
+					migrator.Cancel(id, c)
+				}(metaid, containers)
+			}
+		}
+		waitgroup.Wait()
+		cache.RUnlock()
+	}
 }
 
 // OnMigratorQuitHandleFunc is exported

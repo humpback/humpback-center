@@ -341,6 +341,9 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 	configEnvMap := convert.ConvertKVStringSliceToMap(config.Env)
 	containerIndex, _ := strconv.Atoi(configEnvMap["HUMPBACK_CLUSTER_CONTAINER_INDEX"])
 	metaData := engine.configCache.GetMetaData(configEnvMap["HUMPBACK_CLUSTER_METAID"])
+	if metaData == nil {
+		return nil, ErrClusterMetaDataNotFound
+	}
 	baseConfig := &ContainerBaseConfig{Index: containerIndex, Container: config, MetaData: metaData}
 	engine.configCache.CreateContainerBaseConfig(metaData.MetaID, baseConfig)
 	logger.INFO("[#cluster#] engine %s, create container %s:%s", engine.IP, createContainerResponse.ID[:12], config.Name)
@@ -364,24 +367,49 @@ func (engine *Engine) CreateContainer(config models.Container) (*Container, erro
 // Engine remove a container.
 func (engine *Engine) RemoveContainer(containerid string) error {
 
+	container := engine.Container(containerid)
+	if container == nil {
+		return fmt.Errorf("remove container %s not found", containerid)
+	}
+
+	// first remove local meta
+	engine.Lock()
+	engine.configCache.RemoveContainerBaseConfig(container.MetaID(), containerid)
+	delete(engine.containers, containerid)
+	engine.Unlock()
+
+	//rename container name to expel
+	expelNameSuffix := "-expel"
+	expelName := strings.TrimSuffix(container.Info.Name, expelNameSuffix) + expelNameSuffix
+	if container.Info.Name != expelName {
+		operate := models.ContainerOperate{Action: "rename", Container: container.Info.ID, NewName: expelName}
+		if err := engine.OperateContainer(operate); err != nil {
+			logger.ERROR("[#cluster#] engine %s container %s expel, rename error:%s", engine.IP, container.Info.ID[:12], err.Error())
+		} else {
+			logger.WARN("[#cluster#] engine %s container %s expel, rename to %s.", engine.IP, container.Info.ID[:12], operate.NewName)
+		}
+	}
+
+	//delete container
 	query := map[string][]string{"force": []string{"true"}}
 	respRemoved, err := engine.client.Delete("http://"+engine.APIAddr+"/v1/containers/"+containerid, query, nil)
 	if err != nil {
 		return err
 	}
 
-	defer respRemoved.Close()
+	defer func() {
+		respRemoved.Close()
+		engine.Lock()
+		if _, ret := engine.containers[containerid]; ret {
+			delete(engine.containers, containerid)
+		}
+		engine.Unlock()
+	}()
+
 	if respRemoved.StatusCode() != 200 {
 		return fmt.Errorf("engine %s, remove container %s failure, %s", engine.IP, containerid[:12], ctypes.ParseHTTPResponseError(respRemoved))
 	}
-
 	logger.INFO("[#cluster#] engine %s, remove container %s", engine.IP, containerid[:12])
-	engine.Lock()
-	if container, ret := engine.containers[containerid]; ret {
-		engine.configCache.RemoveContainerBaseConfig(container.MetaID(), containerid)
-		delete(engine.containers, containerid)
-	}
-	engine.Unlock()
 	return nil
 }
 
@@ -517,14 +545,16 @@ func (engine *Engine) RefreshContainers() error {
 // clear engine invalid cluster containers
 func (engine *Engine) ValidateContainers() {
 
-	//get expel containers
+	// get all invalid containers
 	expelContainers := Containers{}
 	containers := engine.Containers("")
 	for _, container := range containers {
 		if !container.ValidateConfig() {
 			containers, err := engine.updateContainer(container.Info.ID, engine.containers)
 			if err != nil {
-				expelContainers = append(expelContainers, container)
+				if strings.Index(err.Error(), "No such container") != -1 {
+					expelContainers = append(expelContainers, container)
+				}
 				continue
 			}
 			engine.Lock()
@@ -536,24 +566,7 @@ func (engine *Engine) ValidateContainers() {
 		}
 	}
 
-	// rename all expel containers, prevent container name conflicts.
-	for _, container := range expelContainers {
-		expelName := strings.TrimSuffix(container.Info.Name, "-expel") + "-expel"
-		if container.Info.Name != expelName {
-			operate := models.ContainerOperate{
-				Action:    "rename",
-				Container: container.Info.ID,
-				NewName:   expelName,
-			}
-			if err := engine.OperateContainer(operate); err != nil {
-				logger.ERROR("[#cluster#] engine %s container %s expel, rename error:%s", engine.IP, container.Info.ID[:12], err.Error())
-				continue
-			}
-			logger.WARN("[#cluster#] engine %s container %s expel, rename to %s.", engine.IP, container.Info.ID[:12], operate.NewName)
-		}
-	}
-
-	// remove all expel containers
+	// remove all local invalid containers
 	for _, container := range expelContainers {
 		if err := engine.RemoveContainer(container.Info.ID); err != nil {
 			logger.WARN("[#cluster#] engine %s container %s expel, remove error %s.", engine.IP, container.Info.ID[:12], err.Error())
@@ -567,8 +580,15 @@ func (engine *Engine) ValidateContainers() {
 // Get container information regularly and engine performance collection
 func (engine *Engine) refreshLoop() {
 
-	const perfUpdateInterval = 5 * time.Minute //engine performance collection interval
-	lastPrefUpdateAt := time.Now()
+	//refresh loop current time seed.
+	seedAt := time.Now()
+	//engine performance collection interval
+	const perfUpdateInterval = 5 * time.Minute
+	lastPrefUpdateAt := seedAt
+	//engine validate containers interval
+	const doValidateInterval = 15 * time.Minute
+	lastValidateAt := seedAt
+
 	for {
 		runTicker := time.NewTicker(refreshInterval)
 		select {
@@ -576,14 +596,19 @@ func (engine *Engine) refreshLoop() {
 			{
 				runTicker.Stop()
 				if engine.IsHealthy() {
+					currentAt := time.Now()
 					if time.Since(lastPrefUpdateAt) > perfUpdateInterval {
 						//engine.updatePerformance()
-						lastPrefUpdateAt = time.Now()
+						lastPrefUpdateAt = currentAt
 					}
 					if err := engine.RefreshContainers(); err != nil {
 						logger.ERROR("[#cluster#] engine %s refresh containers error:%s", engine.IP, err.Error())
 					}
-					engine.ValidateContainers()
+					if time.Since(lastValidateAt) > doValidateInterval {
+						logger.ERROR("[#cluster#] engine %s validate containers...", engine.IP)
+						engine.ValidateContainers()
+						lastValidateAt = currentAt
+					}
 				}
 			}
 		case <-engine.stopCh:

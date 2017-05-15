@@ -512,25 +512,37 @@ func (cluster *Cluster) RemoveGroup(groupid string) bool {
 		return false
 	}
 
+	// get group all metaData and clean metaData containers.
+	wgroup := sync.WaitGroup{}
 	groupMetaData := cluster.configCache.GetGroupMetaData(groupid)
 	for _, metaData := range groupMetaData {
-		for _, engine := range engines {
-			if engine.IsHealthy() {
-				containers := engine.Containers(metaData.MetaID)
-				for _, container := range containers {
-					if err := engine.RemoveContainer(container.Info.ID); err != nil {
-						logger.ERROR("[#cluster#] engine %s, remove container error:%s", engine.IP, err.Error())
-					}
-				}
-			}
-		}
-		cluster.hooksProcessor.Hook(metaData, RemoveMetaEvent)
+		wgroup.Add(1)
+		go func(mdata *MetaData) {
+			cluster.removeContainers(mdata, "")
+			cluster.configCache.RemoveMetaData(mdata.MetaID)
+			cluster.hooksProcessor.Hook(mdata, RemoveMetaEvent)
+			wgroup.Done()
+		}(metaData)
 	}
+	wgroup.Wait()
+
+	// remove metadata and group to cluster.
 	cluster.configCache.RemoveGroupMetaData(groupid)
 	cluster.Lock()
-	delete(cluster.groups, groupid)
+	delete(cluster.groups, groupid) // remove group
 	logger.INFO("[#cluster#] removed group %s", groupid)
 	cluster.Unlock()
+
+	// remove engine to engines pool.
+	for _, engine := range engines {
+		if engine.IsHealthy() {
+			if ret := cluster.InGroupsContains(engine.IP, engine.Name); !ret {
+				// engine does not belong to the any groups, remove to cluster.
+				logger.INFO("[#cluster#] group %s remove server to pendengines %s\t%s", groupid, engine.IP, engine.Name)
+				cluster.enginesPool.RemoveEngine(engine.IP, engine.Name)
+			}
+		}
+	}
 	return true
 }
 
@@ -671,45 +683,20 @@ func (cluster *Cluster) RemoveContainer(containerid string) (string, *types.Remo
 // if containerid is empty string so remove metaid's all containers
 func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*types.RemovedContainers, error) {
 
-	metaData, engines, err := cluster.validateMetaData(metaid)
+	metaData, _, err := cluster.validateMetaData(metaid)
 	if err != nil {
 		logger.ERROR("[#cluster#] remove containers %s error, %s", metaid, err.Error())
 		return nil, err
 	}
 
-	foundContainer := false
-	removedContainers := types.RemovedContainers{}
-	for _, engine := range engines {
-		if foundContainer {
-			break
-		}
-		containers := engine.Containers(metaData.MetaID)
-		for _, container := range containers {
-			if containerid == "" || container.Info.ID == containerid {
-				var err error
-				if engine.IsHealthy() {
-					if err = engine.RemoveContainer(container.Info.ID); err != nil {
-						logger.ERROR("[#cluster#] engine %s, remove container error:%s", engine.IP, err.Error())
-					}
-				} else {
-					err = fmt.Errorf("engine state is %s", engine.State())
-				}
-				removedContainers = removedContainers.SetRemovedPair(engine.IP, engine.Name, container.Info.ID, err)
-			}
-			if container.Info.ID == containerid {
-				foundContainer = true
-				break
-			}
-		}
-	}
-
+	removedContainers := cluster.removeContainers(metaData, containerid)
 	cluster.hooksProcessor.Hook(metaData, RemoveMetaEvent)
 	if metaData := cluster.configCache.GetMetaData(metaData.MetaID); metaData != nil {
 		if len(metaData.BaseConfigs) == 0 {
 			cluster.configCache.RemoveMetaData(metaData.MetaID)
 		}
 	}
-	return &removedContainers, nil
+	return removedContainers, nil
 }
 
 // RecoveryContainers is exported
@@ -719,11 +706,6 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 	if err != nil {
 		logger.WARN("[#cluster#] recovery containers %s error, %s", metaid, err.Error())
 		return err
-	}
-
-	if ret := cluster.containsPendingContainers(metaData.GroupID, metaData.Config.Name); ret {
-		logger.WARN("[#cluster#] recovery containers %s error, %s", metaData.MetaID, ErrClusterContainersSetting)
-		return ErrClusterContainersSetting
 	}
 
 	baseConfigs := cluster.configCache.GetMetaDataBaseConfigs(metaData.MetaID)
@@ -767,11 +749,6 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 	if err != nil {
 		logger.ERROR("[#cluster#] update containers %s error, %s", metaid, err.Error())
 		return nil, err
-	}
-
-	if ret := cluster.containsPendingContainers(metaData.GroupID, metaData.Config.Name); ret {
-		logger.ERROR("[#cluster#] update containers %s error, %s", metaData.MetaID, ErrClusterContainersSetting)
-		return nil, ErrClusterContainersSetting
 	}
 
 	cluster.configCache.SetMetaData(metaid, instances, webhooks)
@@ -884,6 +861,51 @@ func (cluster *Cluster) reduceContainer(metaData *MetaData) (*Engine, *Container
 	return engine, container, nil
 }
 
+// removeContainers is exported
+func (cluster *Cluster) removeContainers(metaData *MetaData, containerid string) *types.RemovedContainers {
+
+	cluster.Lock()
+	cluster.pendingContainers[metaData.Config.Name] = &pendingContainer{
+		GroupID: metaData.GroupID,
+		Name:    metaData.Config.Name,
+		Config:  metaData.Config,
+	}
+	cluster.Unlock()
+
+	removedContainers := types.RemovedContainers{}
+	if engines := cluster.GetGroupEngines(metaData.GroupID); engines != nil {
+		foundContainer := false
+		for _, engine := range engines {
+			if foundContainer {
+				break
+			}
+			containers := engine.Containers(metaData.MetaID)
+			for _, container := range containers {
+				if containerid == "" || container.Info.ID == containerid {
+					var err error
+					if engine.IsHealthy() {
+						if err = engine.RemoveContainer(container.Info.ID); err != nil {
+							logger.ERROR("[#cluster#] engine %s, remove container error:%s", engine.IP, err.Error())
+						}
+					} else {
+						err = fmt.Errorf("engine state is %s", engine.State())
+					}
+					removedContainers = removedContainers.SetRemovedPair(engine.IP, engine.Name, container.Info.ID, err)
+				}
+				if container.Info.ID == containerid {
+					foundContainer = true
+					break
+				}
+			}
+		}
+	}
+
+	cluster.Lock()
+	delete(cluster.pendingContainers, metaData.Config.Name)
+	cluster.Unlock()
+	return &removedContainers
+}
+
 // createContainers is exported
 func (cluster *Cluster) createContainers(metaData *MetaData, instances int, config models.Container) (types.CreatedContainers, error) {
 
@@ -912,7 +934,7 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_CONTAINER_ORIGINALNAME="+containerConfig.Name)
 		engine, container, err := cluster.createContainer(metaData, filter, containerConfig)
 		if err != nil {
-			if err == ErrClusterNoEngineAvailable {
+			if err == ErrClusterNoEngineAvailable || strings.Index(err.Error(), " not found") >= 0 {
 				resultErr = err
 				logger.ERROR("[#cluster#] create container %s, error:%s", containerConfig.Name, err.Error())
 				continue
@@ -1037,17 +1059,21 @@ func (cluster *Cluster) cehckContainerNameUniqueness(groupid string, name string
 // validateMetaData is exported
 func (cluster *Cluster) validateMetaData(metaid string) (*MetaData, []*Engine, error) {
 
-	if ret := cluster.upgraderCache.Contains(metaid); ret {
-		return nil, nil, ErrClusterContainersUpgrading
-	}
-
-	if ret := cluster.migtatorCache.Contains(metaid); ret {
-		return nil, nil, ErrClusterContainersMigrating
-	}
-
 	metaData, engines, err := cluster.GetMetaDataEngines(metaid)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if ret := cluster.upgraderCache.Contains(metaData.MetaID); ret {
+		return nil, nil, ErrClusterContainersUpgrading
+	}
+
+	if ret := cluster.migtatorCache.Contains(metaData.MetaID); ret {
+		return nil, nil, ErrClusterContainersMigrating
+	}
+
+	if ret := cluster.containsPendingContainers(metaData.GroupID, metaData.Config.Name); ret {
+		return nil, nil, ErrClusterContainersSetting
 	}
 	return metaData, engines, nil
 }
