@@ -493,6 +493,9 @@ func (cluster *Cluster) SetGroup(group *Group) {
 			if ret := cluster.InGroupsContains(nodeData.IP, nodeData.Name); !ret {
 				logger.INFO("[#cluster#] group %s remove server to pendengines %s\t%s", pGroup.ID, server.IP, server.Name)
 				cluster.enginesPool.RemoveEngine(server.IP, server.Name)
+			} else {
+				// after recovery containers, need to clear migrator cache of meta container ?
+				// Migrator StartEngineContainers(groupid, engine)... ?
 			}
 		}
 	}
@@ -500,6 +503,11 @@ func (cluster *Cluster) SetGroup(group *Group) {
 	for _, server := range addServers {
 		logger.INFO("[#cluster#] group %s append server to pendengines %s\t%s", pGroup.ID, server.IP, server.Name)
 		cluster.enginesPool.AddEngine(server.IP, server.Name)
+		/*
+			if cluster is engine exists ? {
+				// Migrator CancelEngineContainers(groupid, engine)... // add to group, this group migrator cancel.
+			}
+		*/
 	}
 }
 
@@ -512,6 +520,8 @@ func (cluster *Cluster) RemoveGroup(groupid string) bool {
 		return false
 	}
 
+	// remove group migrator's all meta.
+	cluster.migtatorCache.RemoveGroup(groupid)
 	// get group all metaData and clean metaData containers.
 	wgroup := sync.WaitGroup{}
 	groupMetaData := cluster.configCache.GetGroupMetaData(groupid)

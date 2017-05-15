@@ -322,6 +322,14 @@ func (migrator *Migrator) Cancel(metaid string, containers Containers) {
 	}
 }
 
+// Clear is exported
+func (migrator *Migrator) Clear() {
+
+	migrator.Lock()
+	migrator.containers = []*MigrateContainer{}
+	migrator.Unlock()
+}
+
 // MigratorHandler is exported
 type MigratorHandler interface {
 	OnMigratorQuitHandleFunc(migrator *Migrator)
@@ -377,18 +385,19 @@ func (cache *MigrateContainersCache) Contains(metaid string) bool {
 	return ret
 }
 
-// StartGroup is exported
-// engine remove to group, start migrate containers.
-func (cache *MigrateContainersCache) StartGroup(engine *Engine, groupid string) {
+// RemoveGroup is exported
+// cancel group all metadata migrate.
+func (cache *MigrateContainersCache) RemoveGroup(groupid string) {
 
-	if engine.IsHealthy() {
-		metaids := []string{}
-		groupMetaData := cache.Cluster.configCache.GetGroupMetaData(groupid)
-		for _, metaData := range groupMetaData {
-			metaids = append(metaids, metaData.MetaID)
+	cache.RLock()
+	groupMetaData := cache.Cluster.configCache.GetGroupMetaData(groupid)
+	for _, metaData := range groupMetaData {
+		if migrator, ret := cache.migrators[metaData.MetaID]; ret {
+			migrator.Clear()
+			logger.INFO("[#cluster] migrator clear %s", migrator.MetaID)
 		}
-		cache.start(engine, metaids)
 	}
+	cache.RUnlock()
 }
 
 // Start is exported
@@ -411,7 +420,6 @@ func (cache *MigrateContainersCache) Cancel(engine *Engine) {
 		metaids := engine.MetaIds()
 		cache.cancel(engine, metaids)
 	}
-
 }
 
 func (cache *MigrateContainersCache) start(engine *Engine, metaids []string) {
