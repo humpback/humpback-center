@@ -37,6 +37,7 @@ type Server struct {
 type Group struct {
 	ID          string   `json:"ID"`
 	IsCluster   bool     `json:"IsCluster"`
+	Location    string   `json:"ClusterLocation"`
 	Servers     []Server `json:"Servers"`
 	ContactInfo string   `json:"ContactInfo"`
 }
@@ -44,6 +45,7 @@ type Group struct {
 // Cluster is exported
 type Cluster struct {
 	sync.RWMutex
+	Location  string
 	Discovery *discovery.Discovery
 
 	overcommitRatio   float64
@@ -111,6 +113,11 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 		}
 	}
 
+	clusterLocation := ""
+	if val, ret := driverOpts.String("location", ""); ret {
+		clusterLocation = strings.TrimSpace(val)
+	}
+
 	cacheRoot := ""
 	if val, ret := driverOpts.String("cacheroot", ""); ret {
 		cacheRoot = val
@@ -127,6 +134,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 	}
 
 	cluster := &Cluster{
+		Location:          clusterLocation,
 		Discovery:         discovery,
 		overcommitRatio:   overcommitratio,
 		createRetry:       createretry,
@@ -158,6 +166,9 @@ func (cluster *Cluster) Start() error {
 
 	cluster.configCache.Init()
 	if cluster.Discovery != nil {
+		if cluster.Location != "" {
+			logger.INFO("[#cluster#] cluster location: %s", cluster.Location)
+		}
 		logger.INFO("[#cluster#] discovery service watching...")
 		cluster.Discovery.Watch(cluster.stopCh, cluster.watchDiscoveryHandleFunc)
 		cluster.metaRestorer.Start()
@@ -457,6 +468,7 @@ func (cluster *Cluster) SetGroup(group *Group) {
 		}
 	} else {
 		origins := pGroup.Servers
+		pGroup.Location = group.Location
 		pGroup.Servers = group.Servers
 		pGroup.IsCluster = group.IsCluster
 		pGroup.ContactInfo = group.ContactInfo
@@ -560,6 +572,10 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 
 	if err != nil {
 		logger.ERROR("[#cluster#] discovery watch error:%s", err.Error())
+		return
+	}
+
+	if len(added) == 0 && len(removed) == 0 {
 		return
 	}
 

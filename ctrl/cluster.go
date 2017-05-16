@@ -27,7 +27,7 @@ func createCluster(configuration *etc.Configuration) (*cluster.Cluster, error) {
 		return nil, fmt.Errorf("discovery heartbeat should be at least 1s.")
 	}
 
-	configopts := map[string]string{"kv.path": clusterOpts.Discovery.Cluster}
+	configopts := map[string]string{"kv.path": strings.TrimSpace(clusterOpts.Discovery.Cluster)}
 	discovery, err := discovery.New(clusterOpts.Discovery.URIs, heartbeat, 0, configopts)
 	if err != nil {
 		return nil, err
@@ -41,10 +41,15 @@ func createCluster(configuration *etc.Configuration) (*cluster.Cluster, error) {
 }
 
 func (c *Controller) initCluster() {
+
 	if groups := c.getClusterGroupStoreData(""); groups != nil {
 		logger.INFO("[#ctrl#] init cluster groups:%d", len(groups))
 		for _, group := range groups {
-			c.Cluster.SetGroup(group)
+			if group.IsCluster {
+				if c.Cluster.Location == "" || strings.ToUpper(group.Location) == strings.ToUpper(c.Cluster.Location) {
+					c.Cluster.SetGroup(group)
+				}
+			}
 		}
 	}
 }
@@ -138,10 +143,16 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 				if len(groups) > 0 {
 					for _, group := range groups {
 						if group.IsCluster {
-							c.Cluster.SetGroup(group)
+							if c.Cluster.Location == "" || strings.ToUpper(group.Location) == strings.ToUpper(c.Cluster.Location) {
+								c.Cluster.SetGroup(group)
+							} else { // group location changed
+								if c.Cluster.GetGroup(groupid) != nil {
+									c.Cluster.RemoveGroup(groupid)
+								}
+							}
 						}
 					}
-				} else { //group iscluster is false
+				} else { // group iscluster change to false
 					if c.Cluster.GetGroup(groupid) != nil {
 						c.Cluster.RemoveGroup(groupid)
 					}
@@ -149,7 +160,7 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 			}
 		}
 	case request.GROUP_REMOVE_EVENT:
-		{
+		{ // group removed
 			if c.Cluster.GetGroup(groupid) != nil {
 				c.Cluster.RemoveGroup(groupid)
 			}

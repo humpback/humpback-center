@@ -47,6 +47,11 @@ func (conf *Configuration) ParseEnv() error {
 func parseClusterEnv(conf *Configuration) error {
 
 	driverOpts := convert.ConvertKVStringSliceToMap(conf.Cluster.DriverOpts)
+	clusterLocation := os.Getenv("CENTER_CLUSTER_LOCATION")
+	if clusterLocation != "" {
+		driverOpts["location"] = clusterLocation
+	}
+
 	cacheRoot := os.Getenv("CENTER_CLUSTER_CACHEROOT")
 	if cacheRoot != "" {
 		if _, err := filepath.Abs(cacheRoot); err != nil {

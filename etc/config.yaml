@@ -3,11 +3,11 @@ pidfile: ./humpback-center.pid
 siteapi: http://192.168.2.80:8012/api
 cluster:
     opts: [
+            #"location=dev",
             "cacheroot=./cache", 
             "overcommit=0.08", 
             "recoveryinterval=120s", 
-            "createretry=1", 
-            "upgradedelay=1s", 
+            "createretry=1",  
             "migratedelay=45s"
     ]
     discovery:
