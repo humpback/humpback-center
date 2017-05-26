@@ -605,7 +605,6 @@ func (engine *Engine) refreshLoop() {
 						logger.ERROR("[#cluster#] engine %s refresh containers error:%s", engine.IP, err.Error())
 					}
 					if time.Since(lastValidateAt) > doValidateInterval {
-						logger.ERROR("[#cluster#] engine %s validate containers...", engine.IP)
 						engine.ValidateContainers()
 						lastValidateAt = currentAt
 					}

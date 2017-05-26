@@ -278,6 +278,18 @@ func (cache *NodeCache) Remove(key string) {
 	cache.Unlock()
 }
 
+// Node is exported
+// nodeCache get nodedata of key
+func (cache *NodeCache) Node(key string) *NodeData {
+
+	cache.RLock()
+	defer cache.RUnlock()
+	if nodeData, ret := cache.nodes[key]; ret {
+		return nodeData
+	}
+	return nil
+}
+
 // Get is exported
 // nodeCache get nodeData of server ip or server hostname
 func (cache *NodeCache) Get(IPOrName string) *NodeData {

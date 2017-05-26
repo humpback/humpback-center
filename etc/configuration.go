@@ -2,6 +2,7 @@ package etc
 
 import "github.com/humpback/gounits/logger"
 import "gopkg.in/yaml.v2"
+import "humpback-center/notify"
 
 import (
 	"io/ioutil"
@@ -32,6 +33,8 @@ type Configuration struct {
 		Hosts      []string `yaml:"hosts"`
 		EnableCors bool     `yaml:"enablecors"`
 	} `yaml:"api"`
+
+	Notifications notify.Notifications `yaml:"notifications,omitempty"`
 
 	//log options
 	Logger struct {
@@ -64,6 +67,12 @@ func NewConfiguration(file string) (*Configuration, error) {
 		return nil, err
 	}
 	return conf, nil
+}
+
+// GetNotificationsEndPoints is exported
+func (conf *Configuration) GetNotificationsEndPoints() []notify.EndPoint {
+
+	return conf.Notifications.EndPoints
 }
 
 // GetLogger is exported

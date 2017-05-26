@@ -3,6 +3,7 @@ package cluster
 import "github.com/humpback/gounits/logger"
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -250,10 +251,11 @@ func (migrator *Migrator) Start() {
 
 		if !migrator.isAllCompleted() {
 			if !migrator.verifyEngines() {
-				logger.INFO("[#cluster] migrator %s containers, verify engines no healthy.", migrator.MetaID)
+				err := fmt.Errorf("cluster no docker-engine available")
+				logger.ERROR("[#cluster] migrator %s containers error %s.", migrator.MetaID, err)
 				migrator.clearMigrateContainers()
 				migrator.Cluster.configCache.ClearContainerBaseConfig(migrator.MetaID)
-				migrator.handler.OnMigratorNotifyHandleFunc(migrator)
+				migrator.handler.OnMigratorNotifyHandleFunc(migrator, err)
 				break
 			}
 		}
@@ -268,7 +270,7 @@ func (migrator *Migrator) Start() {
 		}
 
 		if migrator.isAllCompleted() {
-			migrator.handler.OnMigratorNotifyHandleFunc(migrator)
+			migrator.handler.OnMigratorNotifyHandleFunc(migrator, nil)
 			break
 		}
 
@@ -280,12 +282,12 @@ func (migrator *Migrator) Start() {
 				}
 			}
 			migrator.Unlock()
-			migrator.handler.OnMigratorNotifyHandleFunc(migrator)
+			migrator.handler.OnMigratorNotifyHandleFunc(migrator, fmt.Errorf("meta containers part migrated failure."))
 			break
 		}
 
 		if migrator.isPartCompleted() {
-			migrator.handler.OnMigratorNotifyHandleFunc(migrator)
+			migrator.handler.OnMigratorNotifyHandleFunc(migrator, fmt.Errorf("meta containers part migrated completed."))
 		}
 		migrator.resetMigrateContainers()
 		continue
@@ -333,7 +335,7 @@ func (migrator *Migrator) Clear() {
 // MigratorHandler is exported
 type MigratorHandler interface {
 	OnMigratorQuitHandleFunc(migrator *Migrator)
-	OnMigratorNotifyHandleFunc(migrator *Migrator)
+	OnMigratorNotifyHandleFunc(migrator *Migrator, err error)
 }
 
 // MigratorQuitHandleFunc is exported
@@ -345,11 +347,11 @@ func (fn MigratorQuitHandleFunc) OnMigratorQuitHandleFunc(migrator *Migrator) {
 }
 
 // MigratorNotifyHandleFunc is exported
-type MigratorNotifyHandleFunc func(migrator *Migrator)
+type MigratorNotifyHandleFunc func(migrator *Migrator, err error)
 
 // OnMigratorNotifyHandleFunc is exported
-func (fn MigratorNotifyHandleFunc) OnMigratorNotifyHandleFunc(migrator *Migrator) {
-	fn(migrator)
+func (fn MigratorNotifyHandleFunc) OnMigratorNotifyHandleFunc(migrator *Migrator, err error) {
+	fn(migrator, err)
 }
 
 // MigrateContainersCache is exported
@@ -480,11 +482,12 @@ func (cache *MigrateContainersCache) OnMigratorQuitHandleFunc(migrator *Migrator
 }
 
 // OnMigratorNotifyHandleFunc is exported
-func (cache *MigrateContainersCache) OnMigratorNotifyHandleFunc(migrator *Migrator) {
+func (cache *MigrateContainersCache) OnMigratorNotifyHandleFunc(migrator *Migrator, err error) {
 
 	logger.INFO("[#cluster] migrator notify %s", migrator.MetaID)
 	metaData := cache.Cluster.GetMetaData(migrator.MetaID)
 	cache.Cluster.hooksProcessor.Hook(metaData, MigrateMetaEvent)
+	cache.Cluster.NotifyGroupMetaContainersEvent("Cluster Meta Containers Migrated.", err, migrator.MetaID)
 	mContainers := migrator.Containers()
 	for _, mContainer := range mContainers {
 		logger.INFO("[#cluster] migrator container %s %s", mContainer.ID[:12], mContainer.state.String())

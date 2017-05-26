@@ -6,6 +6,7 @@ import "humpback-center/api/request"
 import "humpback-center/cluster"
 import "humpback-center/cluster/types"
 import "humpback-center/etc"
+import "humpback-center/notify"
 import "common/models"
 
 import (
@@ -33,7 +34,8 @@ func createCluster(configuration *etc.Configuration) (*cluster.Cluster, error) {
 		return nil, err
 	}
 
-	cluster, err := cluster.NewCluster(clusterOpts.DriverOpts, discovery)
+	notifySender := notify.NewNotifySender(configuration.GetNotificationsEndPoints())
+	cluster, err := cluster.NewCluster(clusterOpts.DriverOpts, notifySender, discovery)
 	if err != nil {
 		return nil, err
 	}

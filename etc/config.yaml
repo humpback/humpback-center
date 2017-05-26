@@ -17,6 +17,22 @@ cluster:
 api:
     hosts: [":8589"]
     enablecors: true
+notifications:
+    endpoints:
+      #- name: api
+      #  url: http://127.0.0.1:8009/framework/v1/mail
+      #  headers:
+      #      x-cluster-notify: ["endo"]
+      #      content-type: ["application/json; charset=utf-8"]
+      #  sender: humpback@newegg.com
+      #  enabled: true
+      #- name: smtp
+      #  host: smtp.example.com
+      #  port: 25
+      #  user: admin
+      #  password: 123456
+      #  sender: xxxxx.xx.x@example.com
+      #  enabled: true
 logger:
     logfile: ./logs/humpback-center.log
     loglevel: debug

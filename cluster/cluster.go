@@ -6,6 +6,7 @@ import "github.com/humpback/gounits/json"
 import "github.com/humpback/gounits/logger"
 import "github.com/humpback/gounits/system"
 import "humpback-center/cluster/types"
+import "humpback-center/notify"
 import "common/models"
 
 import (
@@ -36,6 +37,7 @@ type Server struct {
 // ContactInfo: cluster manager contactinfo.
 type Group struct {
 	ID          string   `json:"ID"`
+	Name        string   `json:"Name"`
 	IsCluster   bool     `json:"IsCluster"`
 	Location    string   `json:"ClusterLocation"`
 	Servers     []Server `json:"Servers"`
@@ -45,8 +47,9 @@ type Group struct {
 // Cluster is exported
 type Cluster struct {
 	sync.RWMutex
-	Location  string
-	Discovery *discovery.Discovery
+	Location     string
+	NotifySender *notify.NotifySender
+	Discovery    *discovery.Discovery
 
 	overcommitRatio   float64
 	createRetry       int64
@@ -65,7 +68,7 @@ type Cluster struct {
 }
 
 // NewCluster is exported
-func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*Cluster, error) {
+func NewCluster(driverOpts system.DriverOpts, notifySender *notify.NotifySender, discovery *discovery.Discovery) (*Cluster, error) {
 
 	if discovery == nil {
 		return nil, ErrClusterDiscoveryInvalid
@@ -135,6 +138,7 @@ func NewCluster(driverOpts system.DriverOpts, discovery *discovery.Discovery) (*
 
 	cluster := &Cluster{
 		Location:          clusterLocation,
+		NotifySender:      notifySender,
 		Discovery:         discovery,
 		overcommitRatio:   overcommitratio,
 		createRetry:       createretry,
@@ -459,7 +463,7 @@ func (cluster *Cluster) SetGroup(group *Group) {
 	if !ret {
 		pGroup = group
 		cluster.groups[group.ID] = pGroup
-		logger.INFO("[#cluster#] group created %s(%d)", pGroup.ID, len(pGroup.Servers))
+		logger.INFO("[#cluster#] group created %s %s (%d)", pGroup.ID, pGroup.Name, len(pGroup.Servers))
 		for _, server := range pGroup.Servers {
 			ipOrName := selectIPOrName(server.IP, server.Name)
 			if nodeData := cluster.nodeCache.Get(ipOrName); nodeData != nil {
@@ -468,11 +472,12 @@ func (cluster *Cluster) SetGroup(group *Group) {
 		}
 	} else {
 		origins := pGroup.Servers
+		pGroup.Name = group.Name
 		pGroup.Location = group.Location
 		pGroup.Servers = group.Servers
 		pGroup.IsCluster = group.IsCluster
 		pGroup.ContactInfo = group.ContactInfo
-		logger.INFO("[#cluster#] group changed %s(%d)", pGroup.ID, len(pGroup.Servers))
+		logger.INFO("[#cluster#] group changed %s %s (%d)", pGroup.ID, pGroup.Name, len(pGroup.Servers))
 		for _, originServer := range origins {
 			found := false
 			for _, newServer := range group.Servers {
@@ -579,6 +584,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		return
 	}
 
+	watchEngines := WatchEngines{}
 	logger.INFO("[#cluster#] discovery watch removed:%d added:%d.", len(removed), len(added))
 	for _, entry := range removed {
 		nodeData := &NodeData{}
@@ -588,6 +594,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		}
 		nodeData.Name = strings.ToUpper(nodeData.Name)
 		logger.INFO("[#cluster#] discovery watch, remove to pendengines %s\t%s", nodeData.IP, nodeData.Name)
+		watchEngines = append(watchEngines, NewWatchEngine(nodeData.IP, nodeData.Name, StateDisconnected))
 		cluster.enginesPool.RemoveEngine(nodeData.IP, nodeData.Name)
 		cluster.nodeCache.Remove(entry.Key)
 	}
@@ -600,9 +607,11 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 		}
 		nodeData.Name = strings.ToUpper(nodeData.Name)
 		logger.INFO("[#cluster#] discovery watch, append to pendengines %s\t%s", nodeData.IP, nodeData.Name)
+		watchEngines = append(watchEngines, NewWatchEngine(nodeData.IP, nodeData.Name, StateHealthy))
 		cluster.nodeCache.Add(entry.Key, nodeData)
 		cluster.enginesPool.AddEngine(nodeData.IP, nodeData.Name)
 	}
+	cluster.NotifyGroupEnginesWatchEvent("cluster discovery some engines state changed.", watchEngines)
 }
 
 // OperateContainer is exported
@@ -752,12 +761,14 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 	if len(engines) > 0 {
 		baseConfigsCount := cluster.configCache.GetMetaDataBaseConfigsCount(metaData.MetaID)
 		if baseConfigsCount != -1 && metaData.Instances != baseConfigsCount {
+			var err error
 			if metaData.Instances > baseConfigsCount {
-				cluster.createContainers(metaData, metaData.Instances-baseConfigsCount, metaData.Config)
+				_, err = cluster.createContainers(metaData, metaData.Instances-baseConfigsCount, metaData.Config)
 			} else {
 				cluster.reduceContainers(metaData, baseConfigsCount-metaData.Instances)
 			}
 			cluster.hooksProcessor.Hook(metaData, RecoveryMetaEvent)
+			cluster.NotifyGroupMetaContainersEvent("Cluster Meta Containers Recovered.", err, metaData.MetaID)
 		}
 	}
 	return nil

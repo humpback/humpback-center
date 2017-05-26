@@ -1,0 +1,161 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>Humpback Notify</title>
+  <style type="text/css">
+    td.title {
+      height: 25px;
+      color: #FFFFFF;
+      border-bottom: solid 1px #89d7f1;
+      width: 100px;
+      background-color: #2a7b97;
+      text-align: left;
+      padding-left: 10px;
+    }
+    td.content {
+      padding-left: 10px;
+      padding-right: 20px;
+      height: 22px;
+      border-bottom: solid 1px #89d7f1;
+      background-color: #7ecae4;
+      word-wrap: break-word;
+      word-break: break-all;
+    }
+    td.output> div {
+      background-color: #7ecae4;
+    }
+  </style>
+</head>
+<body>
+  <table width="800" border="0" align="center" cellpadding="0" cellspacing="0" bgcolor="#b1ebff" style="padding: 0 10px; font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 12px; color: #333;">
+    <tr>
+      <td colspan="2" style="padding:0 10px;">
+        <a href="{{.siteUrl}}" target="_blank" style=" color: #17627c; text-decoration: none;">
+          <div>
+            <strong style="font-size: 40px; color: white; text-shadow: 3px 3px 3px gray; filter: dropshadow(color=#000000, offx=2, offy=2);">Humpback</strong>
+            <strong style="font-size: 60px; text-shadow: 3px 3px 3px gray; filter: dropshadow(color=#000000, offx=2, offy=2);">Notify</strong>
+          </div>
+        </a>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2" style="border-bottom: solid 1px #89d7f1;"></td>
+    </tr>
+    <tr>
+      <td colspan="2">&nbsp;</td>
+    </tr>
+    <tr>
+      <td class="title"><strong>ID</strong></td>
+      <td class="content"><strong>{{.ID}}</strong></td>
+    </tr>
+    <tr>
+      <td class="title"><strong>Event</strong></td>
+      <td class="content"><strong>{{.Event}}</strong></td>
+    </tr>
+    <tr>
+      <td class="title"><strong>Description</strong></td>
+      <td class="content"><strong>{{.Description}}</strong></td>
+    </tr>
+    {{if .Exception}}
+    <tr>
+      <td class="title"><strong>Exception</strong></td>
+      <td class="content"><strong style="color: red">{{.Exception}}</strong></td>
+    </tr>
+    {{end}}
+    <tr>
+      <td class="title"><strong>Timestamp</strong></td>
+      <td class="content"><strong>{{.Timestamp}}</strong></td>
+    </tr>
+    <tr>
+      <td class="title"><strong>Datetime</strong></td>
+      <td class="content"><strong>{{.Datetime}}</strong></td>
+    </tr>
+    {{if .GroupMeta}}
+    <tr>
+      <td class="title"><strong>MetaID</strong></td>
+      <td class="content"><strong>{{.GroupMeta.MetaID}}</strong></td>
+    </tr>
+    <tr>
+      <td class="title"><strong>MetaName</strong></td>
+      <td class="content"><strong>{{.GroupMeta.MetaName}}</strong></td>
+    </tr>
+    <tr>
+      <td class="title"><strong>Image</strong></td>
+      <td class="content"><strong>{{.GroupMeta.Image}}</strong></td>
+    </tr>
+    <tr>
+      <td class="title"><strong>GroupID</strong></td>
+      <td class="content"><strong>{{.GroupMeta.GroupID}}</strong></td>
+    </tr>
+    <tr>
+      <td class="title"><strong>GroupName</strong></td>
+      <td class="content"><strong>{{.GroupMeta.GroupName}}</strong></td>
+    </tr>
+        {{if .GroupMeta.Location}}
+        <tr>
+            <td class="title"><strong>Location</strong></td>
+            <td class="content"><strong>{{.GroupMeta.Location}}</strong></td>
+        </tr>
+        {{end}}
+    <tr>
+      <td class="title"><strong>Instances</strong></td>
+      <td class="content"><strong>{{.GroupMeta.Instances}}</strong></td>
+    </tr>
+    <tr>
+      <td class="title"><strong>Containers</strong></td>
+      <td class="content">
+      <strong>
+      {{if gt (.GroupMeta.Containers|len) 0}}
+        {{range .GroupMeta.Containers}}
+          <pre><strong style="color: blue">{{.ID}} {{.Name}}</strong></pre>
+             {{if eq .State "Running" }}
+               <pre><strong style="color: darkgreen">-> {{.Server}} {{.State}}</strong></pre>
+             {{else}}
+               <pre><strong style="color: red">-> {{.Server}} {{.State}}</strong></pre>
+             {{end}}
+          <hr style="border:1px dotted #036" />
+        {{end}}
+      {{else}}
+        <pre><strong style="color: red">This meta no valid containers, Please wait recovery, until you start the agnet service.</strong></pre>
+      {{end}}
+      </strong></td>
+    </tr>
+    {{end}}
+    {{if .WatchGroup}}
+    <tr>
+      <td class="title"><strong>GroupID</strong></td>
+      <td class="content"><strong>{{.WatchGroup.GroupID}}</strong></td>
+    </tr>
+    <tr>
+      <td class="title"><strong>GroupName</strong></td>
+      <td class="content"><strong>{{.WatchGroup.GroupName}}</strong></td>
+    </tr>
+        {{if .WatchGroup.Location}}
+          <tr>
+             <td class="title"><strong>Location</strong></td>
+             <td class="content"><strong>{{.WatchGroup.Location}}</strong></td>
+          </tr>
+        {{end}}
+    <tr>
+      <td class="title"><strong>Engines</strong></td>
+      <td class="content">
+      <strong>
+      {{range .WatchGroup.Engines}}
+        {{if eq .State "Healthy"}}
+            <pre><strong style="color: green">{{.IP}} {{.Name}} {{.State}}</strong></pre>
+        {{else}}
+            <pre><strong style="color: red">{{.IP}} {{.Name}} {{.State}}</strong></pre>
+        {{end}}
+      {{end}}
+      </strong>
+      </td>
+    </tr>
+    {{end}} 
+    <tr>
+      <td colspan="2" style="padding-left: 10px; color: #FFFFFF; height:22px; ">&nbsp;</td>
+    </tr>
+  </table>
+</body>
+</html>
