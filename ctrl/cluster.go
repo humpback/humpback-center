@@ -34,7 +34,8 @@ func createCluster(configuration *etc.Configuration) (*cluster.Cluster, error) {
 		return nil, err
 	}
 
-	notifySender := notify.NewNotifySender(configuration.GetNotificationsEndPoints())
+	siteURL := strings.SplitN(configuration.SiteAPI, "/api", 2)
+	notifySender := notify.NewNotifySender(siteURL[0], configuration.GetNotificationsEndPoints())
 	cluster, err := cluster.NewCluster(clusterOpts.DriverOpts, notifySender, discovery)
 	if err != nil {
 		return nil, err

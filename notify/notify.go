@@ -13,15 +13,17 @@ var templateBody string
 //NotifySender is exported
 type NotifySender struct {
 	sync.RWMutex
+	SiteURL   string
 	initWatch bool
 	endPoints []IEndPoint
 	events    map[string]*Event
 }
 
 //NewNotifySender is exported
-func NewNotifySender(endPoints []EndPoint) *NotifySender {
+func NewNotifySender(siteurl string, endPoints []EndPoint) *NotifySender {
 
 	sender := &NotifySender{
+		SiteURL:   siteurl,
 		initWatch: true,
 		endPoints: []IEndPoint{},
 		events:    make(map[string]*Event),
@@ -55,7 +57,7 @@ func NewNotifySender(endPoints []EndPoint) *NotifySender {
 //AddGroupEnginesWatchEvent is exported
 func (sender *NotifySender) AddGroupEnginesWatchEvent(description string, watchGroup *WatchGroup) {
 
-	event := NewEvent(GroupEnginesWatchEvent, description, nil, watchGroup.ContactInfo, sender.endPoints)
+	event := NewEvent(GroupEnginesWatchEvent, description, nil, watchGroup.ContactInfo, sender.SiteURL, sender.endPoints)
 	event.data["WatchGroup"] = watchGroup
 	sender.Lock()
 	sender.events[event.ID] = event
@@ -66,7 +68,7 @@ func (sender *NotifySender) AddGroupEnginesWatchEvent(description string, watchG
 //AddGroupMetaContainersEvent is exported
 func (sender *NotifySender) AddGroupMetaContainersEvent(description string, err error, groupMeta *GroupMeta) {
 
-	event := NewEvent(GroupMetaContainersEvent, description, err, groupMeta.ContactInfo, sender.endPoints)
+	event := NewEvent(GroupMetaContainersEvent, description, err, groupMeta.ContactInfo, sender.SiteURL, sender.endPoints)
 	event.data["GroupMeta"] = groupMeta
 	sender.Lock()
 	sender.events[event.ID] = event

@@ -1,6 +1,6 @@
 FROM bashell/alpine-bash
 
-MAINTAINER bobliu bobliu0909@hotmail.com
+MAINTAINER bobliu bobliu0909@gmail.com
 
 RUN mkdir -p /opt/humpback-center/cache
 

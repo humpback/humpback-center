@@ -38,7 +38,7 @@ type Event struct {
 }
 
 //NewEvent is exported
-func NewEvent(eventType EventType, description string, err error, contactInfo string, endpoints []IEndPoint) *Event {
+func NewEvent(eventType EventType, description string, err error, contactInfo string, siteurl string, endpoints []IEndPoint) *Event {
 
 	seed := time.Now()
 	event := &Event{
@@ -51,6 +51,7 @@ func NewEvent(eventType EventType, description string, err error, contactInfo st
 	}
 
 	event.data = map[string]interface{}{
+		"SiteURL":     siteurl,
 		"ID":          event.ID,
 		"Event":       event.Name,
 		"Description": description,
