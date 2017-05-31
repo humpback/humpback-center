@@ -59,7 +59,7 @@ func (cluster *Cluster) NotifyGroupMetaContainersEvent(description string, excep
 		return
 	}
 
-	containers := []notify.Container{}
+	containers := []*notify.Container{}
 	for _, baseConfig := range metaData.BaseConfigs {
 		for _, engine := range engines {
 			if engine.IsHealthy() && engine.HasContainer(baseConfig.ID) {
@@ -67,7 +67,7 @@ func (cluster *Cluster) NotifyGroupMetaContainersEvent(description string, excep
 				if c := engine.Container(baseConfig.ID); c != nil {
 					state = StateString(c.Info.State)
 				}
-				containers = append(containers, notify.Container{
+				containers = append(containers, &notify.Container{
 					ID:     baseConfig.ID[:12],
 					Name:   baseConfig.Name,
 					Server: engine.IP,
@@ -75,6 +75,17 @@ func (cluster *Cluster) NotifyGroupMetaContainersEvent(description string, excep
 				})
 			}
 		}
+	}
+
+	nEngines := []*notify.Engine{}
+	engines = cluster.GetGroupAllEngines(metaData.GroupID)
+	for _, engine := range engines {
+		e := &notify.Engine{
+			IP:    engine.IP,
+			Name:  engine.Name,
+			State: stateText[engine.state],
+		}
+		nEngines = append(nEngines, e)
 	}
 
 	groupMeta := &notify.GroupMeta{
@@ -86,6 +97,7 @@ func (cluster *Cluster) NotifyGroupMetaContainersEvent(description string, excep
 		Instances:   metaData.Instances,
 		Image:       metaData.Config.Image,
 		ContactInfo: group.ContactInfo,
+		Engines:     nEngines,
 		Containers:  containers,
 	}
 	cluster.NotifySender.AddGroupMetaContainersEvent(description, exception, groupMeta)

@@ -104,6 +104,19 @@
       <td class="content"><strong>{{.GroupMeta.Instances}}</strong></td>
     </tr>
     <tr>
+      <td class="title"><strong>Engines</strong></td>
+      <td class="content">
+      <strong>
+      {{range .GroupMeta.Engines}}
+        {{if eq .State "Healthy"}}
+            <pre><strong style="color: green">{{.IP}} {{.Name}} {{.State}}</strong></pre>
+        {{else}}
+            <pre><strong style="color: red">{{.IP}} {{.Name}} {{.State}}</strong></pre>
+        {{end}}
+      {{end}}
+      </strong></td>
+    </tr>
+    <tr>
       <td class="title"><strong>Containers</strong></td>
       <td class="content">
       <strong>

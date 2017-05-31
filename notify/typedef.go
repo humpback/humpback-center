@@ -57,5 +57,6 @@ type GroupMeta struct {
 	Instances   int
 	Image       string
 	ContactInfo string
-	Containers  []Container
+	Engines     []*Engine
+	Containers  []*Container
 }

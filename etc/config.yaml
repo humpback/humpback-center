@@ -22,9 +22,8 @@ notifications:
       #- name: api
       #  url: http://127.0.0.1:8009/framework/v1/mail
       #  headers:
-      #      x-cluster-notify: ["endo"]
       #      content-type: ["application/json; charset=utf-8"]
-      #  sender: humpback@newegg.com
+      #  sender: xxxxx.xx.x@example.com
       #  enabled: true
       #- name: smtp
       #  host: smtp.example.com
