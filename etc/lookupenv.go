@@ -21,6 +21,11 @@ var (
 // ParseEnv is exported
 func (conf *Configuration) ParseEnv() error {
 
+	pidFile := os.Getenv("HUMPBACK_PIDFILE")
+	if pidFile != "" {
+		conf.PIDFile = pidFile
+	}
+
 	siteAPI := os.Getenv("HUMPBACK_SITEAPI")
 	if siteAPI != "" {
 		if _, err := url.Parse(siteAPI); err != nil {
