@@ -20,27 +20,29 @@ import (
 
 //NodeRegisterOptions is exported
 type NodeRegisterOptions struct {
-	APIPort          int
-	ClusterName      string
-	ClusterURIs      string
-	ClusterHeartBeat string
-	ClusterTTL       string
-	DockerEndPoint   string
-	DockerAPIVersion string
+	APIPort           int
+	ClusterName       string
+	ClusterURIs       string
+	ClusterHeartBeat  string
+	ClusterTTL        string
+	DockerAgentIPAddr string
+	DockerEndPoint    string
+	DockerAPIVersion  string
 }
 
 // NewNodeRegisterOptions is exported
 func NewNodeRegisterOptions(apiPort int, clusterName string, clusterURIs string, clusterHeartBeat string, clusterTTL string,
-	dockerEndPoint string, dockerAPIVersion string) *NodeRegisterOptions {
+	dockerAgentIPAddr string, dockerEndPoint string, dockerAPIVersion string) *NodeRegisterOptions {
 
 	return &NodeRegisterOptions{
-		APIPort:          apiPort,
-		ClusterName:      clusterName,
-		ClusterURIs:      clusterURIs,
-		ClusterHeartBeat: clusterHeartBeat,
-		ClusterTTL:       clusterTTL,
-		DockerEndPoint:   dockerEndPoint,
-		DockerAPIVersion: dockerAPIVersion,
+		APIPort:           apiPort,
+		ClusterName:       clusterName,
+		ClusterURIs:       clusterURIs,
+		ClusterHeartBeat:  clusterHeartBeat,
+		ClusterTTL:        clusterTTL,
+		DockerAgentIPAddr: dockerAgentIPAddr,
+		DockerEndPoint:    dockerEndPoint,
+		DockerAPIVersion:  dockerAPIVersion,
 	}
 }
 
@@ -200,7 +202,13 @@ func createNodeOptions(options *NodeRegisterOptions) (*NodeOptions, error) {
 		return nil, err
 	}
 
-	hostIP := network.GetDefaultIP()
+	var hostIP string
+	if options.DockerAgentIPAddr == "0.0.0.0" {
+		hostIP = network.GetDefaultIP()
+	} else {
+		hostIP = options.DockerAgentIPAddr
+	}
+
 	if _, err := net.ResolveIPAddr("ip4", hostIP); err != nil {
 		return nil, err
 	}
