@@ -1,6 +1,8 @@
-FROM bashell/alpine-bash
+FROM frolvlad/alpine-glibc:alpine-3.6
 
 MAINTAINER bobliu bobliu0909@gmail.com
+
+RUN apk add --no-cache bash
 
 RUN mkdir -p /opt/humpback-center/cache
 

@@ -13,7 +13,7 @@ func main() {
 	service, err := server.NewCenterService()
 	if err != nil {
 		log.Printf("service error:%s\n", err.Error())
-		os.Exit(system.PorcessExitCode(err))
+		os.Exit(system.ErrorExitCode(err))
 	}
 
 	defer func() {
@@ -23,7 +23,7 @@ func main() {
 
 	if err := service.Startup(); err != nil {
 		log.Printf("service start error:%s\n", err.Error())
-		os.Exit(system.PorcessExitCode(err))
+		os.Exit(system.ErrorExitCode(err))
 	}
 	system.InitSignal(nil)
 }
