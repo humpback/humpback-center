@@ -13,35 +13,36 @@ import (
 type Configuration struct {
 
 	//base options
-	Version string `yaml:"version"`
-	PIDFile string `yaml:"pidfile"`
-	SiteAPI string `yaml:"siteapi"`
+	Version      string `yaml:"version"  json:"version"`
+	PIDFile      string `yaml:"pidfile" json:"pidfile"`
+	RetryStartup bool   `yaml:"retrystartup" json:"retrystartup"`
+	SiteAPI      string `yaml:"siteapi" json:"siteapi"`
 
 	Cluster struct {
 		//driver opts
-		DriverOpts []string `yaml:"opts"`
+		DriverOpts []string `yaml:"opts" json:"opts"`
 		//service discovery opts
 		Discovery struct {
-			URIs      string `yaml:"uris"`
-			Cluster   string `yaml:"cluster"`
-			Heartbeat string `yaml:"heartbeat"`
-		} `yaml:"discovery"`
-	} `yaml:"cluster"`
+			URIs      string `yaml:"uris" json:"uris"`
+			Cluster   string `yaml:"cluster" json:"cluster"`
+			Heartbeat string `yaml:"heartbeat" json:"heartbeat"`
+		} `yaml:"discovery" json:"discovery"`
+	} `yaml:"cluster" json:"cluster"`
 
 	//api options
 	API struct {
-		Hosts      []string `yaml:"hosts"`
-		EnableCors bool     `yaml:"enablecors"`
-	} `yaml:"api"`
+		Hosts      []string `yaml:"hosts" json:"hosts"`
+		EnableCors bool     `yaml:"enablecors" json:"enablecors"`
+	} `yaml:"api" json:"api"`
 
-	Notifications notify.Notifications `yaml:"notifications,omitempty"`
+	Notifications notify.Notifications `yaml:"notifications,omitempty" json:"notifications,omitempty"`
 
 	//log options
 	Logger struct {
-		LogFile  string `yaml:"logfile"`
-		LogLevel string `yaml:"loglevel"`
-		LogSize  int64  `yaml:"logsize"`
-	} `yaml:"logger"`
+		LogFile  string `yaml:"logfile" json:"logfile"`
+		LogLevel string `yaml:"loglevel" json:"loglevel"`
+		LogSize  int64  `yaml:"logsize" json:"logsize"`
+	} `yaml:"logger" json:"logger"`
 }
 
 // NewConfiguration is exported

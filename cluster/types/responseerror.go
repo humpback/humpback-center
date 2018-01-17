@@ -1,6 +1,6 @@
 package types
 
-import "github.com/humpback/gounits/http"
+import "github.com/humpback/gounits/httpx"
 
 import (
 	"fmt"
@@ -18,11 +18,11 @@ type ResponseError struct {
 }
 
 // ParseHTTPResponseError is exported
-func ParseHTTPResponseError(response *http.Response) string {
+func ParseHTTPResponseError(response *httpx.HttpResponse) string {
 
 	responseError := &ResponseError{}
 	if err := response.JSON(responseError); err != nil {
-		return fmt.Sprintf("agent api error, httpcode:%d", response.StatusCode())
+		return fmt.Sprintf("engine client error, httpcode: %d", response.StatusCode())
 	}
 	return responseError.Detail
 }

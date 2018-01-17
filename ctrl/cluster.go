@@ -1,17 +1,19 @@
 package ctrl
 
-import "github.com/humpback/discovery"
-import "github.com/humpback/gounits/logger"
+import "common/models"
 import "humpback-center/api/request"
 import "humpback-center/cluster"
 import "humpback-center/cluster/types"
 import "humpback-center/etc"
 import "humpback-center/notify"
-import "common/models"
+import "github.com/humpback/discovery"
+import "github.com/humpback/gounits/logger"
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -81,15 +83,15 @@ func (c *Controller) getClusterGroupStoreData(groupid string) []*cluster.Group {
 	t := time.Now().UnixNano() / int64(time.Millisecond)
 	value := fmt.Sprintf("HUMPBACK_CENTER%d", t)
 	code := base64.StdEncoding.EncodeToString([]byte(value))
-	header := map[string][]string{"x-get-cluster": []string{code}}
-	respGroups, err := c.httpClient.Get(c.Configuration.SiteAPI+"/groups/getclusters", query, header)
+	headers := map[string][]string{"x-get-cluster": []string{code}}
+	respGroups, err := c.client.Get(context.Background(), c.Configuration.SiteAPI+"/groups/getclusters", query, headers)
 	if err != nil {
 		logger.ERROR("[#ctrl#] get cluster group storedata error:%s", err.Error())
 		return nil
 	}
 
 	defer respGroups.Close()
-	if respGroups.StatusCode() != 200 {
+	if respGroups.StatusCode() != http.StatusOK {
 		logger.ERROR("[#ctrl#] get cluster group storedata error:%d %s", respGroups.StatusCode(), respGroups.String())
 		return nil
 	}

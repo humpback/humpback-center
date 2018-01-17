@@ -68,7 +68,7 @@ func (cluster *Cluster) NotifyGroupMetaContainersEvent(description string, excep
 					state = StateString(c.Info.State)
 				}
 				containers = append(containers, &notify.Container{
-					ID:     baseConfig.ID[:12],
+					ID:     ShortContainerID(baseConfig.ID),
 					Name:   baseConfig.Name,
 					Server: engine.IP,
 					State:  state,

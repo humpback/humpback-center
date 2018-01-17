@@ -82,13 +82,13 @@ func (mContainer *MigrateContainer) Execute(cluster *Cluster) {
 	engine, container, err := cluster.createContainer(mContainer.metaData, mContainer.filter, mContainer.baseConfig.Container)
 	if err != nil {
 		mContainer.SetState(MigrateFailure)
-		logger.ERROR("[#cluster] migrator container %s error %s", mContainer.ID[:12], err.Error())
+		logger.ERROR("[#cluster] migrator container %s error %s", ShortContainerID(mContainer.ID), err.Error())
 		return
 	}
 
 	mContainer.Lock()
 	mContainer.state = MigrateCompleted
-	logger.INFO("[#cluster] migrator container %s > %s to %s", mContainer.ID[:12], container.Info.ID[:12], engine.IP)
+	logger.INFO("[#cluster] migrator container %s > %s to %s", ShortContainerID(mContainer.ID), ShortContainerID(container.Info.ID), engine.IP)
 	mContainer.Unlock()
 	return
 }
@@ -486,10 +486,10 @@ func (cache *MigrateContainersCache) OnMigratorNotifyHandleFunc(migrator *Migrat
 
 	logger.INFO("[#cluster] migrator notify %s", migrator.MetaID)
 	metaData := cache.Cluster.GetMetaData(migrator.MetaID)
-	cache.Cluster.hooksProcessor.Hook(metaData, MigrateMetaEvent)
+	cache.Cluster.submitHookEvent(metaData, MigrateMetaEvent)
 	cache.Cluster.NotifyGroupMetaContainersEvent("Cluster Meta Containers Migrated.", err, migrator.MetaID)
 	mContainers := migrator.Containers()
 	for _, mContainer := range mContainers {
-		logger.INFO("[#cluster] migrator container %s %s", mContainer.ID[:12], mContainer.state.String())
+		logger.INFO("[#cluster] migrator container %s %s", ShortContainerID(mContainer.ID), mContainer.state.String())
 	}
 }

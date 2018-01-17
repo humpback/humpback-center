@@ -26,6 +26,15 @@ func (conf *Configuration) ParseEnv() error {
 		conf.PIDFile = pidFile
 	}
 
+	retryStartup := os.Getenv("HUMPBACK_RETRYSTARTUP")
+	if retryStartup != "" {
+		value, err := strconv.ParseBool(retryStartup)
+		if err != nil {
+			return fmt.Errorf("HUMPBACK_RETRYSTARTUP invalid, %s", err.Error())
+		}
+		conf.RetryStartup = value
+	}
+
 	siteAPI := os.Getenv("HUMPBACK_SITEAPI")
 	if siteAPI != "" {
 		if _, err := url.Parse(siteAPI); err != nil {
@@ -87,6 +96,14 @@ func parseClusterEnv(conf *Configuration) error {
 			return fmt.Errorf("%s, CENTER_CLUSTER_CREATERETRY %s", ERRConfigurationParseEnv.Error(), err.Error())
 		}
 		driverOpts["createretry"] = createRetry
+	}
+
+	removeDelay := os.Getenv("CENTER_CLUSTER_REMOVEDELAY")
+	if removeDelay != "" {
+		if _, err := time.ParseDuration(removeDelay); err != nil {
+			return fmt.Errorf("%s, CENTER_CLUSTER_REMOVEDELAY %s", ERRConfigurationParseEnv.Error(), err.Error())
+		}
+		driverOpts["removedelay"] = removeDelay
 	}
 
 	migrateDelay := os.Getenv("CENTER_CLUSTER_MIGRATEDELAY")

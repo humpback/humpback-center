@@ -1,6 +1,7 @@
 version: 1.0.0
 pidfile: ./humpback-center.pid
-siteapi: http://192.168.2.80/api
+retrystartup: true
+siteapi: http://192.168.2.80:8012/api
 cluster:
     opts: [
             #"location=dev",
@@ -8,10 +9,11 @@ cluster:
             "overcommit=0.08",
             "recoveryinterval=120s",
             "createretry=1",
-            "migratedelay=45s"
+            "migratedelay=45s",
+            "removedelay=500s"
     ]
     discovery:
-        uris: zk://192.168.2.80:2181,192.168.2.81:2181,192.168.2.82:2181
+        uris: etcd://192.168.2.80:2379
         cluster: humpback/center
         heartbeat: 8s
 api:
@@ -19,18 +21,19 @@ api:
     enablecors: true
 notifications:
     endpoints:
-      #- name: api
-      #  url: http://127.0.0.1:8009/framework/v1/mail
-      #  headers:
-      #      content-type: ["application/json; charset=utf-8"]
-      #  sender: xxxxx.xx.x@example.com
-      #  enabled: true
+      - name: api
+        url: http://192.168.139.1:8009/framework/v1/mail
+        headers:
+            x-cluster-notify: ["endo"]
+            content-type: ["application/json; charset=utf-8"]
+        sender: humpback@newegg.com
+        enabled: true
       #- name: smtp
       #  host: smtp.example.com
       #  port: 25
-      #  user: admin
+      #  user: u1
       #  password: 123456
-      #  sender: xxxxx.xx.x@example.com
+      #  sender: humpback@newegg.com
       #  enabled: true
 logger:
     logfile: ./logs/humpback-center.log

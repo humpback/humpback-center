@@ -1,13 +1,13 @@
 package cluster
 
+import "common/models"
+import "humpback-center/notify"
+import "humpback-center/cluster/types"
 import "github.com/humpback/discovery"
 import "github.com/humpback/discovery/backends"
 import "github.com/humpback/gounits/json"
 import "github.com/humpback/gounits/logger"
 import "github.com/humpback/gounits/system"
-import "humpback-center/cluster/types"
-import "humpback-center/notify"
-import "common/models"
 
 import (
 	"fmt"
@@ -36,12 +36,13 @@ type Server struct {
 // Servers: cluster group's servers.
 // ContactInfo: cluster manager contactinfo.
 type Group struct {
-	ID          string   `json:"ID"`
-	Name        string   `json:"Name"`
-	IsCluster   bool     `json:"IsCluster"`
-	Location    string   `json:"ClusterLocation"`
-	Servers     []Server `json:"Servers"`
-	ContactInfo string   `json:"ContactInfo"`
+	ID            string   `json:"ID"`
+	Name          string   `json:"Name"`
+	IsCluster     bool     `json:"IsCluster"`
+	IsRemoveDelay bool     `json:"IsRemoveDelay"`
+	Location      string   `json:"ClusterLocation"`
+	Servers       []Server `json:"Servers"`
+	ContactInfo   string   `json:"ContactInfo"`
 }
 
 // Cluster is exported
@@ -53,13 +54,14 @@ type Cluster struct {
 
 	overcommitRatio   float64
 	createRetry       int64
+	removeDelay       time.Duration
+	recoveryInterval  time.Duration
 	randSeed          *rand.Rand
 	nodeCache         *NodeCache
 	configCache       *ContainersConfigCache
 	upgraderCache     *UpgradeContainersCache
 	migtatorCache     *MigrateContainersCache
 	enginesPool       *EnginesPool
-	metaRestorer      *MetaRestorer
 	hooksProcessor    *HooksProcessor
 	pendingContainers map[string]*pendingContainer
 	engines           map[string]*Engine
@@ -95,6 +97,13 @@ func NewCluster(driverOpts system.DriverOpts, notifySender *notify.NotifySender,
 		}
 	}
 
+	removedelay := time.Duration(0)
+	if val, ret := driverOpts.String("removedelay", ""); ret {
+		if dur, err := time.ParseDuration(val); err == nil {
+			removedelay = dur
+		}
+	}
+
 	upgradedelay := 10 * time.Second
 	if val, ret := driverOpts.String("upgradedelay", ""); ret {
 		if dur, err := time.ParseDuration(val); err == nil {
@@ -109,7 +118,7 @@ func NewCluster(driverOpts system.DriverOpts, notifySender *notify.NotifySender,
 		}
 	}
 
-	recoveryInterval := 120 * time.Second
+	recoveryInterval := 150 * time.Second
 	if val, ret := driverOpts.String("recoveryinterval", ""); ret {
 		if dur, err := time.ParseDuration(val); err == nil {
 			recoveryInterval = dur
@@ -126,9 +135,7 @@ func NewCluster(driverOpts system.DriverOpts, notifySender *notify.NotifySender,
 		cacheRoot = val
 	}
 
-	hooksProcessor := NewHooksProcessor()
 	enginesPool := NewEnginesPool()
-	metaRestorer := NewMetaRestorer(recoveryInterval)
 	migrateContainersCache := NewMigrateContainersCache(migratedelay)
 	upgraderContainersCache := NewUpgradeContainersCache(upgradedelay)
 	configCache, err := NewContainersConfigCache(cacheRoot)
@@ -142,22 +149,21 @@ func NewCluster(driverOpts system.DriverOpts, notifySender *notify.NotifySender,
 		Discovery:         discovery,
 		overcommitRatio:   overcommitratio,
 		createRetry:       createretry,
+		removeDelay:       removedelay,
+		recoveryInterval:  recoveryInterval,
 		randSeed:          rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
 		nodeCache:         NewNodeCache(),
 		configCache:       configCache,
 		upgraderCache:     upgraderContainersCache,
 		migtatorCache:     migrateContainersCache,
 		enginesPool:       enginesPool,
-		metaRestorer:      metaRestorer,
-		hooksProcessor:    hooksProcessor,
+		hooksProcessor:    NewHooksProcessor(),
 		pendingContainers: make(map[string]*pendingContainer),
 		engines:           make(map[string]*Engine),
 		groups:            make(map[string]*Group),
 		stopCh:            make(chan struct{}),
 	}
 
-	hooksProcessor.SetCluster(cluster)
-	metaRestorer.SetCluster(cluster)
 	enginesPool.SetCluster(cluster)
 	migrateContainersCache.SetCluster(cluster)
 	upgraderContainersCache.SetCluster(cluster)
@@ -169,13 +175,20 @@ func NewCluster(driverOpts system.DriverOpts, notifySender *notify.NotifySender,
 func (cluster *Cluster) Start() error {
 
 	cluster.configCache.Init()
+	cluster.Lock()
+	for _, group := range cluster.groups {
+		cluster.configCache.SetGroupMetaDataIsRemoveDelay(group.ID, group.IsRemoveDelay)
+	}
+	cluster.Unlock()
+
 	if cluster.Discovery != nil {
 		if cluster.Location != "" {
 			logger.INFO("[#cluster#] cluster location: %s", cluster.Location)
 		}
 		logger.INFO("[#cluster#] discovery service watching...")
 		cluster.Discovery.Watch(cluster.stopCh, cluster.watchDiscoveryHandleFunc)
-		cluster.metaRestorer.Start()
+		cluster.hooksProcessor.Start()
+		go cluster.recoveryContainersLoop()
 		return nil
 	}
 	return ErrClusterDiscoveryInvalid
@@ -189,7 +202,7 @@ func (cluster *Cluster) Stop() {
 
 	close(cluster.stopCh)
 	cluster.enginesPool.Release()
-	cluster.metaRestorer.Stop()
+	cluster.hooksProcessor.Close()
 	logger.INFO("[#cluster#] discovery service closed.")
 }
 
@@ -476,6 +489,7 @@ func (cluster *Cluster) SetGroup(group *Group) {
 		pGroup.Location = group.Location
 		pGroup.Servers = group.Servers
 		pGroup.IsCluster = group.IsCluster
+		pGroup.IsRemoveDelay = group.IsRemoveDelay
 		pGroup.ContactInfo = group.ContactInfo
 		logger.INFO("[#cluster#] group changed %s %s (%d)", pGroup.ID, pGroup.Name, len(pGroup.Servers))
 		for _, originServer := range origins {
@@ -526,6 +540,9 @@ func (cluster *Cluster) SetGroup(group *Group) {
 			}
 		*/
 	}
+
+	// set metadata group is remove-delay opts.
+	cluster.configCache.SetGroupMetaDataIsRemoveDelay(pGroup.ID, pGroup.IsRemoveDelay)
 }
 
 // RemoveGroup is exported
@@ -547,7 +564,7 @@ func (cluster *Cluster) RemoveGroup(groupid string) bool {
 		go func(mdata *MetaData) {
 			cluster.removeContainers(mdata, "")
 			cluster.configCache.RemoveMetaData(mdata.MetaID)
-			cluster.hooksProcessor.Hook(mdata, RemoveMetaEvent)
+			cluster.submitHookEvent(mdata, RemoveMetaEvent)
 			wgroup.Done()
 		}(metaData)
 	}
@@ -660,7 +677,7 @@ func (cluster *Cluster) OperateContainers(metaid string, containerid string, act
 			}
 		}
 	}
-	cluster.hooksProcessor.Hook(metaData, OperateMetaEvent)
+	cluster.submitHookEvent(metaData, OperateMetaEvent)
 	return &operatedContainers, nil
 }
 
@@ -687,7 +704,7 @@ func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) (*type
 		cluster.upgraderCache.Upgrade(upgradeCh, metaData.MetaID, imagetag, containers)
 		ret = <-upgradeCh
 		close(upgradeCh)
-		cluster.hooksProcessor.Hook(metaData, UpgradeMetaEvent)
+		cluster.submitHookEvent(metaData, UpgradeMetaEvent)
 		if !ret {
 			return nil, fmt.Errorf("upgrade containers failure to %s", imagetag)
 		}
@@ -725,7 +742,7 @@ func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*ty
 	}
 
 	removedContainers := cluster.removeContainers(metaData, containerid)
-	cluster.hooksProcessor.Hook(metaData, RemoveMetaEvent)
+	cluster.submitHookEvent(metaData, RemoveMetaEvent)
 	if metaData := cluster.configCache.GetMetaData(metaData.MetaID); metaData != nil {
 		if len(metaData.BaseConfigs) == 0 {
 			cluster.configCache.RemoveMetaData(metaData.MetaID)
@@ -754,7 +771,7 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 		}
 		if !found { //clean meta invalid container.
 			cluster.configCache.RemoveContainerBaseConfig(metaData.MetaID, baseConfig.ID)
-			logger.WARN("[#cluster#] recovery containers %s remove invalid container %s", metaData.MetaID, baseConfig.ID[:12])
+			logger.WARN("[#cluster#] recovery containers %s remove invalid container %s", metaData.MetaID, ShortContainerID(baseConfig.ID))
 		}
 	}
 
@@ -767,7 +784,7 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 			} else {
 				cluster.reduceContainers(metaData, baseConfigsCount-metaData.Instances)
 			}
-			cluster.hooksProcessor.Hook(metaData, RecoveryMetaEvent)
+			cluster.submitHookEvent(metaData, RecoveryMetaEvent)
 			cluster.NotifyGroupMetaContainersEvent("Cluster Meta Containers Recovered.", err, metaData.MetaID)
 		}
 	}
@@ -798,7 +815,7 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 		}
 	}
 
-	cluster.hooksProcessor.Hook(metaData, UpdateMetaEvent)
+	cluster.submitHookEvent(metaData, UpdateMetaEvent)
 	createdContainers := types.CreatedContainers{}
 	for _, engine := range engines {
 		if engine.IsHealthy() {
@@ -818,8 +835,9 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 		return "", nil, ErrClusterContainersInstancesInvalid
 	}
 
+	group := cluster.GetGroup(groupid)
 	engines := cluster.GetGroupEngines(groupid)
-	if engines == nil {
+	if group == nil || engines == nil {
 		logger.ERROR("[#cluster#] create containers error %s : %s", groupid, ErrClusterGroupNotFound)
 		return "", nil, ErrClusterGroupNotFound
 	}
@@ -834,7 +852,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 		return "", nil, ErrClusterCreateContainerNameConflict
 	}
 
-	metaData, err := cluster.configCache.CreateMetaData(groupid, instances, webhooks, config)
+	metaData, err := cluster.configCache.CreateMetaData(groupid, group.IsRemoveDelay, instances, webhooks, config)
 	if err != nil {
 		logger.ERROR("[#cluster#] create containers error %s : %s", groupid, ErrClusterContainersMetaCreateFailure)
 		return "", nil, ErrClusterContainersMetaCreateFailure
@@ -849,7 +867,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 		}
 		return "", nil, fmt.Errorf("%s, %s\n", ErrClusterCreateContainerFailure.Error(), resultErr)
 	}
-	cluster.hooksProcessor.Hook(metaData, CreateMetaEvent)
+	cluster.submitHookEvent(metaData, CreateMetaEvent)
 	return metaData.MetaID, &createdContainers, nil
 }
 
@@ -1113,4 +1131,67 @@ func (cluster *Cluster) validateMetaData(metaid string) (*MetaData, []*Engine, e
 		return nil, nil, ErrClusterContainersSetting
 	}
 	return metaData, engines, nil
+}
+
+func (cluster *Cluster) submitHookEvent(metaData *MetaData, hookEvent HookEvent) {
+
+	if len(metaData.WebHooks) == 0 {
+		return
+	}
+
+	hookContainers := HookContainers{}
+	engines := cluster.GetGroupEngines(metaData.GroupID)
+	for _, engine := range engines {
+		if engine.IsHealthy() {
+			containers := engine.Containers(metaData.MetaID)
+			for _, container := range containers {
+				hookContainers = append(hookContainers, &HookContainer{
+					IP:        engine.IP,
+					Name:      engine.Name,
+					Container: container.Config.Container,
+				})
+			}
+		}
+	}
+	cluster.hooksProcessor.SubmitHook(metaData.MetaBase, hookContainers, hookEvent)
+}
+
+func (cluster *Cluster) recoveryContainersLoop() {
+
+	for {
+		ticker := time.NewTicker(cluster.recoveryInterval)
+		select {
+		case <-ticker.C:
+			{
+				ticker.Stop()
+				metaids := []string{}
+				metaEngines := make(map[string]*Engine)
+				groups := cluster.GetGroups()
+				for _, group := range groups {
+					groupMetaData := cluster.configCache.GetGroupMetaData(group.ID)
+					for _, metaData := range groupMetaData {
+						metaids = append(metaids, metaData.MetaID)
+						if _, engines, err := cluster.GetMetaDataEngines(metaData.MetaID); err == nil {
+							for _, engine := range engines {
+								if engine.IsHealthy() && engine.HasMeta(metaData.MetaID) {
+									metaEngines[engine.IP] = engine
+								}
+							}
+						}
+					}
+				}
+				if len(metaids) > 0 {
+					cluster.RefreshEnginesContainers(metaEngines)
+					for _, metaid := range metaids {
+						cluster.RecoveryContainers(metaid)
+					}
+				}
+			}
+		case <-cluster.stopCh:
+			{
+				ticker.Stop()
+				return
+			}
+		}
+	}
 }

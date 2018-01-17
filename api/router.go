@@ -17,13 +17,10 @@ var routes = map[string]map[string]handler{
 		"/v1/groups/collections/{metaid}":      getGroupContainers,
 		"/v1/groups/collections/{metaid}/base": getGroupContainersMetaBase,
 		"/v1/groups/engines/{server}":          getGroupEngine,
-		"/v1/repository/images/catalog":        getRepositoryImagesCatalog,
-		"/v1/repository/images/tags/*":         getRepositoryImagesTags,
 	},
 	"POST": {
-		"/v1/groups/event":              postGroupEvent,
-		"/v1/groups/collections":        postGroupCreateContainers,
-		"/v1/repository/images/migrate": postRepositoryImagesMigrate,
+		"/v1/groups/event":       postGroupEvent,
+		"/v1/groups/collections": postGroupCreateContainers,
 	},
 	"PUT": {
 		"/v1/groups/collections":         putGroupUpdateContainers,
@@ -34,7 +31,6 @@ var routes = map[string]map[string]handler{
 	"DELETE": {
 		"/v1/groups/collections/{metaid}":    deleteGroupRemoveContainers,
 		"/v1/groups/container/{containerid}": deleteGroupRemoveContainer,
-		"/v1/repository/images/{name:.*}":    deleteRepositoryImages,
 	},
 }
 

@@ -87,7 +87,7 @@ func (pool *EnginesPool) AddEngine(ip string, name string) {
 		logger.INFO("[#cluster#] addengine, pool engine reused %s %s %s.", poolEngine.IP, poolEngine.Name, poolEngine.State())
 	} else {
 		var err error
-		poolEngine, err = NewEngine(nodeData, pool.Cluster.overcommitRatio, pool.Cluster.configCache)
+		poolEngine, err = NewEngine(nodeData, pool.Cluster.overcommitRatio, pool.Cluster.removeDelay, pool.Cluster.configCache)
 		if err != nil {
 			return
 		}

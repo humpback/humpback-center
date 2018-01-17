@@ -44,12 +44,13 @@ func (containers SortContainerBaseConfigs) Less(i, j int) bool {
 
 // MetaBase is exported
 type MetaBase struct {
-	GroupID   string           `json:"GroupId"`
-	MetaID    string           `json:"MetaId"`
-	Instances int              `json:"Instances"`
-	WebHooks  types.WebHooks   `json:"WebHooks"`
-	ImageTag  string           `json:"ImageTag"`
-	Config    models.Container `json:"Config"`
+	GroupID       string           `json:"GroupId"`
+	MetaID        string           `json:"MetaId"`
+	IsRemoveDelay bool             `json:"IsRemoveDelay"`
+	Instances     int              `json:"Instances"`
+	WebHooks      types.WebHooks   `json:"WebHooks"`
+	ImageTag      string           `json:"ImageTag"`
+	Config        models.Container `json:"Config"`
 }
 
 // MetaData is exported
@@ -277,6 +278,19 @@ func (cache *ContainersConfigCache) GetGroupMetaData(groupid string) []*MetaData
 	return out
 }
 
+// SetGroupMetaDataIsRemoveDelay is exported
+func (cache *ContainersConfigCache) SetGroupMetaDataIsRemoveDelay(groupid string, isremovedelay bool) {
+
+	cache.Lock()
+	for _, metaData := range cache.data {
+		if metaData.GroupID == groupid {
+			metaData.IsRemoveDelay = isremovedelay
+			cache.writeMetaData(metaData)
+		}
+	}
+	cache.Unlock()
+}
+
 // SetMetaData is exported
 func (cache *ContainersConfigCache) SetMetaData(metaid string, instances int, webhooks types.WebHooks) {
 
@@ -322,7 +336,7 @@ func (cache *ContainersConfigCache) RemoveGroupMetaData(groupid string) bool {
 }
 
 // CreateMetaData is exported
-func (cache *ContainersConfigCache) CreateMetaData(groupid string, instances int, webhooks types.WebHooks, config models.Container) (*MetaData, error) {
+func (cache *ContainersConfigCache) CreateMetaData(groupid string, isremovedelay bool, instances int, webhooks types.WebHooks, config models.Container) (*MetaData, error) {
 
 	cache.Lock()
 	defer cache.Unlock()
@@ -335,12 +349,13 @@ func (cache *ContainersConfigCache) CreateMetaData(groupid string, instances int
 
 	metaData := &MetaData{
 		MetaBase: MetaBase{
-			GroupID:   groupid,
-			MetaID:    metaid,
-			Instances: instances,
-			WebHooks:  webhooks,
-			ImageTag:  imageTag,
-			Config:    config,
+			GroupID:       groupid,
+			MetaID:        metaid,
+			IsRemoveDelay: isremovedelay,
+			Instances:     instances,
+			WebHooks:      webhooks,
+			ImageTag:      imageTag,
+			Config:        config,
 		},
 		BaseConfigs: []*ContainerBaseConfig{},
 	}
@@ -456,9 +471,5 @@ func (cache *ContainersConfigCache) removeMeteData(metaid string) error {
 	if err != nil {
 		return err
 	}
-
-	if err := os.Remove(metaPath); err != nil {
-		return err
-	}
-	return nil
+	return os.Remove(metaPath)
 }

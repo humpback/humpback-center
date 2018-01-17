@@ -1,5 +1,6 @@
 package cluster
 
+import "github.com/docker/docker/pkg/stringid"
 import "github.com/docker/docker/api/types"
 import units "github.com/docker/go-units"
 import "github.com/humpback/gounits/convert"
@@ -11,6 +12,12 @@ import (
 	"strings"
 	"time"
 )
+
+// ShortContainerID is exported
+// return a short containerid string.
+func ShortContainerID(containerid string) string {
+	return stringid.TruncateID(containerid)
+}
 
 // ContainerConfig is exported
 type ContainerConfig struct {

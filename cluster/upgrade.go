@@ -44,7 +44,7 @@ func (upgradeContainer *UpgradeContainer) Execute(newImageTag string) error {
 
 	originalContainer := upgradeContainer.Original
 	containerOperate := models.ContainerOperate{Action: "upgrade", Container: originalContainer.Config.ID, ImageTag: newImageTag}
-	newContainer, err := engine.UpgradeContainer(containerOperate)
+	newContainer, err := engine.ForceUpgradeContainer(containerOperate)
 	if err != nil {
 		upgradeContainer.State = UpgradeFailure
 		return fmt.Errorf("engine %s %s", engine.IP, err.Error())
@@ -66,7 +66,7 @@ func (upgradeContainer *UpgradeContainer) Recovery(originalImageTag string) erro
 	upgradeContainer.State = UpgradeFailure
 	newContainer := upgradeContainer.New
 	containerOperate := models.ContainerOperate{Action: "upgrade", Container: newContainer.Config.ID, ImageTag: originalImageTag}
-	newContainer, err := engine.UpgradeContainer(containerOperate)
+	newContainer, err := engine.ForceUpgradeContainer(containerOperate)
 	if err != nil {
 		return fmt.Errorf("engine %s %s", engine.IP, err.Error())
 	}
@@ -131,7 +131,7 @@ func (upgrader *Upgrader) Start(upgradeCh chan<- bool) {
 		if err = upgradeContainer.Execute(upgrader.NewTag); err != nil {
 			upgrader.configCache.RemoveContainerBaseConfig(upgrader.MetaID, upgradeContainer.Original.Config.ID)
 			errMsgs = append(errMsgs, "upgrade container execute, "+err.Error())
-			logger.ERROR("[#cluster#] upgrade container %s execute %s", upgradeContainer.Original.Config.ID[:12], err.Error())
+			logger.ERROR("[#cluster#] upgrade container %s execute %s", ShortContainerID(upgradeContainer.Original.Config.ID), err.Error())
 			break
 		}
 	}
@@ -144,7 +144,7 @@ func (upgrader *Upgrader) Start(upgradeCh chan<- bool) {
 				if err := upgradeContainer.Recovery(upgrader.OriginalTag); err != nil {
 					upgrader.configCache.RemoveContainerBaseConfig(upgrader.MetaID, upgradeContainer.New.Config.ID)
 					errMsgs = append(errMsgs, "upgrade container recovery, "+err.Error())
-					logger.ERROR("[#cluster#] upgrade container %s recovery %s", upgradeContainer.New.Config.ID[:12], err.Error())
+					logger.ERROR("[#cluster#] upgrade container %s recovery %s", ShortContainerID(upgradeContainer.New.Config.ID), err.Error())
 				}
 			}
 		}

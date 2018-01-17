@@ -1,13 +1,14 @@
 package cluster
 
-import "github.com/humpback/gounits/http"
-import "github.com/humpback/gounits/logger"
 import "common/models"
+import "github.com/humpback/gounits/container"
+import "github.com/humpback/gounits/httpx"
+import "github.com/humpback/gounits/logger"
 
 import (
-	"bytes"
-	"encoding/json"
-	"sync"
+	"context"
+	"net"
+	"net/http"
 	"time"
 )
 
@@ -61,92 +62,99 @@ type Hook struct {
 	Event     string   `json:"Event"`
 	MetaBase  MetaBase `json:"MetaBase"`
 	HookContainers
+	client *httpx.HttpClient
 }
 
-// NewHook is exported
-func NewHook(cluster *Cluster, metaData *MetaData, timeStamp int64, hookEvent HookEvent) *Hook {
+// Submit is exported
+func (hook *Hook) Submit() {
 
-	hookContainers := HookContainers{}
-	engines := cluster.GetGroupEngines(metaData.GroupID)
-	for _, engine := range engines {
-		if engine.IsHealthy() {
-			containers := engine.Containers(metaData.MetaID)
-			for _, container := range containers {
-				hookContainers = append(hookContainers, &HookContainer{
-					IP:        engine.IP,
-					Name:      engine.Name,
-					Container: container.Config.Container,
-				})
-			}
+	webHooks := hook.MetaBase.WebHooks
+	for _, webHook := range webHooks {
+		headers := map[string][]string{}
+		if webHook.SecretToken != "" {
+			headers["X-Humpback-Token"] = []string{webHook.SecretToken}
 		}
-	}
-
-	return &Hook{
-		Timestamp:      timeStamp,
-		Event:          hookEvent.String(),
-		MetaBase:       metaData.MetaBase,
-		HookContainers: hookContainers,
-	}
-}
-
-// Post is exported
-func (hook *Hook) Post(pool *sync.Pool) {
-
-	metaWebHooks := hook.MetaBase.WebHooks
-	for _, metaWebHook := range metaWebHooks {
-		buf := pool.Get().(*bytes.Buffer)
-		buf.Reset()
-		if err := json.NewEncoder(buf).Encode(hook); err != nil {
-			pool.Put(buf)
-			logger.ERROR("[#cluster#] webhook %s post %s to %s, encode error:%s", hook.Event, hook.MetaBase.MetaID, metaWebHook.URL, err.Error())
-			continue
-		}
-		header := map[string][]string{"Content-Type": []string{"application/json"}}
-		if metaWebHook.SecretToken != "" {
-			header["X-Humpback-Token"] = []string{metaWebHook.SecretToken}
-		}
-		resp, err := http.NewWithTimeout(requestTimeout).Post(metaWebHook.URL, nil, buf, header)
+		respWebHook, err := hook.client.PostJSON(context.Background(), webHook.URL, nil, hook, headers)
 		if err != nil {
-			pool.Put(buf)
-			logger.ERROR("[#cluster#] webhook %s post %s to %s, http error:%s", hook.Event, hook.MetaBase.MetaID, metaWebHook.URL, err.Error())
+			logger.ERROR("[#cluster#] webhook %s post %s to %s, http error:%s", hook.Event, hook.MetaBase.MetaID, webHook.URL, err.Error())
 			continue
 		}
-		resp.Close()
-		pool.Put(buf)
-		logger.INFO("[#cluster#] webhook %s post %s to %s, http code %d", hook.Event, hook.MetaBase.MetaID, metaWebHook.URL, resp.StatusCode())
+		if respWebHook.StatusCode() >= http.StatusBadRequest {
+			logger.ERROR("[#cluster#] webhook %s post %s to %s, http code %d", hook.Event, hook.MetaBase.MetaID, webHook.URL, respWebHook.StatusCode())
+		}
+		respWebHook.Close()
 	}
 }
 
 // HooksProcessor is exported
 type HooksProcessor struct {
-	Cluster *Cluster
-	pool    *sync.Pool
+	bStart     bool
+	client     *httpx.HttpClient
+	hooksQueue *container.SyncQueue
+	stopCh     chan struct{}
 }
 
 // NewHooksProcessor is exported
 func NewHooksProcessor() *HooksProcessor {
 
+	client := httpx.NewClient().
+		SetTransport(&http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   45 * time.Second,
+				KeepAlive: 90 * time.Second,
+			}).DialContext,
+			DisableKeepAlives:     false,
+			MaxIdleConns:          50,
+			MaxIdleConnsPerHost:   65,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   http.DefaultTransport.(*http.Transport).TLSHandshakeTimeout,
+			ExpectContinueTimeout: http.DefaultTransport.(*http.Transport).ExpectContinueTimeout,
+		})
+
 	return &HooksProcessor{
-		pool: &sync.Pool{
-			New: func() interface{} {
-				return bytes.NewBuffer(make([]byte, 0, 64<<10))
-			},
-		},
+		bStart:     false,
+		client:     client,
+		hooksQueue: container.NewSyncQueue(),
 	}
 }
 
-// SetCluster is exported
-func (processor *HooksProcessor) SetCluster(cluster *Cluster) {
+// SubmitHook is exported
+func (processor *HooksProcessor) SubmitHook(metaBase MetaBase, hookContainers HookContainers, hookEvent HookEvent) {
 
-	processor.Cluster = cluster
+	hook := &Hook{
+		client:         processor.client,
+		Timestamp:      time.Now().UnixNano(),
+		Event:          hookEvent.String(),
+		MetaBase:       metaBase,
+		HookContainers: hookContainers,
+	}
+	processor.hooksQueue.Push(hook)
 }
 
-// Hook is exported
-func (processor *HooksProcessor) Hook(metaData *MetaData, hookEvent HookEvent) {
+func (processor *HooksProcessor) Start() {
 
-	if metaData != nil && len(metaData.WebHooks) > 0 {
-		timeStamp := time.Now().UnixNano()
-		hook := NewHook(processor.Cluster, metaData, timeStamp, hookEvent)
-		go hook.Post(processor.pool)
+	if !processor.bStart {
+		processor.bStart = true
+		go processor.eventPopLoop()
+	}
+}
+
+func (processor *HooksProcessor) Close() {
+
+	if processor.bStart {
+		processor.hooksQueue.Close()
+		processor.bStart = false
+	}
+}
+
+func (processor *HooksProcessor) eventPopLoop() {
+
+	for processor.bStart {
+		value := processor.hooksQueue.Pop()
+		if value != nil {
+			hook := value.(*Hook)
+			go hook.Submit()
+		}
 	}
 }
