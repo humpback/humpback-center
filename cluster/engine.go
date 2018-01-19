@@ -379,7 +379,7 @@ func (engine *Engine) RemoveContainer(containerid string) error {
 		return fmt.Errorf("remove container %s not found", ShortContainerID(containerid))
 	}
 
-	//rename engine container name, append '-expel' suffix.
+	//rename engine container, append '-expel' suffix.
 	if ret := strings.HasSuffix(container.Info.Name, "-expel"); !ret {
 		expelName := strings.TrimPrefix(container.Info.Name, "/") + "-" + rand.UUID(true)[:8] + "-expel"
 		operate := models.ContainerOperate{Action: "rename", Container: container.Info.ID, NewName: expelName}
@@ -472,7 +472,7 @@ func (engine *Engine) ForceUpgradeContainer(operate models.ContainerOperate) (*C
 
 	newContainer, err := engine.CreateContainer(containerConfig)
 	if err != nil {
-		return nil, fmt.Errorf("upgrade create new container %s failure. %s", engine.IP, containerConfig.Image, err)
+		return nil, fmt.Errorf("upgrade create new container %s failure. %s", containerConfig.Image, err)
 	}
 	return newContainer, nil
 }
@@ -672,8 +672,7 @@ func (engine *Engine) useRemovePool(containerConfig *ContainerConfig) bool {
 		return false
 	}
 
-	networkMode := containerConfig.NetworkMode
-	if networkMode != "bridge" && networkMode != "nat" {
+	if containerConfig.NetworkMode != "bridge" && containerConfig.NetworkMode != "nat" {
 		return false
 	}
 

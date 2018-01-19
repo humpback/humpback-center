@@ -59,7 +59,6 @@ type Cluster struct {
 	randSeed          *rand.Rand
 	nodeCache         *NodeCache
 	configCache       *ContainersConfigCache
-	upgraderCache     *UpgradeContainersCache
 	migtatorCache     *MigrateContainersCache
 	enginesPool       *EnginesPool
 	hooksProcessor    *HooksProcessor
@@ -104,13 +103,6 @@ func NewCluster(driverOpts system.DriverOpts, notifySender *notify.NotifySender,
 		}
 	}
 
-	upgradedelay := 10 * time.Second
-	if val, ret := driverOpts.String("upgradedelay", ""); ret {
-		if dur, err := time.ParseDuration(val); err == nil {
-			upgradedelay = dur
-		}
-	}
-
 	migratedelay := 30 * time.Second
 	if val, ret := driverOpts.String("migratedelay", ""); ret {
 		if dur, err := time.ParseDuration(val); err == nil {
@@ -137,7 +129,6 @@ func NewCluster(driverOpts system.DriverOpts, notifySender *notify.NotifySender,
 
 	enginesPool := NewEnginesPool()
 	migrateContainersCache := NewMigrateContainersCache(migratedelay)
-	upgraderContainersCache := NewUpgradeContainersCache(upgradedelay)
 	configCache, err := NewContainersConfigCache(cacheRoot)
 	if err != nil {
 		return nil, err
@@ -154,7 +145,6 @@ func NewCluster(driverOpts system.DriverOpts, notifySender *notify.NotifySender,
 		randSeed:          rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
 		nodeCache:         NewNodeCache(),
 		configCache:       configCache,
-		upgraderCache:     upgraderContainersCache,
 		migtatorCache:     migrateContainersCache,
 		enginesPool:       enginesPool,
 		hooksProcessor:    NewHooksProcessor(),
@@ -166,7 +156,6 @@ func NewCluster(driverOpts system.DriverOpts, notifySender *notify.NotifySender,
 
 	enginesPool.SetCluster(cluster)
 	migrateContainersCache.SetCluster(cluster)
-	upgraderContainersCache.SetCluster(cluster)
 	return cluster, nil
 }
 
@@ -681,6 +670,86 @@ func (cluster *Cluster) OperateContainers(metaid string, containerid string, act
 	return &operatedContainers, nil
 }
 
+func (cluster *Cluster) actionContainers(action string, engineContainers map[string]*Engine) (string, error) {
+
+	for container, engine := range engineContainers {
+		if engine != nil {
+			operate := models.ContainerOperate{Action: action, Container: container}
+			if err := engine.OperateContainer(operate); err != nil {
+				return container, err
+			}
+		}
+	}
+	return "", nil
+}
+
+func (cluster *Cluster) upgradeContainers(metaData *MetaData, engines []*Engine, config models.Container) (*types.UpgradeContainers, error) {
+
+	engineContainers := map[string]*Engine{}
+	for _, baseConfig := range metaData.BaseConfigs {
+		var e *Engine
+		for _, engine := range engines {
+			if engine.IsHealthy() && engine.HasContainer(baseConfig.ID) {
+				e = engine
+				break
+			}
+		}
+		engineContainers[baseConfig.ID] = e
+	}
+
+	afterStop := false
+	if config.NetworkMode != "bridge" && config.NetworkMode != "nat" {
+		afterStop = true
+	}
+
+	if !afterStop {
+		for _, portBindings := range metaData.Config.Ports {
+			if portBindings.PublicPort != 0 {
+				afterStop = true
+				break
+			}
+		}
+	}
+
+	if afterStop { //after stop old tag containers.
+		if containerid, err := cluster.actionContainers("stop", engineContainers); err != nil {
+			cluster.configCache.RemoveContainerBaseConfig(metaData.MetaID, containerid)
+			delete(engineContainers, containerid)
+			logger.ERROR("[#cluster#] upgrade %s after-stop containers error, %s", metaData.MetaID, err.Error())
+			cluster.actionContainers("start", engineContainers) //restart old tag containers.
+			return nil, err
+		}
+	}
+
+	createdContainers, err := cluster.createContainers(metaData, metaData.Instances, config)
+	if err != nil {
+		for _, container := range createdContainers {
+			if engine := cluster.GetEngine(container.IP); engine != nil {
+				engine.RemoveContainer(container.ID)
+			}
+		}
+		if afterStop { //restart old tag containers.
+			cluster.actionContainers("start", engineContainers)
+		}
+		return nil, err
+	}
+
+	//remove old tag containers.
+	for container, engine := range engineContainers {
+		if engine != nil {
+			engine.RemoveContainer(container)
+		} else {
+			cluster.configCache.RemoveContainerBaseConfig(metaData.MetaID, container)
+		}
+	}
+
+	upgradeContainers := types.UpgradeContainers{}
+	for _, container := range createdContainers {
+		upgradeContainers = upgradeContainers.SetUpgradePair(container.IP, container.HostName, container.Container)
+	}
+	return &upgradeContainers, nil
+}
+
 // UpgradeContainers is exported
 func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) (*types.UpgradeContainers, error) {
 
@@ -690,34 +759,25 @@ func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) (*type
 		return nil, err
 	}
 
-	containers := Containers{}
-	for _, engine := range engines {
-		for _, container := range engine.Containers(metaData.MetaID) {
-			containers = append(containers, container)
-		}
+	if metaData.ImageTag == imagetag {
+		return nil, fmt.Errorf("upgrade containers %s cancel, this tag has already in cluster.", metaid)
 	}
 
-	upgradeContainers := types.UpgradeContainers{}
-	if len(containers) > 0 {
-		ret := false
-		upgradeCh := make(chan bool)
-		cluster.upgraderCache.Upgrade(upgradeCh, metaData.MetaID, imagetag, containers)
-		ret = <-upgradeCh
-		close(upgradeCh)
-		cluster.submitHookEvent(metaData, UpgradeMetaEvent)
-		if !ret {
-			return nil, fmt.Errorf("upgrade containers failure to %s", imagetag)
-		}
-		for _, engine := range engines {
-			if engine.IsHealthy() {
-				containers := engine.Containers(metaData.MetaID)
-				for _, container := range containers {
-					upgradeContainers = upgradeContainers.SetUpgradePair(engine.IP, engine.Name, container.Config.Container)
-				}
-			}
-		}
+	config := metaData.Config
+	tagIndex := strings.LastIndex(config.Image, ":")
+	if tagIndex <= 0 {
+		return nil, fmt.Errorf("upgrade %s config tag invalid.", metaid)
 	}
-	return &upgradeContainers, nil
+
+	config.Image = config.Image[0:tagIndex] + ":" + imagetag
+	upgradeContainers, err := cluster.upgradeContainers(metaData, engines, config)
+	if err != nil {
+		return nil, fmt.Errorf("upgrade %s failure, %s", metaid, err.Error())
+	}
+	//save new tag to meta file.
+	cluster.configCache.SetImageTag(metaid, imagetag)
+	cluster.submitHookEvent(metaData, UpgradeMetaEvent)
+	return upgradeContainers, nil
 }
 
 // RemoveContainer is exported
@@ -1117,10 +1177,6 @@ func (cluster *Cluster) validateMetaData(metaid string) (*MetaData, []*Engine, e
 	metaData, engines, err := cluster.GetMetaDataEngines(metaid)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	if ret := cluster.upgraderCache.Contains(metaData.MetaID); ret {
-		return nil, nil, ErrClusterContainersUpgrading
 	}
 
 	if ret := cluster.migtatorCache.Contains(metaData.MetaID); ret {

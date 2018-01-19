@@ -8,8 +8,8 @@ cluster:
             "cacheroot=./cache",
             "overcommit=0.08",
             "recoveryinterval=120s",
-            "createretry=1",
-            "migratedelay=45s",
+            "createretry=2",
+            "migratedelay=60",
             "removedelay=500s"
     ]
     discovery:
