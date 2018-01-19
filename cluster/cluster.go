@@ -685,12 +685,14 @@ func (cluster *Cluster) actionContainers(action string, engineContainers map[str
 
 func (cluster *Cluster) upgradeContainers(metaData *MetaData, engines []*Engine, config models.Container) (*types.UpgradeContainers, error) {
 
+	priorities := NewEnginePriorities()
 	engineContainers := map[string]*Engine{}
 	for _, baseConfig := range metaData.BaseConfigs {
 		var e *Engine
 		for _, engine := range engines {
 			if engine.IsHealthy() && engine.HasContainer(baseConfig.ID) {
 				e = engine
+				priorities.Add(engine)
 				break
 			}
 		}
@@ -721,7 +723,7 @@ func (cluster *Cluster) upgradeContainers(metaData *MetaData, engines []*Engine,
 		}
 	}
 
-	createdContainers, err := cluster.createContainers(metaData, metaData.Instances, config)
+	createdContainers, err := cluster.createContainers(metaData, metaData.Instances, priorities, config)
 	if err != nil {
 		for _, container := range createdContainers {
 			if engine := cluster.GetEngine(container.IP); engine != nil {
@@ -840,7 +842,7 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 		if baseConfigsCount != -1 && metaData.Instances != baseConfigsCount {
 			var err error
 			if metaData.Instances > baseConfigsCount {
-				_, err = cluster.createContainers(metaData, metaData.Instances-baseConfigsCount, metaData.Config)
+				_, err = cluster.createContainers(metaData, metaData.Instances-baseConfigsCount, nil, metaData.Config)
 			} else {
 				cluster.reduceContainers(metaData, baseConfigsCount-metaData.Instances)
 			}
@@ -869,7 +871,7 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 	if len(engines) > 0 {
 		originalInstances := len(metaData.BaseConfigs)
 		if originalInstances < instances {
-			cluster.createContainers(metaData, instances-originalInstances, metaData.Config)
+			cluster.createContainers(metaData, instances-originalInstances, nil, metaData.Config)
 		} else {
 			cluster.reduceContainers(metaData, originalInstances-instances)
 		}
@@ -918,7 +920,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 		return "", nil, ErrClusterContainersMetaCreateFailure
 	}
 
-	createdContainers, err := cluster.createContainers(metaData, instances, config)
+	createdContainers, err := cluster.createContainers(metaData, instances, nil, config)
 	if len(createdContainers) == 0 {
 		cluster.configCache.RemoveMetaData(metaData.MetaID)
 		var resultErr string
@@ -1022,7 +1024,7 @@ func (cluster *Cluster) removeContainers(metaData *MetaData, containerid string)
 }
 
 // createContainers is exported
-func (cluster *Cluster) createContainers(metaData *MetaData, instances int, config models.Container) (types.CreatedContainers, error) {
+func (cluster *Cluster) createContainers(metaData *MetaData, instances int, priorities *EnginePriorities, config models.Container) (types.CreatedContainers, error) {
 
 	cluster.Lock()
 	cluster.pendingContainers[config.Name] = &pendingContainer{
@@ -1047,7 +1049,7 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_METAID="+metaData.MetaID)
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_CONTAINER_INDEX="+indexStr)
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_CONTAINER_ORIGINALNAME="+containerConfig.Name)
-		engine, container, err := cluster.createContainer(metaData, filter, containerConfig)
+		engine, container, err := cluster.createContainer(metaData, filter, priorities, containerConfig)
 		if err != nil {
 			if err == ErrClusterNoEngineAvailable || strings.Index(err.Error(), " not found") >= 0 {
 				resultErr = err
@@ -1057,7 +1059,7 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 			logger.ERROR("[#cluster#] engine %s, create container %s, error:%s", engine.IP, containerConfig.Name, err.Error())
 			var retries int64
 			for ; retries < cluster.createRetry && err != nil; retries++ {
-				engine, container, err = cluster.createContainer(metaData, filter, containerConfig)
+				engine, container, err = cluster.createContainer(metaData, filter, nil, containerConfig)
 			}
 			if err != nil {
 				resultErr = err
@@ -1079,7 +1081,7 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, conf
 }
 
 // createContainer is exported
-func (cluster *Cluster) createContainer(metaData *MetaData, filter *EnginesFilter, config models.Container) (*Engine, *Container, error) {
+func (cluster *Cluster) createContainer(metaData *MetaData, filter *EnginesFilter, priorities *EnginePriorities, config models.Container) (*Engine, *Container, error) {
 
 	engines := cluster.GetGroupEngines(metaData.GroupID)
 	if engines == nil || len(engines) == 0 {
@@ -1092,12 +1094,19 @@ func (cluster *Cluster) createContainer(metaData *MetaData, filter *EnginesFilte
 		}
 	}
 
-	selectEngines := cluster.selectEngines(engines, filter, config)
-	if len(selectEngines) == 0 {
-		return nil, nil, ErrClusterNoEngineAvailable
+	var engine *Engine
+	if priorities != nil {
+		engine = priorities.Select()
 	}
 
-	engine := selectEngines[0]
+	if engine == nil {
+		selectEngines := cluster.selectEngines(engines, filter, config)
+		if len(selectEngines) == 0 {
+			return nil, nil, ErrClusterNoEngineAvailable
+		}
+		engine = selectEngines[0]
+	}
+
 	container, err := engine.CreateContainer(config)
 	if err != nil {
 		filter.SetFailEngine(engine)
