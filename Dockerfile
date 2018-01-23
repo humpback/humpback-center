@@ -16,13 +16,13 @@ COPY notify/template.html /opt/humpback-center/notify/template.html
 
 COPY humpback-center /opt/humpback-center/humpback-center
 
-RUN chmod +x /opt/humpback-center/humpback-center
-
 WORKDIR /opt/humpback-center
 
 VOLUME ["/opt/humpback-center/etc"]
 
 VOLUME ["/opt/humpback-center/cache"]
+
+VOLUME ["/opt/humpback-center/logs"]
 
 CMD ["./humpback-center"]
 

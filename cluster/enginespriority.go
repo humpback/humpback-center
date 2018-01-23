@@ -26,9 +26,9 @@ func (priorities *EnginePriorities) Select() *Engine {
 		return nil
 	}
 
-	for _, e := range priorities.Engines {
+	for containerid, e := range priorities.Engines {
 		engine = e
-		delete(priorities.Engines, e.IP)
+		delete(priorities.Engines, containerid)
 		break
 	}
 	return engine
@@ -45,19 +45,19 @@ func (priorities *EnginePriorities) Size() int {
 }
 
 // Add is exported
-func (priorities *EnginePriorities) Add(engine *Engine) {
+func (priorities *EnginePriorities) Add(containerid string, engine *Engine) {
 
 	priorities.Lock()
-	if _, ret := priorities.Engines[engine.IP]; !ret {
-		priorities.Engines[engine.IP] = engine
+	if _, ret := priorities.Engines[containerid]; !ret {
+		priorities.Engines[containerid] = engine
 	}
 	priorities.Unlock()
 }
 
 // Remove is exported
-func (priorities *EnginePriorities) Remove(ip string) {
+func (priorities *EnginePriorities) Remove(containerid string) {
 
 	priorities.Lock()
-	delete(priorities.Engines, ip)
+	delete(priorities.Engines, containerid)
 	priorities.Unlock()
 }

@@ -637,7 +637,7 @@ func (cluster *Cluster) OperateContainers(metaid string, containerid string, act
 
 	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
-		logger.ERROR("[#cluster#] %s containers %s error, %s", action, metaid, err.Error())
+		logger.ERROR("[#cluster#] %s meta %s error, %s", action, metaid, err.Error())
 		return nil, err
 	}
 
@@ -692,7 +692,7 @@ func (cluster *Cluster) upgradeContainers(metaData *MetaData, engines []*Engine,
 		for _, engine := range engines {
 			if engine.IsHealthy() && engine.HasContainer(baseConfig.ID) {
 				e = engine
-				priorities.Add(engine)
+				priorities.Add(baseConfig.ID, engine)
 				break
 			}
 		}
@@ -757,12 +757,12 @@ func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) (*type
 
 	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
-		logger.ERROR("[#cluster#] upgrade containers %s error, %s", metaid, err.Error())
+		logger.ERROR("[#cluster#] upgrade meta %s error, %s", metaid, err.Error())
 		return nil, err
 	}
 
 	if metaData.ImageTag == imagetag {
-		return nil, fmt.Errorf("upgrade containers %s cancel, this tag has already in cluster.", metaid)
+		return nil, fmt.Errorf("upgrade meta %s cancel, this tag has already in cluster.", metaid)
 	}
 
 	config := metaData.Config
@@ -799,7 +799,7 @@ func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*ty
 
 	metaData, _, err := cluster.validateMetaData(metaid)
 	if err != nil {
-		logger.ERROR("[#cluster#] remove containers %s error, %s", metaid, err.Error())
+		logger.ERROR("[#cluster#] remove meta %s error, %s", metaid, err.Error())
 		return nil, err
 	}
 
@@ -818,7 +818,7 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 
 	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
-		logger.WARN("[#cluster#] recovery containers %s error, %s", metaid, err.Error())
+		logger.WARN("[#cluster#] recovery meta %s error, %s", metaid, err.Error())
 		return err
 	}
 
@@ -833,7 +833,7 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 		}
 		if !found { //clean meta invalid container.
 			cluster.configCache.RemoveContainerBaseConfig(metaData.MetaID, baseConfig.ID)
-			logger.WARN("[#cluster#] recovery containers %s remove invalid container %s", metaData.MetaID, ShortContainerID(baseConfig.ID))
+			logger.WARN("[#cluster#] recovery meta %s remove invalid container %s", metaData.MetaID, ShortContainerID(baseConfig.ID))
 		}
 	}
 
@@ -857,13 +857,13 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks types.WebHooks) (*types.CreatedContainers, error) {
 
 	if instances <= 0 {
-		logger.ERROR("[#cluster#] update containers %s error, %s", metaid, ErrClusterContainersInstancesInvalid)
+		logger.ERROR("[#cluster#] update meta %s error, %s", metaid, ErrClusterContainersInstancesInvalid)
 		return nil, ErrClusterContainersInstancesInvalid
 	}
 
 	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
-		logger.ERROR("[#cluster#] update containers %s error, %s", metaid, err.Error())
+		logger.ERROR("[#cluster#] update meta %s error, %s", metaid, err.Error())
 		return nil, err
 	}
 
