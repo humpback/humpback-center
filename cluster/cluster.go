@@ -793,6 +793,22 @@ func (cluster *Cluster) RemoveContainer(containerid string) (string, *types.Remo
 	return metaData.MetaID, removedContainers, err
 }
 
+// RemoveContainersOfMetaName is exported
+// remove meta's all containers
+func (cluster *Cluster) RemoveContainersOfMetaName(groupid string, metaname string) (string, *types.RemovedContainers, error) {
+
+	metaData := cluster.configCache.GetMetaDataOfName(groupid, metaname)
+	if metaData == nil {
+		return "", nil, ErrClusterMetaDataNotFound
+	}
+
+	removedContainers, err := cluster.RemoveContainers(metaData.MetaID, "")
+	if err != nil {
+		return "", nil, err
+	}
+	return metaData.MetaID, removedContainers, nil
+}
+
 // RemoveContainers is exported
 // if containerid is empty string so remove metaid's all containers
 func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*types.RemovedContainers, error) {
@@ -891,7 +907,7 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 }
 
 // CreateContainers is exported
-func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks types.WebHooks, config models.Container) (string, *types.CreatedContainers, error) {
+func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks types.WebHooks, config models.Container, isrecreate bool) (string, *types.CreatedContainers, error) {
 
 	if instances <= 0 {
 		return "", nil, ErrClusterContainersInstancesInvalid
@@ -909,9 +925,15 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 		return "", nil, ErrClusterNoEngineAvailable
 	}
 
-	if ret := cluster.cehckContainerNameUniqueness(groupid, config.Name); !ret {
-		logger.ERROR("[#cluster#] create containers error %s : %s", groupid, ErrClusterCreateContainerNameConflict)
-		return "", nil, ErrClusterCreateContainerNameConflict
+	if !isrecreate {
+		if ret := cluster.cehckContainerNameUniqueness(groupid, config.Name); !ret {
+			logger.ERROR("[#cluster#] create containers error %s : %s", groupid, ErrClusterCreateContainerNameConflict)
+			return "", nil, ErrClusterCreateContainerNameConflict
+		}
+	} else {
+		if metaData := cluster.configCache.GetMetaDataOfName(groupid, config.Name); metaData != nil {
+			cluster.RemoveContainers(metaData.MetaID, "")
+		}
 	}
 
 	metaData, err := cluster.configCache.CreateMetaData(groupid, group.IsRemoveDelay, instances, webhooks, config)

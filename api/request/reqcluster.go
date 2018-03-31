@@ -175,10 +175,11 @@ Method:  POST
 Route:   /v1/groups/collections
 */
 type GroupCreateContainersRequest struct {
-	GroupID   string           `json:"GroupId"`
-	Instances int              `json:"Instances"`
-	WebHooks  types.WebHooks   `json:"WebHooks"`
-	Config    models.Container `json:"Config"`
+	GroupID    string           `json:"GroupId"`
+	Instances  int              `json:"Instances"`
+	WebHooks   types.WebHooks   `json:"WebHooks"`
+	Config     models.Container `json:"Config"`
+	IsReCreate bool             `json:"IsReCreate"`
 }
 
 // ResolveGroupCreateContainersRequest is exported
@@ -325,6 +326,35 @@ func ResolveGroupUpgradeContainersRequest(r *http.Request) (*GroupUpgradeContain
 
 	if len(strings.TrimSpace(request.MetaID)) == 0 {
 		return nil, fmt.Errorf("upgrade containers metaid invalid, can not be empty")
+	}
+	return request, nil
+}
+
+/*
+GroupRemoveContainersOfMetaNameRequest is exported
+Method:  DELETE
+Route:   /v1/groups/{groupid}/collections/{metaname}
+*/
+type GroupRemoveContainersOfMetaNameRequest struct {
+	GroupID  string `json:"GroupID"`
+	MetaName string `json:"MetaName"`
+}
+
+// ResolveGroupRemoveContainersOfMetaNameRequest is exported
+func ResolveGroupRemoveContainersOfMetaNameRequest(r *http.Request) (*GroupRemoveContainersOfMetaNameRequest, error) {
+
+	vars := mux.Vars(r)
+	groupid := strings.TrimSpace(vars["groupid"])
+	if len(strings.TrimSpace(groupid)) == 0 {
+		return nil, fmt.Errorf("remove containers groupid invalid, can not be empty")
+	}
+	metaname := strings.TrimSpace(vars["metaname"])
+	if len(strings.TrimSpace(metaname)) == 0 {
+		return nil, fmt.Errorf("remove containers meta invalid, can not be empty")
+	}
+	request := &GroupRemoveContainersOfMetaNameRequest{
+		GroupID:  groupid,
+		MetaName: metaname,
 	}
 	return request, nil
 }

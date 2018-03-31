@@ -173,9 +173,9 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 	}
 }
 
-func (c *Controller) CreateClusterContainers(groupid string, instances int, webhooks types.WebHooks, config models.Container) (string, *types.CreatedContainers, error) {
+func (c *Controller) CreateClusterContainers(groupid string, instances int, webhooks types.WebHooks, config models.Container, isrecreate bool) (string, *types.CreatedContainers, error) {
 
-	return c.Cluster.CreateContainers(groupid, instances, webhooks, config)
+	return c.Cluster.CreateContainers(groupid, instances, webhooks, config, isrecreate)
 }
 
 func (c *Controller) UpdateClusterContainers(metaid string, instances int, webhooks types.WebHooks) (*types.CreatedContainers, error) {
@@ -196,6 +196,11 @@ func (c *Controller) OperateContainer(containerid string, action string) (string
 func (c *Controller) UpgradeContainers(metaid string, imagetag string) (*types.UpgradeContainers, error) {
 
 	return c.Cluster.UpgradeContainers(metaid, imagetag)
+}
+
+func (c *Controller) RemoveContainersOfMetaName(groupid string, metaname string) (string, *types.RemovedContainers, error) {
+
+	return c.Cluster.RemoveContainersOfMetaName(groupid, metaname)
 }
 
 func (c *Controller) RemoveContainers(metaid string) (*types.RemovedContainers, error) {

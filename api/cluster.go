@@ -163,7 +163,7 @@ func postGroupCreateContainers(c *Context) error {
 	}
 
 	logger.INFO("[#api#] %s resolve create containers request successed. %+v", c.ID, req)
-	metaid, createdContainers, err := c.Controller.CreateClusterContainers(req.GroupID, req.Instances, req.WebHooks, req.Config)
+	metaid, createdContainers, err := c.Controller.CreateClusterContainers(req.GroupID, req.Instances, req.WebHooks, req.Config, req.IsReCreate)
 	if err != nil {
 		logger.ERROR("[#api#] %s create containers to group %s error: %s", c.ID, req.GroupID, err.Error())
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())
@@ -285,6 +285,33 @@ func putGroupUpgradeContainers(c *Context) error {
 
 	resp := response.NewGroupUpgradeContainersResponse(req.MetaID, "upgrade containers", upgradeContainers)
 	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "upgrade containers response")
+	result.SetResponse(resp)
+	return c.JSON(http.StatusOK, result)
+}
+
+func deleteGroupRemoveContainersOfMetaName(c *Context) error {
+
+	result := response.ResponseResult{ResponseID: c.ID}
+	req, err := request.ResolveGroupRemoveContainersOfMetaNameRequest(c.Request())
+	if err != nil {
+		logger.ERROR("[#api#] %s resolve remove containers request faild, %s", c.ID, err.Error())
+		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
+		return c.JSON(http.StatusBadRequest, result)
+	}
+
+	logger.INFO("[#api#] %s resolve remove containers request successed. %+v", c.ID, req)
+	metaid, removedContainers, err := c.Controller.RemoveContainersOfMetaName(req.GroupID, req.MetaName)
+	if err != nil {
+		logger.ERROR("[#api#] %s remove containers to meta %s %s error: %s", c.ID, req.GroupID, req.MetaName, err.Error())
+		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())
+		if err == cluster.ErrClusterMetaDataNotFound || err == cluster.ErrClusterGroupNotFound {
+			return c.JSON(http.StatusNotFound, result)
+		}
+		return c.JSON(http.StatusInternalServerError, result)
+	}
+
+	resp := response.NewGroupRemoveContainersResponse(metaid, removedContainers)
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "remove containers response")
 	result.SetResponse(resp)
 	return c.JSON(http.StatusOK, result)
 }
