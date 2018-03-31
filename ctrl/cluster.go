@@ -1,11 +1,11 @@
 package ctrl
 
-import "common/models"
-import "humpback-center/api/request"
-import "humpback-center/cluster"
-import "humpback-center/cluster/types"
-import "humpback-center/etc"
-import "humpback-center/notify"
+import "github.com/humpback/common/models"
+import "github.com/humpback/humpback-center/api/request"
+import "github.com/humpback/humpback-center/cluster"
+import "github.com/humpback/humpback-center/cluster/types"
+import "github.com/humpback/humpback-center/etc"
+import "github.com/humpback/humpback-center/notify"
 import "github.com/humpback/discovery"
 import "github.com/humpback/gounits/logger"
 

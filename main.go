@@ -1,7 +1,7 @@
 package main
 
 import "github.com/humpback/gounits/system"
-import "humpback-center/server"
+import "github.com/humpback/humpback-center/server"
 
 import (
 	"log"

@@ -2,8 +2,8 @@ package ctrl
 
 import "github.com/humpback/gounits/httpx"
 import "github.com/humpback/gounits/logger"
-import "humpback-center/cluster"
-import "humpback-center/etc"
+import "github.com/humpback/humpback-center/cluster"
+import "github.com/humpback/humpback-center/etc"
 
 import (
 	"net"

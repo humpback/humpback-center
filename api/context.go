@@ -1,7 +1,7 @@
 package api
 
 import "github.com/humpback/gounits/rand"
-import "humpback-center/ctrl"
+import "github.com/humpback/humpback-center/ctrl"
 
 import (
 	"context"

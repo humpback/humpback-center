@@ -1,9 +1,9 @@
 package cluster
 
-import "common/models"
+import "github.com/humpback/common/models"
 import "github.com/humpback/gounits/httpx"
 import "github.com/docker/docker/api/types"
-import ctypes "humpback-center/cluster/types"
+import ctypes "github.com/humpback/humpback-center/cluster/types"
 
 import (
 	"context"

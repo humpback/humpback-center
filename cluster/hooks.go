@@ -1,6 +1,6 @@
 package cluster
 
-import "common/models"
+import "github.com/humpback/common/models"
 import "github.com/humpback/gounits/container"
 import "github.com/humpback/gounits/httpx"
 import "github.com/humpback/gounits/logger"

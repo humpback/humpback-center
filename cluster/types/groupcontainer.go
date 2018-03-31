@@ -1,6 +1,6 @@
 package types
 
-import "common/models"
+import "github.com/humpback/common/models"
 
 // EngineContainer is exported
 type EngineContainer struct {

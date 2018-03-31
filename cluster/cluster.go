@@ -1,8 +1,8 @@
 package cluster
 
-import "common/models"
-import "humpback-center/notify"
-import "humpback-center/cluster/types"
+import "github.com/humpback/common/models"
+import "github.com/humpback/humpback-center/notify"
+import "github.com/humpback/humpback-center/cluster/types"
 import "github.com/humpback/discovery"
 import "github.com/humpback/discovery/backends"
 import "github.com/humpback/gounits/json"

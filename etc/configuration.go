@@ -1,8 +1,8 @@
 package etc
 
 import "github.com/humpback/gounits/logger"
+import "github.com/humpback/humpback-center/notify"
 import "gopkg.in/yaml.v2"
-import "humpback-center/notify"
 
 import (
 	"io/ioutil"

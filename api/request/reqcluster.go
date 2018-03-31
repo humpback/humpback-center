@@ -1,8 +1,8 @@
 package request
 
 import "github.com/gorilla/mux"
-import "humpback-center/cluster/types"
-import "common/models"
+import "github.com/humpback/humpback-center/cluster/types"
+import "github.com/humpback/common/models"
 
 import (
 	"bytes"

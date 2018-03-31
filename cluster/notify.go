@@ -1,6 +1,6 @@
 package cluster
 
-import "humpback-center/notify"
+import "github.com/humpback/humpback-center/notify"
 
 //WatchEngines is exported
 type WatchEngines []*Engine

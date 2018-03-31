@@ -1,7 +1,7 @@
 package cluster
 
 import "github.com/humpback/gounits/logger"
-import "common/models"
+import "github.com/humpback/common/models"
 
 // WeightedEngine is exported
 type WeightedEngine struct {
