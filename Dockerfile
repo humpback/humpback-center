@@ -1,4 +1,4 @@
-FROM frolvlad/alpine-glibc:alpine-3.6
+FROM frolvlad/alpine-glibc:alpine-3.7
 
 MAINTAINER bobliu bobliu0909@gmail.com
 
@@ -15,6 +15,10 @@ COPY etc/config.yaml /opt/humpback-center/etc/config.yaml
 COPY notify/template.html /opt/humpback-center/notify/template.html
 
 COPY humpback-center /opt/humpback-center/humpback-center
+
+COPY dumb-init /dumb-init
+
+ENTRYPOINT ["/dumb-init", "--"]
 
 WORKDIR /opt/humpback-center
 

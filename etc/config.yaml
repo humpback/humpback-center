@@ -1,4 +1,4 @@
-version: 1.0.0
+version: 1.3.0
 pidfile: ./humpback-center.pid
 retrystartup: true
 siteapi: http://192.168.2.80:8012/api
@@ -13,7 +13,7 @@ cluster:
             "removedelay=500s"
     ]
     discovery:
-        uris: etcd://192.168.2.80:2379
+        uris: zk://192.168.2.80:2181,192.168.2.81:2181,192.168.2.82:2181
         cluster: humpback/center
         heartbeat: 8s
 api:
@@ -21,13 +21,13 @@ api:
     enablecors: true
 notifications:
     endpoints:
-      - name: api
-        url: http://192.168.139.1:8009/framework/v1/mail
-        headers:
-            x-cluster-notify: ["endo"]
-            content-type: ["application/json; charset=utf-8"]
-        sender: humpback@newegg.com
-        enabled: true
+      #- name: api
+      #  url: http://192.168.139.1:8009/framework/v1/mail
+      #  headers:
+      #      x-cluster-notify: ["endo"]
+      #      content-type: ["application/json; charset=utf-8"]
+      #  sender: humpback@newegg.com
+      #  enabled: true
       #- name: smtp
       #  host: smtp.example.com
       #  port: 25
