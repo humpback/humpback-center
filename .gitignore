@@ -22,6 +22,5 @@ _testmain.go
 *.test
 *.prof
 *.log
-vendor
 humpback-center
 humpback-center.pid
