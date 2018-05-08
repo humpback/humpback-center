@@ -2,7 +2,18 @@ package cluster
 
 import (
 	"sort"
+	"strings"
 )
+
+func getImageTag(imageName string) string {
+
+	imageTag := "latest"
+	values := strings.SplitN(imageName, ":", 2)
+	if len(values) == 2 {
+		imageTag = values[1]
+	}
+	return imageTag
+}
 
 // searchServerOfEngines is exported
 func searchServerOfEngines(server Server, engines map[string]*Engine) *Engine {

@@ -163,7 +163,7 @@ func postGroupCreateContainers(c *Context) error {
 	}
 
 	logger.INFO("[#api#] %s resolve create containers request successed. %+v", c.ID, req)
-	metaid, createdContainers, err := c.Controller.CreateClusterContainers(req.GroupID, req.Instances, req.WebHooks, req.Config, req.IsReCreate)
+	metaid, createdContainers, err := c.Controller.CreateClusterContainers(req.GroupID, req.Instances, req.WebHooks, req.Config, req.Option)
 	if err != nil {
 		logger.ERROR("[#api#] %s create containers to group %s error: %s", c.ID, req.GroupID, err.Error())
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())
@@ -192,7 +192,7 @@ func putGroupUpdateContainers(c *Context) error {
 	}
 
 	logger.INFO("[#api#] %s resolve update containers request successed. %+v", c.ID, req)
-	updatedContainers, err := c.Controller.UpdateClusterContainers(req.MetaID, req.Instances, req.WebHooks)
+	updatedContainers, err := c.Controller.UpdateClusterContainers(req.MetaID, req.Instances, req.WebHooks, req.Config, req.Option)
 	if err != nil {
 		logger.ERROR("[#api#] %s update containers to meta %s error: %s", c.ID, req.MetaID, err.Error())
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())

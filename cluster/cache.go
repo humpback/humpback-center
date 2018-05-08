@@ -292,13 +292,14 @@ func (cache *ContainersConfigCache) SetGroupMetaDataIsRemoveDelay(groupid string
 }
 
 // SetMetaData is exported
-func (cache *ContainersConfigCache) SetMetaData(metaid string, instances int, webhooks types.WebHooks) {
+func (cache *ContainersConfigCache) SetMetaData(metaid string, instances int, webhooks types.WebHooks, config models.Container) {
 
 	cache.Lock()
 	defer cache.Unlock()
 	if metaData, ret := cache.data[metaid]; ret {
 		metaData.Instances = instances
 		metaData.WebHooks = webhooks
+		metaData.Config = config
 		cache.writeMetaData(metaData)
 	}
 }
@@ -341,12 +342,7 @@ func (cache *ContainersConfigCache) CreateMetaData(groupid string, isremovedelay
 	cache.Lock()
 	defer cache.Unlock()
 	metaid := cache.MakeUniqueMetaID()
-	imageTag := "latest"
-	imageName := strings.SplitN(config.Image, ":", 2)
-	if len(imageName) == 2 {
-		imageTag = imageName[1]
-	}
-
+	imageTag := getImageTag(config.Image)
 	metaData := &MetaData{
 		MetaBase: MetaBase{
 			GroupID:       groupid,

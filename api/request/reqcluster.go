@@ -164,7 +164,7 @@ func ResolveGroupEventRequest(r *http.Request) (*GroupEventRequest, error) {
 	if request.Event != GROUP_CREATE_EVENT &&
 		request.Event != GROUP_REMOVE_EVENT &&
 		request.Event != GROUP_CHANGE_EVENT {
-		return nil, fmt.Errorf("event type invalid.")
+		return nil, fmt.Errorf("event type invalid")
 	}
 	return request, nil
 }
@@ -175,11 +175,11 @@ Method:  POST
 Route:   /v1/groups/collections
 */
 type GroupCreateContainersRequest struct {
-	GroupID    string           `json:"GroupId"`
-	Instances  int              `json:"Instances"`
-	WebHooks   types.WebHooks   `json:"WebHooks"`
-	Config     models.Container `json:"Config"`
-	IsReCreate bool             `json:"IsReCreate"`
+	GroupID   string           `json:"GroupId"`
+	Instances int              `json:"Instances"`
+	WebHooks  types.WebHooks   `json:"WebHooks"`
+	Config    models.Container `json:"Config"`
+	Option    types.CreateOption
 }
 
 // ResolveGroupCreateContainersRequest is exported
@@ -215,9 +215,11 @@ Method:  PUT
 Route:   /v1/groups/collections
 */
 type GroupUpdateContainersRequest struct {
-	MetaID    string         `json:"MetaId"`
-	Instances int            `json:"Instances"`
-	WebHooks  types.WebHooks `json:"WebHooks"`
+	MetaID    string           `json:"MetaId"`
+	Instances int              `json:"Instances"`
+	WebHooks  types.WebHooks   `json:"WebHooks"`
+	Config    models.Container `json:"Config"`
+	Option    types.CreateOption
 }
 
 // ResolveGroupUpdateContainersRequest is exported

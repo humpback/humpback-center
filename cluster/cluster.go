@@ -762,13 +762,13 @@ func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) (*type
 	}
 
 	if metaData.ImageTag == imagetag {
-		return nil, fmt.Errorf("upgrade meta %s cancel, this tag has already in cluster.", metaid)
+		return nil, fmt.Errorf("upgrade meta %s cancel, this tag has already in cluster", metaid)
 	}
 
 	config := metaData.Config
 	tagIndex := strings.LastIndex(config.Image, ":")
 	if tagIndex <= 0 {
-		return nil, fmt.Errorf("upgrade %s config tag invalid.", metaid)
+		return nil, fmt.Errorf("upgrade %s config tag invalid", metaid)
 	}
 
 	config.Image = config.Image[0:tagIndex] + ":" + imagetag
@@ -870,7 +870,7 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 }
 
 // UpdateContainers is exported
-func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks types.WebHooks) (*types.CreatedContainers, error) {
+func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks types.WebHooks, config models.Container, option types.CreateOption) (*types.CreatedContainers, error) {
 
 	if instances <= 0 {
 		logger.ERROR("[#cluster#] update meta %s error, %s", metaid, ErrClusterContainersInstancesInvalid)
@@ -883,13 +883,29 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 		return nil, err
 	}
 
-	cluster.configCache.SetMetaData(metaid, instances, webhooks)
+	var tempConfig models.Container
+	if !option.IsReCreate {
+		tempConfig = metaData.Config
+	} else {
+		tempConfig = config
+	}
+
+	imageTag := getImageTag(tempConfig.Image)
+	cluster.configCache.SetMetaData(metaid, instances, webhooks, tempConfig)
+	cluster.configCache.SetImageTag(metaid, imageTag)
+	metaData = cluster.configCache.GetMetaData(metaid)
+
 	if len(engines) > 0 {
 		originalInstances := len(metaData.BaseConfigs)
-		if originalInstances < instances {
-			cluster.createContainers(metaData, instances-originalInstances, nil, metaData.Config)
+		if !option.IsReCreate {
+			if originalInstances < instances {
+				cluster.createContainers(metaData, instances-originalInstances, nil, metaData.Config)
+			} else {
+				cluster.reduceContainers(metaData, originalInstances-instances)
+			}
 		} else {
-			cluster.reduceContainers(metaData, originalInstances-instances)
+			cluster.reduceContainers(metaData, originalInstances)
+			cluster.createContainers(metaData, instances, nil, metaData.Config)
 		}
 	}
 
@@ -907,7 +923,7 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 }
 
 // CreateContainers is exported
-func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks types.WebHooks, config models.Container, isrecreate bool) (string, *types.CreatedContainers, error) {
+func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks types.WebHooks, config models.Container, option types.CreateOption) (string, *types.CreatedContainers, error) {
 
 	if instances <= 0 {
 		return "", nil, ErrClusterContainersInstancesInvalid
@@ -916,43 +932,72 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 	group := cluster.GetGroup(groupid)
 	engines := cluster.GetGroupEngines(groupid)
 	if group == nil || engines == nil {
-		logger.ERROR("[#cluster#] create containers error %s : %s", groupid, ErrClusterGroupNotFound)
+		logger.ERROR("[#cluster#] create containers %s error, %s", config.Name, ErrClusterGroupNotFound)
 		return "", nil, ErrClusterGroupNotFound
 	}
 
 	if len(engines) == 0 {
-		logger.ERROR("[#cluster#] create containers error %s : %s", groupid, ErrClusterNoEngineAvailable)
+		logger.ERROR("[#cluster#] create containers %s error, %s", config.Name, ErrClusterNoEngineAvailable)
 		return "", nil, ErrClusterNoEngineAvailable
 	}
 
-	if !isrecreate {
+	var (
+		metaID  string
+		bCreate bool = true
+	)
+
+	if !option.IsReCreate {
 		if ret := cluster.cehckContainerNameUniqueness(groupid, config.Name); !ret {
-			logger.ERROR("[#cluster#] create containers error %s : %s", groupid, ErrClusterCreateContainerNameConflict)
+			logger.ERROR("[#cluster#] create containers %s error, %s", config.Name, ErrClusterCreateContainerNameConflict)
 			return "", nil, ErrClusterCreateContainerNameConflict
 		}
 	} else {
 		if metaData := cluster.configCache.GetMetaDataOfName(groupid, config.Name); metaData != nil {
-			cluster.RemoveContainers(metaData.MetaID, "")
+			if len(webhooks) == 0 {
+				webhooks = metaData.WebHooks
+			}
+			if option.ForceRemove {
+				cluster.RemoveContainers(metaData.MetaID, "")
+			} else {
+				imageTag := getImageTag(config.Image)
+				if metaData.ImageTag == imageTag {
+					logger.ERROR("[#cluster#] re-create %s containers %s error, %s", metaData.MetaID, config.Name, ErrClusterCreateContainerTagAlreadyUsing)
+					return "", nil, ErrClusterCreateContainerTagAlreadyUsing
+				}
+				metaID = metaData.MetaID
+				bCreate = false
+			}
 		}
 	}
 
-	metaData, err := cluster.configCache.CreateMetaData(groupid, group.IsRemoveDelay, instances, webhooks, config)
-	if err != nil {
-		logger.ERROR("[#cluster#] create containers error %s : %s", groupid, ErrClusterContainersMetaCreateFailure)
-		return "", nil, ErrClusterContainersMetaCreateFailure
-	}
-
-	createdContainers, err := cluster.createContainers(metaData, instances, nil, config)
-	if len(createdContainers) == 0 {
-		cluster.configCache.RemoveMetaData(metaData.MetaID)
-		var resultErr string
+	createdContainers := types.CreatedContainers{}
+	if bCreate {
+		metaData, err := cluster.configCache.CreateMetaData(groupid, group.IsRemoveDelay, instances, webhooks, config)
 		if err != nil {
-			resultErr = err.Error()
+			logger.ERROR("[#cluster#] create containers %s error, %s", config.Name, ErrClusterContainersMetaCreateFailure)
+			return "", nil, ErrClusterContainersMetaCreateFailure
 		}
-		return "", nil, fmt.Errorf("%s, %s\n", ErrClusterCreateContainerFailure.Error(), resultErr)
+		createdContainers, err = cluster.createContainers(metaData, instances, nil, config)
+		if len(createdContainers) == 0 {
+			cluster.configCache.RemoveMetaData(metaData.MetaID)
+			var resultErr string
+			if err != nil {
+				resultErr = err.Error()
+			}
+			logger.ERROR("[#cluster#] create containers %s error, %s", config.Name, ErrClusterCreateContainerFailure)
+			return "", nil, fmt.Errorf("%s, %s\n", ErrClusterCreateContainerFailure.Error(), resultErr)
+		}
+		metaID = metaData.MetaID
+		cluster.submitHookEvent(metaData, CreateMetaEvent)
+	} else {
+		containers, err := cluster.UpdateContainers(metaID, instances, webhooks, config, option)
+		if err != nil || len(*containers) == 0 {
+			logger.ERROR("[#cluster#] re-create %s containers %s error, %s", metaID, config.Name, ErrClusterCreateContainerFailure)
+			return "", nil, ErrClusterCreateContainerFailure
+		}
+		createdContainers = *containers
 	}
-	cluster.submitHookEvent(metaData, CreateMetaEvent)
-	return metaData.MetaID, &createdContainers, nil
+	return metaID, &createdContainers, nil
 }
 
 // reduceContainers is exported
@@ -1071,6 +1116,9 @@ func (cluster *Cluster) createContainers(metaData *MetaData, instances int, prio
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_METAID="+metaData.MetaID)
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_CONTAINER_INDEX="+indexStr)
 		containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_CONTAINER_ORIGINALNAME="+containerConfig.Name)
+		if cluster.Location != "" {
+			containerConfig.Env = append(containerConfig.Env, "HUMPBACK_CLUSTER_LOCATION="+cluster.Location)
+		}
 		engine, container, err := cluster.createContainer(metaData, filter, priorities, containerConfig)
 		if err != nil {
 			if err == ErrClusterNoEngineAvailable || strings.Index(err.Error(), " not found") >= 0 {
