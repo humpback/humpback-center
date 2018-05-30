@@ -9,6 +9,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -71,16 +72,18 @@ func (hook *Hook) Submit() {
 	webHooks := hook.MetaBase.WebHooks
 	for _, webHook := range webHooks {
 		headers := map[string][]string{}
-		if webHook.SecretToken != "" {
-			headers["X-Humpback-Token"] = []string{webHook.SecretToken}
+		secretToken := strings.TrimSpace(webHook.SecretToken)
+		if secretToken != "" {
+			headers["X-Humpback-Token"] = []string{secretToken}
 		}
-		respWebHook, err := hook.client.PostJSON(context.Background(), webHook.URL, nil, hook, headers)
+		hookURL := strings.TrimSpace(webHook.URL)
+		respWebHook, err := hook.client.PostJSON(context.Background(), hookURL, nil, hook, headers)
 		if err != nil {
-			logger.ERROR("[#cluster#] webhook %s post %s to %s, http error:%s", hook.Event, hook.MetaBase.MetaID, webHook.URL, err.Error())
+			logger.ERROR("[#cluster#] webhook %s post %s to %s, http error:%s", hook.Event, hook.MetaBase.MetaID, hookURL, err.Error())
 			continue
 		}
 		if respWebHook.StatusCode() >= http.StatusBadRequest {
-			logger.ERROR("[#cluster#] webhook %s post %s to %s, http code %d", hook.Event, hook.MetaBase.MetaID, webHook.URL, respWebHook.StatusCode())
+			logger.ERROR("[#cluster#] webhook %s post %s to %s, http code %d", hook.Event, hook.MetaBase.MetaID, hookURL, respWebHook.StatusCode())
 		}
 		respWebHook.Close()
 	}
