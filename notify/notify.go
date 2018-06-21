@@ -61,8 +61,8 @@ func (sender *NotifySender) AddGroupEnginesWatchEvent(description string, watchG
 	event.data["WatchGroup"] = watchGroup
 	sender.Lock()
 	sender.events[event.ID] = event
-	go sender.dispatchEvents()
 	sender.Unlock()
+	go sender.dispatchEvents()
 }
 
 //AddGroupMetaContainersEvent is exported
@@ -72,8 +72,8 @@ func (sender *NotifySender) AddGroupMetaContainersEvent(description string, err 
 	event.data["GroupMeta"] = groupMeta
 	sender.Lock()
 	sender.events[event.ID] = event
-	go sender.dispatchEvents()
 	sender.Unlock()
+	go sender.dispatchEvents()
 }
 
 //dispatchEvents is exported
