@@ -219,7 +219,6 @@ type GroupUpdateContainersRequest struct {
 	Instances int              `json:"Instances"`
 	WebHooks  types.WebHooks   `json:"WebHooks"`
 	Config    models.Container `json:"Config"`
-	Option    types.CreateOption
 }
 
 // ResolveGroupUpdateContainersRequest is exported
@@ -239,8 +238,8 @@ func ResolveGroupUpdateContainersRequest(r *http.Request) (*GroupUpdateContainer
 		return nil, fmt.Errorf("set containers metaid invalid, can not be empty")
 	}
 
-	if request.Instances <= 0 {
-		return nil, fmt.Errorf("set containers instances invalid, should be larger than 0")
+	if request.Instances < 0 {
+		return nil, fmt.Errorf("set containers instances invalid, should be larger or equal than 0")
 	}
 	return request, nil
 }

@@ -9,11 +9,33 @@ type EnginePriorities struct {
 }
 
 // NewEnginePriorities is exported
-func NewEnginePriorities() *EnginePriorities {
+func NewEnginePriorities(metaData *MetaData, engines []*Engine) *EnginePriorities {
 
-	return &EnginePriorities{
+	enginePriorities := &EnginePriorities{
 		Engines: make(map[string]*Engine),
 	}
+
+	for _, baseConfig := range metaData.BaseConfigs {
+		for _, engine := range engines {
+			if engine.IsHealthy() && engine.HasContainer(baseConfig.ID) {
+				enginePriorities.Add(baseConfig.ID, engine)
+				break
+			}
+		}
+	}
+	return enginePriorities
+}
+
+// EngineStrings is exported
+func (priorities *EnginePriorities) EngineStrings() []string {
+
+	engines := []string{}
+	priorities.RLock()
+	defer priorities.RUnlock()
+	for _, engine := range priorities.Engines {
+		engines = append(engines, engine.IP)
+	}
+	return engines
 }
 
 // Select is exported

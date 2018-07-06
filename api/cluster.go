@@ -171,6 +171,8 @@ func postGroupCreateContainers(c *Context) error {
 			return c.JSON(http.StatusNotFound, result)
 		} else if err == cluster.ErrClusterCreateContainerNameConflict {
 			return c.JSON(http.StatusConflict, result)
+		} else if err == cluster.ErrClusterCreateContainerTagAlreadyUsing {
+			return c.JSON(http.StatusConflict, result)
 		}
 		return c.JSON(http.StatusInternalServerError, result)
 	}
@@ -192,7 +194,7 @@ func putGroupUpdateContainers(c *Context) error {
 	}
 
 	logger.INFO("[#api#] %s resolve update containers request successed. %+v", c.ID, req)
-	updatedContainers, err := c.Controller.UpdateClusterContainers(req.MetaID, req.Instances, req.WebHooks, req.Config, req.Option)
+	updatedContainers, err := c.Controller.UpdateClusterContainers(req.MetaID, req.Instances, req.WebHooks, req.Config)
 	if err != nil {
 		logger.ERROR("[#api#] %s update containers to meta %s error: %s", c.ID, req.MetaID, err.Error())
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())

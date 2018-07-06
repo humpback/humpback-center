@@ -178,9 +178,9 @@ func (c *Controller) CreateClusterContainers(groupid string, instances int, webh
 	return c.Cluster.CreateContainers(groupid, instances, webhooks, config, option)
 }
 
-func (c *Controller) UpdateClusterContainers(metaid string, instances int, webhooks types.WebHooks, config models.Container, option types.CreateOption) (*types.CreatedContainers, error) {
+func (c *Controller) UpdateClusterContainers(metaid string, instances int, webhooks types.WebHooks, config models.Container) (*types.CreatedContainers, error) {
 
-	return c.Cluster.UpdateContainers(metaid, instances, webhooks, config, option)
+	return c.Cluster.UpdateContainers(metaid, instances, webhooks, config)
 }
 
 func (c *Controller) OperateContainers(metaid string, action string) (*types.OperatedContainers, error) {

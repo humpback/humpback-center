@@ -12,6 +12,7 @@ import "github.com/humpback/gounits/system"
 import (
 	"fmt"
 	"math/rand"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -685,14 +686,14 @@ func (cluster *Cluster) actionContainers(action string, engineContainers map[str
 
 func (cluster *Cluster) upgradeContainers(metaData *MetaData, engines []*Engine, config models.Container) (*types.UpgradeContainers, error) {
 
-	priorities := NewEnginePriorities()
+	priorities := NewEnginePriorities(metaData, engines)
+	logger.INFO("[#cluster#] upgrade %s containers, priorities %s", config.Name, priorities.EngineStrings())
 	engineContainers := map[string]*Engine{}
 	for _, baseConfig := range metaData.BaseConfigs {
 		var e *Engine
 		for _, engine := range engines {
 			if engine.IsHealthy() && engine.HasContainer(baseConfig.ID) {
 				e = engine
-				priorities.Add(baseConfig.ID, engine)
 				break
 			}
 		}
@@ -870,9 +871,9 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 }
 
 // UpdateContainers is exported
-func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks types.WebHooks, config models.Container, option types.CreateOption) (*types.CreatedContainers, error) {
+func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks types.WebHooks, config models.Container) (*types.CreatedContainers, error) {
 
-	if instances <= 0 {
+	if instances < 0 {
 		logger.ERROR("[#cluster#] update meta %s error, %s", metaid, ErrClusterContainersInstancesInvalid)
 		return nil, ErrClusterContainersInstancesInvalid
 	}
@@ -883,29 +884,40 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 		return nil, err
 	}
 
-	var tempConfig models.Container
-	if !option.IsReCreate {
-		tempConfig = metaData.Config
-	} else {
-		tempConfig = config
+	if config.Name == "" {
+		config = metaData.Config
 	}
 
-	imageTag := getImageTag(tempConfig.Image)
-	cluster.configCache.SetMetaData(metaid, instances, webhooks, tempConfig)
+	originalConfig := metaData.Config
+	imageTag := getImageTag(config.Image)
+	cluster.configCache.SetMetaData(metaid, instances, webhooks, config)
 	cluster.configCache.SetImageTag(metaid, imageTag)
 	metaData = cluster.configCache.GetMetaData(metaid)
 
 	if len(engines) > 0 {
 		originalInstances := len(metaData.BaseConfigs)
-		if !option.IsReCreate {
-			if originalInstances < instances {
-				cluster.createContainers(metaData, instances-originalInstances, nil, metaData.Config)
-			} else {
-				cluster.reduceContainers(metaData, originalInstances-instances)
-			}
-		} else {
+		if instances == 0 { //clear containers.
+			logger.INFO("[#cluster#] update %s containers, reduce instances to %d.", config.Name, instances)
 			cluster.reduceContainers(metaData, originalInstances)
-			cluster.createContainers(metaData, instances, nil, metaData.Config)
+		} else {
+			if !reflect.DeepEqual(originalConfig, config) { //config changed, re-create all containers.
+				logger.INFO("[#cluster#] update %s containers, re-create %d instances.", config.Name, instances)
+				var priorities *EnginePriorities
+				if originalInstances == instances {
+					priorities = NewEnginePriorities(metaData, engines)
+					logger.INFO("[#cluster#] update %s containers, priorities %s", config.Name, priorities.EngineStrings())
+				}
+				cluster.reduceContainers(metaData, originalInstances)
+				cluster.createContainers(metaData, instances, priorities, metaData.Config)
+			} else { //instances changed only.
+				if originalInstances < instances {
+					logger.INFO("[#cluster#] update %s containers, instances changed only, append %d instances.", config.Name, instances-originalInstances)
+					cluster.createContainers(metaData, instances-originalInstances, nil, metaData.Config)
+				} else {
+					logger.INFO("[#cluster#] update %s containers, instances changed only, reduce %d containers.", config.Name, originalInstances-instances)
+					cluster.reduceContainers(metaData, originalInstances-instances)
+				}
+			}
 		}
 	}
 
@@ -990,7 +1002,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 		metaID = metaData.MetaID
 		cluster.submitHookEvent(metaData, CreateMetaEvent)
 	} else {
-		containers, err := cluster.UpdateContainers(metaID, instances, webhooks, config, option)
+		containers, err := cluster.UpdateContainers(metaID, instances, webhooks, config)
 		if err != nil || len(*containers) == 0 {
 			logger.ERROR("[#cluster#] re-create %s containers %s error, %s", metaID, config.Name, ErrClusterCreateContainerFailure)
 			return "", nil, ErrClusterCreateContainerFailure
