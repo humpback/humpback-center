@@ -1,19 +1,20 @@
-version: 1.3.4
+version: 1.3.5
 pidfile: ./humpback-center.pid
 retrystartup: true
 siteapi: http://192.168.2.80:8012/api
 cluster:
     opts: [
             #"location=dev",
+            "datapath=./data",
             "cacheroot=./cache",
             "overcommit=0.08",
-            "recoveryinterval=120s",
+            "recoveryinterval=320s",
             "createretry=2",
-            "migratedelay=60",
+            "migratedelay=145s",
             "removedelay=500s"
     ]
     discovery:
-        uris: zk://192.168.2.80:2181,192.168.2.81:2181,192.168.2.82:2181
+        uris: etcd://192.168.2.80:2379
         cluster: humpback/center
         heartbeat: 8s
 api:
@@ -37,6 +38,6 @@ notifications:
       #  enabled: true
 logger:
     logfile: ./logs/humpback-center.log
-    loglevel: error
+    loglevel: info
     logsize: 20971520
 ...

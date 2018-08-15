@@ -134,7 +134,14 @@ func (c *Controller) GetClusterGroupAllEngines(groupid string) []*cluster.Engine
 
 func (c *Controller) GetClusterEngine(server string) *cluster.Engine {
 
-	return c.Cluster.GetEngine(server)
+	s := cluster.ParseServer(server)
+	return c.Cluster.GetServerOfEngines(s)
+}
+
+func (c *Controller) SetClusterServerNodeLabels(server string, labels map[string]string) error {
+
+	s := cluster.ParseServer(server)
+	return c.Cluster.SetServerNodeLabels(s, labels)
 }
 
 func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
@@ -173,14 +180,14 @@ func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 	}
 }
 
-func (c *Controller) CreateClusterContainers(groupid string, instances int, webhooks types.WebHooks, config models.Container, option types.CreateOption) (string, *types.CreatedContainers, error) {
+func (c *Controller) CreateClusterContainers(groupid string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container, option types.CreateOption) (string, *types.CreatedContainers, error) {
 
-	return c.Cluster.CreateContainers(groupid, instances, webhooks, config, option)
+	return c.Cluster.CreateContainers(groupid, instances, webhooks, placement, config, option)
 }
 
-func (c *Controller) UpdateClusterContainers(metaid string, instances int, webhooks types.WebHooks, config models.Container) (*types.CreatedContainers, error) {
+func (c *Controller) UpdateClusterContainers(metaid string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container) (*types.CreatedContainers, error) {
 
-	return c.Cluster.UpdateContainers(metaid, instances, webhooks, config)
+	return c.Cluster.UpdateContainers(metaid, instances, webhooks, placement, config)
 }
 
 func (c *Controller) OperateContainers(metaid string, action string) (*types.OperatedContainers, error) {

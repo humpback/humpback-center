@@ -2,6 +2,7 @@ package cluster
 
 import "github.com/humpback/common/models"
 import "github.com/humpback/humpback-center/notify"
+import "github.com/humpback/humpback-center/cluster/storage"
 import "github.com/humpback/humpback-center/cluster/types"
 import "github.com/humpback/discovery"
 import "github.com/humpback/discovery/backends"
@@ -49,20 +50,20 @@ type Group struct {
 // Cluster is exported
 type Cluster struct {
 	sync.RWMutex
-	Location     string
-	NotifySender *notify.NotifySender
-	Discovery    *discovery.Discovery
-
+	Location          string
+	NotifySender      *notify.NotifySender
+	Discovery         *discovery.Discovery
 	overcommitRatio   float64
 	createRetry       int64
 	removeDelay       time.Duration
 	recoveryInterval  time.Duration
 	randSeed          *rand.Rand
-	nodeCache         *NodeCache
+	nodeCache         *types.NodeCache
 	configCache       *ContainersConfigCache
 	migtatorCache     *MigrateContainersCache
 	enginesPool       *EnginesPool
 	hooksProcessor    *HooksProcessor
+	storageDriver     *storage.DataStorage
 	pendingContainers map[string]*pendingContainer
 	engines           map[string]*Engine
 	groups            map[string]*Group
@@ -135,6 +136,16 @@ func NewCluster(driverOpts system.DriverOpts, notifySender *notify.NotifySender,
 		return nil, err
 	}
 
+	dataPath := "./data"
+	if val, ret := driverOpts.String("datapath", ""); ret {
+		dataPath = strings.TrimSpace(val)
+	}
+
+	storageDriver, err := storage.NewDataStorage(dataPath)
+	if err != nil {
+		return nil, err
+	}
+
 	cluster := &Cluster{
 		Location:          clusterLocation,
 		NotifySender:      notifySender,
@@ -144,11 +155,12 @@ func NewCluster(driverOpts system.DriverOpts, notifySender *notify.NotifySender,
 		removeDelay:       removedelay,
 		recoveryInterval:  recoveryInterval,
 		randSeed:          rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
-		nodeCache:         NewNodeCache(),
+		nodeCache:         types.NewNodeCache(),
 		configCache:       configCache,
 		migtatorCache:     migrateContainersCache,
 		enginesPool:       enginesPool,
 		hooksProcessor:    NewHooksProcessor(),
+		storageDriver:     storageDriver,
 		pendingContainers: make(map[string]*pendingContainer),
 		engines:           make(map[string]*Engine),
 		groups:            make(map[string]*Group),
@@ -163,6 +175,10 @@ func NewCluster(driverOpts system.DriverOpts, notifySender *notify.NotifySender,
 // Start is exported
 // Cluster start, init container config cache watch open discovery service
 func (cluster *Cluster) Start() error {
+
+	if err := cluster.storageDriver.Open(); err != nil {
+		return err
+	}
 
 	cluster.configCache.Init()
 	cluster.Lock()
@@ -193,6 +209,7 @@ func (cluster *Cluster) Stop() {
 	close(cluster.stopCh)
 	cluster.enginesPool.Release()
 	cluster.hooksProcessor.Close()
+	cluster.storageDriver.Close()
 	logger.INFO("[#cluster#] discovery service closed.")
 }
 
@@ -275,6 +292,26 @@ func (cluster *Cluster) GetEngineGroups(engine *Engine) []*Group {
 	return groups
 }
 
+// GetServerOfEngines is exported
+func (cluster *Cluster) GetServerOfEngines(server Server) *Engine {
+
+	engine := searchServerOfEngines(server, cluster.engines)
+	if engine == nil {
+		engine = searchServerOfStorage(server, cluster.storageDriver.NodeStorage)
+		if engine == nil {
+			engine = &Engine{
+				Name:         server.Name,
+				IP:           server.IP,
+				EngineLabels: map[string]string{},
+				NodeLabels:   map[string]string{},
+			}
+		}
+		engine.StateText = stateText[StateDisconnected]
+		engine.state = StateDisconnected
+	}
+	return engine
+}
+
 // GetGroupAllEngines is exported
 // Returns all engine under group and contains offline (cluster engines not exists.)
 func (cluster *Cluster) GetGroupAllEngines(groupid string) []*Engine {
@@ -290,17 +327,17 @@ func (cluster *Cluster) GetGroupAllEngines(groupid string) []*Engine {
 	for _, server := range group.Servers {
 		engine := searchServerOfEngines(server, cluster.engines)
 		if engine == nil {
-			engine = &Engine{
-				ID:        "",
-				Name:      server.Name,
-				IP:        server.IP,
-				APIAddr:   "",
-				Cpus:      0,
-				Memory:    0,
-				Labels:    make(map[string]string),
-				StateText: stateText[StateDisconnected],
-				state:     StateDisconnected,
+			engine = searchServerOfStorage(server, cluster.storageDriver.NodeStorage)
+			if engine == nil {
+				engine = &Engine{
+					Name:         server.Name,
+					IP:           server.IP,
+					EngineLabels: map[string]string{},
+					NodeLabels:   map[string]string{},
+				}
 			}
+			engine.StateText = stateText[StateDisconnected]
+			engine.state = StateDisconnected
 		}
 		engines = append(engines, engine)
 	}
@@ -355,11 +392,16 @@ func (cluster *Cluster) InGroupsContains(ip string, name string) bool {
 func (cluster *Cluster) GetMetaEnginesContainers(metaData *MetaData, metaEngines map[string]*Engine) *types.GroupContainer {
 
 	groupContainer := &types.GroupContainer{
-		MetaID:     metaData.MetaID,
-		Instances:  metaData.Instances,
-		WebHooks:   metaData.WebHooks,
-		Config:     metaData.Config,
-		Containers: make([]*types.EngineContainer, 0),
+		GroupID:       metaData.GroupID,
+		MetaID:        metaData.MetaID,
+		IsRemoveDelay: metaData.IsRemoveDelay,
+		Instances:     metaData.Instances,
+		Placement:     metaData.Placement,
+		WebHooks:      metaData.WebHooks,
+		Config:        metaData.Config,
+		Containers:    make([]*types.EngineContainer, 0),
+		CreateAt:      metaData.CreateAt,
+		LastUpdateAt:  metaData.LastUpdateAt,
 	}
 
 	baseConfigs := cluster.configCache.GetMetaDataBaseConfigs(metaData.MetaID)
@@ -580,6 +622,37 @@ func (cluster *Cluster) RemoveGroup(groupid string) bool {
 	return true
 }
 
+//SetServerNodeLabels is exported
+func (cluster *Cluster) SetServerNodeLabels(server Server, labels map[string]string) error {
+
+	engine := searchServerOfStorage(server, cluster.storageDriver.NodeStorage)
+	if engine == nil {
+		return ErrClusterServerNotFound
+	}
+
+	err := cluster.storageDriver.NodeStorage.SetNodeLabels(engine.IP, labels)
+	if err == nil {
+		//update engine node-labels in memory
+		if engine = cluster.GetEngine(engine.IP); engine != nil {
+			originalLabels := engine.NodeLabelsPairs()
+			if !reflect.DeepEqual(originalLabels, labels) {
+				logger.INFO("[#cluster#] set %s(%s) node-labels, %+v", engine.IP, engine.Name, labels)
+				engine.SetNodeLabelsPairs(labels)
+				metaids := engine.MetaIds()
+				for _, metaid := range metaids {
+					if metaData := cluster.GetMetaData(metaid); metaData != nil {
+						if metaData.Placement.Constraints != nil && len(metaData.Placement.Constraints) > 0 {
+							logger.INFO("[#cluster#] meta %s enable available nodes changed.", metaid)
+							cluster.configCache.SetAvailableNodesChanged(metaid, true)
+						}
+					}
+				}
+			}
+		}
+	}
+	return err
+}
+
 func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed backends.Entries, err error) {
 
 	if err != nil {
@@ -594,7 +667,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 	watchEngines := WatchEngines{}
 	logger.INFO("[#cluster#] discovery watch removed:%d added:%d.", len(removed), len(added))
 	for _, entry := range removed {
-		nodeData := &NodeData{}
+		nodeData := &types.NodeData{}
 		if err := json.DeCodeBufferToObject(entry.Data, nodeData); err != nil {
 			logger.ERROR("[#cluster#] discovery watch removed decode error: %s", err.Error())
 			continue
@@ -607,7 +680,7 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 	}
 
 	for _, entry := range added {
-		nodeData := &NodeData{}
+		nodeData := &types.NodeData{}
 		if err := json.DeCodeBufferToObject(entry.Data, nodeData); err != nil {
 			logger.ERROR("[#cluster#] discovery service watch added decode error: %s", err.Error())
 			continue
@@ -820,10 +893,12 @@ func (cluster *Cluster) RemoveContainers(metaid string, containerid string) (*ty
 		return nil, err
 	}
 
+	logger.INFO("[#cluster#] remove meta %s %s", metaid, containerid)
 	removedContainers := cluster.removeContainers(metaData, containerid)
 	cluster.submitHookEvent(metaData, RemoveMetaEvent)
-	if metaData := cluster.configCache.GetMetaData(metaData.MetaID); metaData != nil {
-		if len(metaData.BaseConfigs) == 0 {
+	metaData = cluster.configCache.GetMetaData(metaData.MetaID)
+	if metaData != nil {
+		if containerid == "" || len(metaData.BaseConfigs) == 0 {
 			cluster.configCache.RemoveMetaData(metaData.MetaID)
 		}
 	}
@@ -871,7 +946,7 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 }
 
 // UpdateContainers is exported
-func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks types.WebHooks, config models.Container) (*types.CreatedContainers, error) {
+func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container) (*types.CreatedContainers, error) {
 
 	if instances < 0 {
 		logger.ERROR("[#cluster#] update meta %s error, %s", metaid, ErrClusterContainersInstancesInvalid)
@@ -889,10 +964,14 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 	}
 
 	originalConfig := metaData.Config
+	originalPlacement := metaData.Placement
 	imageTag := getImageTag(config.Image)
-	cluster.configCache.SetMetaData(metaid, instances, webhooks, config)
+	cluster.configCache.SetMetaData(metaid, instances, webhooks, placement, config)
 	cluster.configCache.SetImageTag(metaid, imageTag)
 	metaData = cluster.configCache.GetMetaData(metaid)
+	if metaData == nil {
+		return nil, fmt.Errorf("update invalid meta %s", metaid)
+	}
 
 	if len(engines) > 0 {
 		originalInstances := len(metaData.BaseConfigs)
@@ -900,19 +979,22 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 			logger.INFO("[#cluster#] update %s containers, reduce instances to %d.", config.Name, instances)
 			cluster.reduceContainers(metaData, originalInstances)
 		} else {
-			if !reflect.DeepEqual(originalConfig, config) { //config changed, re-create all containers.
+			placementCompared := reflect.DeepEqual(originalPlacement, placement)
+			availableNodesChanged := metaData.AvailableNodesChanged
+			if !reflect.DeepEqual(originalConfig, config) || !placementCompared || availableNodesChanged {
+				//config or placement changed, re-create all containers.
 				logger.INFO("[#cluster#] update %s containers, re-create %d instances.", config.Name, instances)
 				var priorities *EnginePriorities
-				if originalInstances == instances {
+				if originalInstances == instances && placementCompared && !availableNodesChanged {
 					priorities = NewEnginePriorities(metaData, engines)
 					logger.INFO("[#cluster#] update %s containers, priorities %s", config.Name, priorities.EngineStrings())
 				}
 				cluster.reduceContainers(metaData, originalInstances)
-				cluster.createContainers(metaData, instances, priorities, metaData.Config)
+				_, err = cluster.createContainers(metaData, instances, priorities, metaData.Config)
 			} else { //instances changed only.
 				if originalInstances < instances {
 					logger.INFO("[#cluster#] update %s containers, instances changed only, append %d instances.", config.Name, instances-originalInstances)
-					cluster.createContainers(metaData, instances-originalInstances, nil, metaData.Config)
+					_, err = cluster.createContainers(metaData, instances-originalInstances, nil, metaData.Config)
 				} else {
 					logger.INFO("[#cluster#] update %s containers, instances changed only, reduce %d containers.", config.Name, originalInstances-instances)
 					cluster.reduceContainers(metaData, originalInstances-instances)
@@ -921,21 +1003,29 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 		}
 	}
 
+	if metaData.AvailableNodesChanged {
+		cluster.configCache.SetAvailableNodesChanged(metaid, false)
+		logger.INFO("[#cluster#] meta %s disable available nodes changed.", metaid)
+	}
+
 	cluster.submitHookEvent(metaData, UpdateMetaEvent)
-	createdContainers := types.CreatedContainers{}
-	for _, engine := range engines {
-		if engine.IsHealthy() {
-			containers := engine.Containers(metaData.MetaID)
-			for _, container := range containers {
-				createdContainers = createdContainers.SetCreatedPair(engine.IP, engine.Name, container.Config.Container)
+	if err == nil {
+		createdContainers := types.CreatedContainers{}
+		for _, engine := range engines {
+			if engine.IsHealthy() {
+				containers := engine.Containers(metaData.MetaID)
+				for _, container := range containers {
+					createdContainers = createdContainers.SetCreatedPair(engine.IP, engine.Name, container.Config.Container)
+				}
 			}
 		}
+		return &createdContainers, nil
 	}
-	return &createdContainers, nil
+	return nil, err
 }
 
 // CreateContainers is exported
-func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks types.WebHooks, config models.Container, option types.CreateOption) (string, *types.CreatedContainers, error) {
+func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container, option types.CreateOption) (string, *types.CreatedContainers, error) {
 
 	if instances <= 0 {
 		return "", nil, ErrClusterContainersInstancesInvalid
@@ -973,25 +1063,26 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 			} else {
 				imageTag := getImageTag(config.Image)
 				if metaData.ImageTag == imageTag {
-					logger.ERROR("[#cluster#] re-create %s containers %s error, %s", metaData.MetaID, config.Name, ErrClusterCreateContainerTagAlreadyUsing)
-					return "", nil, ErrClusterCreateContainerTagAlreadyUsing
+					logger.WARN("[#cluster#] re-create %s containers %s tag %s eq.", metaData.MetaID, config.Name, imageTag)
+					cluster.RemoveContainers(metaData.MetaID, "")
+				} else {
+					metaID = metaData.MetaID
+					bCreate = false
 				}
-				metaID = metaData.MetaID
-				bCreate = false
 			}
 		}
 	}
 
 	createdContainers := types.CreatedContainers{}
 	if bCreate {
-		metaData, err := cluster.configCache.CreateMetaData(groupid, group.IsRemoveDelay, instances, webhooks, config)
+		metaData, err := cluster.configCache.CreateMetaData(groupid, group.IsRemoveDelay, instances, webhooks, placement, config)
 		if err != nil {
 			logger.ERROR("[#cluster#] create containers %s error, %s", config.Name, ErrClusterContainersMetaCreateFailure)
 			return "", nil, ErrClusterContainersMetaCreateFailure
 		}
 		createdContainers, err = cluster.createContainers(metaData, instances, nil, config)
 		if len(createdContainers) == 0 {
-			cluster.configCache.RemoveMetaData(metaData.MetaID)
+			//cluster.configCache.RemoveMetaData(metaData.MetaID)
 			var resultErr string
 			if err != nil {
 				resultErr = err.Error()
@@ -1002,7 +1093,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 		metaID = metaData.MetaID
 		cluster.submitHookEvent(metaData, CreateMetaEvent)
 	} else {
-		containers, err := cluster.UpdateContainers(metaID, instances, webhooks, config)
+		containers, err := cluster.UpdateContainers(metaID, instances, webhooks, placement, config)
 		if err != nil || len(*containers) == 0 {
 			logger.ERROR("[#cluster#] re-create %s containers %s error, %s", metaID, config.Name, ErrClusterCreateContainerFailure)
 			return "", nil, ErrClusterCreateContainerFailure
@@ -1186,6 +1277,10 @@ func (cluster *Cluster) createContainer(metaData *MetaData, filter *EnginesFilte
 		if len(selectEngines) == 0 {
 			return nil, nil, ErrClusterNoEngineAvailable
 		}
+		selectEngines = cluster.selectPlacementEngines(selectEngines, filter, &metaData.Placement)
+		if len(selectEngines) == 0 {
+			return nil, nil, ErrClusterNoEngineAvailable
+		}
 		engine = selectEngines[0]
 	}
 
@@ -1231,6 +1326,48 @@ func (cluster *Cluster) selectEngines(engines []*Engine, filter *EnginesFilter, 
 				selectEngines[i], selectEngines[j] = selectEngines[j], selectEngines[i]
 			}
 		}
+	}
+	return selectEngines
+}
+
+// selectPlacementEngines is exported
+func (cluster *Cluster) selectPlacementEngines(engines []*Engine, filter *EnginesFilter, placement *types.Placement) []*Engine {
+
+	selectEngines := []*Engine{}
+	if placement.Constraints != nil && len(placement.Constraints) > 0 {
+		constraints, err := ParseConstraints(placement.Constraints)
+		if err != nil {
+			logger.ERROR("[#cluster#] placement engines error, %s", err.Error())
+			return selectEngines //return empty engines
+		}
+		for _, engine := range engines {
+			ret := MatchConstraints(constraints, engine)
+			if ret {
+				selectEngines = append(selectEngines, engine)
+				logger.INFO("[#cluster#] placement engines, %s(%s)", engine.IP, engine.Name)
+			} else {
+				logger.INFO("[#cluster#] placement engines filter, %s(%s)", engine.IP, engine.Name)
+			}
+		}
+		if len(selectEngines) == 0 {
+			filterEngines := filter.AllocEngines()
+			if len(filterEngines) > 0 {
+				logger.INFO("[#cluster#] placement select alloc engines")
+				selectEngines = filterEngines
+			} else {
+				//last retry fail! select a fail engine, throw cretae error,
+				//prevent return cluster no engine available error.
+				logger.INFO("[#cluster#] placement select fail engines")
+				selectEngines = filter.FailEngines()
+			}
+			for i := len(selectEngines) - 1; i > 0; i-- {
+				j := cluster.randSeed.Intn(i + 1)
+				selectEngines[i], selectEngines[j] = selectEngines[j], selectEngines[i]
+			}
+		}
+	} else {
+		selectEngines = engines
+		logger.INFO("[#cluster#] skip placement engines.")
 	}
 	return selectEngines
 }

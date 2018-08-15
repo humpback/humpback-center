@@ -48,6 +48,15 @@ func (pool *EnginesPool) Release() {
 	pool.Unlock()
 }
 
+// InitEngineNodeLabels is exported
+func (pool *EnginesPool) InitEngineNodeLabels(engine *Engine) {
+
+	node, _ := pool.Cluster.storageDriver.NodeStorage.NodeByIP(engine.IP)
+	if node != nil {
+		engine.SetNodeLabelsPairs(node.NodeLabels)
+	}
+}
+
 // AddEngine is exported
 func (pool *EnginesPool) AddEngine(ip string, name string) {
 
@@ -57,7 +66,10 @@ func (pool *EnginesPool) AddEngine(ip string, name string) {
 		return
 	}
 
-	if engine := pool.Cluster.GetEngine(nodeData.IP); engine != nil {
+	pool.Cluster.storageDriver.NodeStorage.SetNodeData(nodeData)
+	engine := pool.Cluster.GetEngine(nodeData.IP)
+	if engine != nil {
+		pool.InitEngineNodeLabels(engine)
 		return
 	}
 
@@ -68,6 +80,7 @@ func (pool *EnginesPool) AddEngine(ip string, name string) {
 	pool.Lock()
 	defer pool.Unlock()
 	if pendEngine, ret := pool.pendEngines[nodeData.IP]; ret {
+		pool.InitEngineNodeLabels(pendEngine)
 		if pendEngine.IsHealthy() {
 			delete(pool.pendEngines, pendEngine.IP)
 			pool.Cluster.Lock()
@@ -94,6 +107,7 @@ func (pool *EnginesPool) AddEngine(ip string, name string) {
 		pool.poolEngines[poolEngine.IP] = poolEngine
 		logger.INFO("[#cluster#] addengine, pool engine create %s %s %s.", poolEngine.IP, poolEngine.Name, poolEngine.State())
 	}
+	pool.InitEngineNodeLabels(poolEngine)
 	pool.pendEngines[poolEngine.IP] = poolEngine
 }
 

@@ -1,9 +1,27 @@
 package cluster
 
+import "github.com/humpback/humpback-center/cluster/storage/entry"
+import "github.com/humpback/humpback-center/cluster/storage/node"
+import "github.com/humpback/humpback-center/cluster/types"
+
 import (
+	"net"
 	"sort"
 	"strings"
 )
+
+//ParseServer is exported
+func ParseServer(ipOrName string) Server {
+
+	server := Server{}
+	ip := net.ParseIP(ipOrName)
+	if ip != nil {
+		server.IP = ipOrName
+	} else {
+		server.Name = ipOrName
+	}
+	return server
+}
 
 func getImageTag(imageName string) string {
 
@@ -33,6 +51,25 @@ func searchServerOfEngines(server Server, engines map[string]*Engine) *Engine {
 	return nil
 }
 
+func searchServerOfStorage(server Server, nodeStorage *node.NodeStorage) *Engine {
+
+	var node *entry.Node
+	if server.IP != "" {
+		node, _ = nodeStorage.NodeByIP(server.IP)
+	} else if server.Name != "" {
+		node, _ = nodeStorage.NodeByName(server.Name)
+	}
+
+	if node != nil {
+		engine := &Engine{}
+		engine.Update(node.NodeData)
+		engine.NodeLabels = node.NodeLabels
+		engine.AvailabilityText = node.Availability
+		return engine
+	}
+	return nil
+}
+
 // selectIPOrName is exported
 func selectIPOrName(ip string, name string) string {
 
@@ -43,7 +80,7 @@ func selectIPOrName(ip string, name string) string {
 }
 
 // compareAddServers is exported
-func compareAddServers(nodeCache *NodeCache, originServer Server, newServer Server) bool {
+func compareAddServers(nodeCache *types.NodeCache, originServer Server, newServer Server) bool {
 
 	nodeData1 := nodeCache.Get(selectIPOrName(originServer.IP, originServer.Name))
 	nodeData2 := nodeCache.Get(selectIPOrName(newServer.IP, newServer.Name))
@@ -59,7 +96,7 @@ func compareAddServers(nodeCache *NodeCache, originServer Server, newServer Serv
 }
 
 // compareRemoveServers is exported
-func compareRemoveServers(nodeCache *NodeCache, originServer Server, newServer Server) bool {
+func compareRemoveServers(nodeCache *types.NodeCache, originServer Server, newServer Server) bool {
 
 	nodeData1 := nodeCache.Get(selectIPOrName(originServer.IP, originServer.Name))
 	nodeData2 := nodeCache.Get(selectIPOrName(newServer.IP, newServer.Name))

@@ -163,15 +163,13 @@ func postGroupCreateContainers(c *Context) error {
 	}
 
 	logger.INFO("[#api#] %s resolve create containers request successed. %+v", c.ID, req)
-	metaid, createdContainers, err := c.Controller.CreateClusterContainers(req.GroupID, req.Instances, req.WebHooks, req.Config, req.Option)
+	metaid, createdContainers, err := c.Controller.CreateClusterContainers(req.GroupID, req.Instances, req.WebHooks, req.Placement, req.Config, req.Option)
 	if err != nil {
 		logger.ERROR("[#api#] %s create containers to group %s error: %s", c.ID, req.GroupID, err.Error())
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())
 		if err == cluster.ErrClusterGroupNotFound {
 			return c.JSON(http.StatusNotFound, result)
 		} else if err == cluster.ErrClusterCreateContainerNameConflict {
-			return c.JSON(http.StatusConflict, result)
-		} else if err == cluster.ErrClusterCreateContainerTagAlreadyUsing {
 			return c.JSON(http.StatusConflict, result)
 		}
 		return c.JSON(http.StatusInternalServerError, result)
@@ -194,7 +192,7 @@ func putGroupUpdateContainers(c *Context) error {
 	}
 
 	logger.INFO("[#api#] %s resolve update containers request successed. %+v", c.ID, req)
-	updatedContainers, err := c.Controller.UpdateClusterContainers(req.MetaID, req.Instances, req.WebHooks, req.Config)
+	updatedContainers, err := c.Controller.UpdateClusterContainers(req.MetaID, req.Instances, req.WebHooks, req.Placement, req.Config)
 	if err != nil {
 		logger.ERROR("[#api#] %s update containers to meta %s error: %s", c.ID, req.MetaID, err.Error())
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())
@@ -261,6 +259,30 @@ func putGroupOperateContainer(c *Context) error {
 	resp := response.NewGroupOperateContainersResponse(metaID, req.Action, operatedContainers)
 	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "operate container response")
 	result.SetResponse(resp)
+	return c.JSON(http.StatusOK, result)
+}
+
+func putGroupServerNodeLabels(c *Context) error {
+
+	result := response.ResponseResult{ResponseID: c.ID}
+	req, err := request.ResolveServerNodeLabelsRequest(c.Request())
+	if err != nil {
+		logger.ERROR("[#api#] %s resolve server nodelabels request faild, %s", c.ID, err.Error())
+		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
+		return c.JSON(http.StatusBadRequest, result)
+	}
+
+	logger.INFO("[#api#] %s resolve server nodelabels request successed. %+v", c.ID, req)
+	err = c.Controller.SetClusterServerNodeLabels(req.Server, req.Labels)
+	if err != nil {
+		logger.ERROR("[#api#] %s server %s set nodelabels error: %s", c.ID, req.Server, err.Error())
+		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())
+		if err == cluster.ErrClusterServerNotFound {
+			return c.JSON(http.StatusNotFound, result)
+		}
+		return c.JSON(http.StatusInternalServerError, result)
+	}
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "set node labels response")
 	return c.JSON(http.StatusOK, result)
 }
 

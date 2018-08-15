@@ -66,6 +66,11 @@ func parseClusterEnv(conf *Configuration) error {
 		driverOpts["location"] = clusterLocation
 	}
 
+	dataPath := os.Getenv("CENTER_CLUSTER_DATAPATH")
+	if dataPath != "" {
+		driverOpts["datapath"] = dataPath
+	}
+
 	cacheRoot := os.Getenv("CENTER_CLUSTER_CACHEROOT")
 	if cacheRoot != "" {
 		if _, err := filepath.Abs(cacheRoot); err != nil {

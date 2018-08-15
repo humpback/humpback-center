@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // ContainerBaseConfig is exported
@@ -44,13 +45,17 @@ func (containers SortContainerBaseConfigs) Less(i, j int) bool {
 
 // MetaBase is exported
 type MetaBase struct {
-	GroupID       string           `json:"GroupId"`
-	MetaID        string           `json:"MetaId"`
-	IsRemoveDelay bool             `json:"IsRemoveDelay"`
-	Instances     int              `json:"Instances"`
-	WebHooks      types.WebHooks   `json:"WebHooks"`
-	ImageTag      string           `json:"ImageTag"`
-	Config        models.Container `json:"Config"`
+	GroupID               string           `json:"GroupId"`
+	MetaID                string           `json:"MetaId"`
+	IsRemoveDelay         bool             `json:"IsRemoveDelay"`
+	Instances             int              `json:"Instances"`
+	WebHooks              types.WebHooks   `json:"WebHooks"`
+	Placement             types.Placement  `json:"Placement"`
+	ImageTag              string           `json:"ImageTag"`
+	Config                models.Container `json:"Config"`
+	CreateAt              int64            `json:"CreateAt"`
+	LastUpdateAt          int64            `json:"LastUpdateAt"`
+	AvailableNodesChanged bool             `json:"AvailableNodesChanged"`
 }
 
 // MetaData is exported
@@ -117,7 +122,10 @@ func (cache *ContainersConfigCache) Init() {
 // Return a new create unique metaid
 func (cache *ContainersConfigCache) MakeUniqueMetaID() string {
 
-	var metaid string
+	var (
+		metaid string
+	)
+
 	for {
 		metaid = rand.UUID(true)
 		if _, ret := cache.data[metaid]; ret {
@@ -291,17 +299,31 @@ func (cache *ContainersConfigCache) SetGroupMetaDataIsRemoveDelay(groupid string
 	cache.Unlock()
 }
 
-// SetMetaData is exported
-func (cache *ContainersConfigCache) SetMetaData(metaid string, instances int, webhooks types.WebHooks, config models.Container) {
+// SetAvailableNodesChanged is exported
+func (cache *ContainersConfigCache) SetAvailableNodesChanged(metaid string, changed bool) {
 
 	cache.Lock()
-	defer cache.Unlock()
+	if metaData, ret := cache.data[metaid]; ret {
+		metaData.AvailableNodesChanged = changed
+		metaData.LastUpdateAt = time.Now().Unix()
+		cache.writeMetaData(metaData)
+	}
+	cache.Unlock()
+}
+
+// SetMetaData is exported
+func (cache *ContainersConfigCache) SetMetaData(metaid string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container) {
+
+	cache.Lock()
 	if metaData, ret := cache.data[metaid]; ret {
 		metaData.Instances = instances
 		metaData.WebHooks = webhooks
+		metaData.Placement = placement
 		metaData.Config = config
+		metaData.LastUpdateAt = time.Now().Unix()
 		cache.writeMetaData(metaData)
 	}
+	cache.Unlock()
 }
 
 // RemoveMetaData is exported
@@ -337,7 +359,7 @@ func (cache *ContainersConfigCache) RemoveGroupMetaData(groupid string) bool {
 }
 
 // CreateMetaData is exported
-func (cache *ContainersConfigCache) CreateMetaData(groupid string, isremovedelay bool, instances int, webhooks types.WebHooks, config models.Container) (*MetaData, error) {
+func (cache *ContainersConfigCache) CreateMetaData(groupid string, isremovedelay bool, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container) (*MetaData, error) {
 
 	cache.Lock()
 	defer cache.Unlock()
@@ -350,8 +372,10 @@ func (cache *ContainersConfigCache) CreateMetaData(groupid string, isremovedelay
 			IsRemoveDelay: isremovedelay,
 			Instances:     instances,
 			WebHooks:      webhooks,
+			Placement:     placement,
 			ImageTag:      imageTag,
 			Config:        config,
+			CreateAt:      time.Now().Unix(),
 		},
 		BaseConfigs: []*ContainerBaseConfig{},
 	}

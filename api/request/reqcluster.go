@@ -175,11 +175,12 @@ Method:  POST
 Route:   /v1/groups/collections
 */
 type GroupCreateContainersRequest struct {
-	GroupID   string           `json:"GroupId"`
-	Instances int              `json:"Instances"`
-	WebHooks  types.WebHooks   `json:"WebHooks"`
-	Config    models.Container `json:"Config"`
-	Option    types.CreateOption
+	GroupID   string             `json:"GroupId"`
+	Instances int                `json:"Instances"`
+	Placement types.Placement    `json:"Placement"`
+	WebHooks  types.WebHooks     `json:"WebHooks"`
+	Config    models.Container   `json:"Config"`
+	Option    types.CreateOption `json:"Option"`
 }
 
 // ResolveGroupCreateContainersRequest is exported
@@ -217,6 +218,7 @@ Route:   /v1/groups/collections
 type GroupUpdateContainersRequest struct {
 	MetaID    string           `json:"MetaId"`
 	Instances int              `json:"Instances"`
+	Placement types.Placement  `json:"Placement"`
 	WebHooks  types.WebHooks   `json:"WebHooks"`
 	Config    models.Container `json:"Config"`
 }
@@ -403,6 +405,31 @@ func ResolveGroupRemoveContainerRequest(r *http.Request) (*GroupRemoveContainerR
 
 	request := &GroupRemoveContainerRequest{
 		ContainerID: containerid,
+	}
+	return request, nil
+}
+
+/*
+ServerNodeLabelsRequest is exported
+Method:  PUT
+Route:   /v1/groups/nodelabels
+*/
+type ServerNodeLabelsRequest struct {
+	Server string            `json:"Server"`
+	Labels map[string]string `json:"Labels"`
+}
+
+// ResolveServerNodeLabelsRequest is exported
+func ResolveServerNodeLabelsRequest(r *http.Request) (*ServerNodeLabelsRequest, error) {
+
+	buf, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	request := &ServerNodeLabelsRequest{}
+	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
+		return nil, err
 	}
 	return request, nil
 }

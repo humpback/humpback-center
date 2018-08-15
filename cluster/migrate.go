@@ -79,6 +79,7 @@ func (mContainer *MigrateContainer) SetState(state MigrateState) {
 func (mContainer *MigrateContainer) Execute(cluster *Cluster) {
 
 	mContainer.SetState(Migrating)
+	mContainer.baseConfig.ID = "" //re-create a new container
 	engine, container, err := cluster.createContainer(mContainer.metaData, mContainer.filter, nil, mContainer.baseConfig.Container)
 	if err != nil {
 		mContainer.SetState(MigrateFailure)

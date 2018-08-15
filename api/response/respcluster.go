@@ -42,12 +42,16 @@ func NewGroupContainersResponse(container *types.GroupContainer) *GroupContainer
 
 // ContainersMetaBase is exported
 type ContainersMetaBase struct {
-	GroupID   string         `json:"GroupId"`
-	MetaID    string         `json:"MetaId"`
-	Instances int            `json:"Instances"`
-	WebHooks  types.WebHooks `json:"WebHooks"`
-	ImageTag  string         `json:"ImageTag"`
+	GroupID       string          `json:"GroupId"`
+	MetaID        string          `json:"MetaId"`
+	IsRemoveDelay bool            `json:"IsRemoveDelay"`
+	Instances     int             `json:"Instances"`
+	Placement     types.Placement `json:"Placement"`
+	WebHooks      types.WebHooks  `json:"WebHooks"`
+	ImageTag      string          `json:"ImageTag"`
 	models.Container
+	CreateAt     int64 `json:"CreateAt"`
+	LastUpdateAt int64 `json:"LastUpdateAt"`
 }
 
 /*
@@ -63,12 +67,16 @@ type GroupContainersMetaBaseResponse struct {
 func NewGroupContainersMetaBaseResponse(metaBase *cluster.MetaBase) *GroupContainersMetaBaseResponse {
 
 	containersMetaBase := &ContainersMetaBase{
-		GroupID:   metaBase.GroupID,
-		MetaID:    metaBase.MetaID,
-		Instances: metaBase.Instances,
-		WebHooks:  metaBase.WebHooks,
-		ImageTag:  metaBase.ImageTag,
-		Container: metaBase.Config,
+		GroupID:       metaBase.GroupID,
+		MetaID:        metaBase.MetaID,
+		IsRemoveDelay: metaBase.IsRemoveDelay,
+		Instances:     metaBase.Instances,
+		Placement:     metaBase.Placement,
+		WebHooks:      metaBase.WebHooks,
+		ImageTag:      metaBase.ImageTag,
+		Container:     metaBase.Config,
+		CreateAt:      metaBase.CreateAt,
+		LastUpdateAt:  metaBase.LastUpdateAt,
 	}
 
 	return &GroupContainersMetaBaseResponse{

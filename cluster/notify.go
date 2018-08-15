@@ -6,7 +6,7 @@ import "github.com/humpback/humpback-center/notify"
 type WatchEngines []*Engine
 
 //NewWatchEngine is exported
-func NewWatchEngine(ip string, name string, state engineState) *Engine {
+func NewWatchEngine(ip string, name string, state EngineState) *Engine {
 
 	return &Engine{
 		IP:    ip,

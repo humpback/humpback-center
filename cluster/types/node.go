@@ -1,4 +1,4 @@
-package cluster
+package types
 
 import "github.com/docker/docker/client"
 import "github.com/humpback/discovery"
@@ -6,6 +6,7 @@ import "github.com/humpback/discovery/backends"
 import "github.com/humpback/gounits/json"
 import "github.com/humpback/gounits/network"
 import "github.com/humpback/gounits/rand"
+import "github.com/humpback/common/models"
 
 import (
 	"context"
@@ -20,29 +21,16 @@ import (
 
 //NodeRegisterOptions is exported
 type NodeRegisterOptions struct {
-	APIPort           int
-	ClusterName       string
-	ClusterURIs       string
-	ClusterHeartBeat  string
-	ClusterTTL        string
-	DockerAgentIPAddr string
-	DockerEndPoint    string
-	DockerAPIVersion  string
+	APIPort    int
+	NodeConfig *models.Config
 }
 
 // NewNodeRegisterOptions is exported
-func NewNodeRegisterOptions(apiPort int, clusterName string, clusterURIs string, clusterHeartBeat string, clusterTTL string,
-	dockerAgentIPAddr string, dockerEndPoint string, dockerAPIVersion string) *NodeRegisterOptions {
+func NewNodeRegisterOptions(apiPort int, nodeConfig *models.Config) *NodeRegisterOptions {
 
 	return &NodeRegisterOptions{
-		APIPort:           apiPort,
-		ClusterName:       clusterName,
-		ClusterURIs:       clusterURIs,
-		ClusterHeartBeat:  clusterHeartBeat,
-		ClusterTTL:        clusterTTL,
-		DockerAgentIPAddr: dockerAgentIPAddr,
-		DockerEndPoint:    dockerEndPoint,
-		DockerAPIVersion:  dockerAPIVersion,
+		APIPort:    apiPort,
+		NodeConfig: nodeConfig,
 	}
 }
 
@@ -62,30 +50,22 @@ type NodeData struct {
 	APIAddr         string   `json:"apiaddr"`
 	Cpus            int64    `json:"cpus"`
 	Memory          int64    `json:"memory"`
-	Driver          string   `json:"driver"`
+	StorageDirver   string   `json:"storagedirver"`
 	KernelVersion   string   `json:"kernelversion"`
+	Architecture    string   `json:"architecture"`
 	OperatingSystem string   `json:"operatingsystem"`
-	Labels          []string `json:"lables"`
+	OSType          string   `json:"ostype"`
+	EngineLabels    []string `json:"lables"`
+	AppVersion      string   `json:"appversion"`
+	DockerVersion   string   `json:"dockerversion"`
 }
 
-// MapLabels is exported
-// covert nodedata's labels []string to map
-func (nodeData *NodeData) MapLabels() map[string]string {
+// MapEngineLabels is exported
+// covert nodedata's engine labels []string to map
+func (nodeData *NodeData) MapEngineLabels() map[string]string {
 
 	labels := map[string]string{}
-	if nodeData.Driver != "" {
-		labels["storagedirver"] = nodeData.Driver
-	}
-
-	if nodeData.KernelVersion != "" {
-		labels["kernelversion"] = nodeData.KernelVersion
-	}
-
-	if nodeData.OperatingSystem != "" {
-		labels["operatingsystem"] = nodeData.OperatingSystem
-	}
-
-	for _, label := range nodeData.Labels {
+	for _, label := range nodeData.EngineLabels {
 		kv := strings.SplitN(label, "=", 2)
 		if len(kv) == 2 {
 			labels[kv[0]] = kv[1]
@@ -192,21 +172,21 @@ func createNode(nodeOptions *NodeOptions) (*Node, error) {
 // create cluster node options
 func createNodeOptions(options *NodeRegisterOptions) (*NodeOptions, error) {
 
-	heartbeat, err := time.ParseDuration(options.ClusterHeartBeat)
+	heartbeat, err := time.ParseDuration(options.NodeConfig.DockerClusterHeartBeat)
 	if err != nil {
 		return nil, err
 	}
 
-	ttl, err := time.ParseDuration(options.ClusterTTL)
+	ttl, err := time.ParseDuration(options.NodeConfig.DockerClusterTTL)
 	if err != nil {
 		return nil, err
 	}
 
 	var hostIP string
-	if options.DockerAgentIPAddr == "0.0.0.0" {
+	if options.NodeConfig.DockerAgentIPAddr == "0.0.0.0" {
 		hostIP = network.GetDefaultIP()
 	} else {
-		hostIP = options.DockerAgentIPAddr
+		hostIP = options.NodeConfig.DockerAgentIPAddr
 	}
 
 	if _, err := net.ResolveIPAddr("ip4", hostIP); err != nil {
@@ -215,7 +195,7 @@ func createNodeOptions(options *NodeRegisterOptions) (*NodeOptions, error) {
 
 	apiAddr := hostIP + net.JoinHostPort("", strconv.Itoa(options.APIPort))
 	defaultHeaders := map[string]string{"User-Agent": "engine-api-cli-1.0"}
-	dockerClient, err := client.NewClient(options.DockerEndPoint, options.DockerAPIVersion, nil, defaultHeaders)
+	dockerClient, err := client.NewClient(options.NodeConfig.DockerEndPoint, options.NodeConfig.DockerAPIVersion, nil, defaultHeaders)
 	if err != nil {
 		return nil, err
 	}
@@ -238,14 +218,18 @@ func createNodeOptions(options *NodeRegisterOptions) (*NodeOptions, error) {
 			APIAddr:         apiAddr,
 			Cpus:            (int64)(engineInfo.NCPU),
 			Memory:          engineInfo.MemTotal,
-			Driver:          engineInfo.Driver,
+			StorageDirver:   engineInfo.Driver,
 			KernelVersion:   engineInfo.KernelVersion,
+			Architecture:    engineInfo.Architecture,
 			OperatingSystem: engineInfo.OperatingSystem,
-			Labels:          engineInfo.Labels,
+			OSType:          engineInfo.OSType,
+			EngineLabels:    engineInfo.Labels,
+			AppVersion:      options.NodeConfig.AppVersion,
+			DockerVersion:   engineInfo.ServerVersion,
 		},
 		NodeClusterOptions: NodeClusterOptions{
-			ClusterName:      options.ClusterName,
-			ClusterURIs:      options.ClusterURIs,
+			ClusterName:      options.NodeConfig.DockerClusterName,
+			ClusterURIs:      options.NodeConfig.DockerClusterURIs,
 			ClusterHeartBeat: heartbeat,
 			ClusterTTL:       ttl,
 		},

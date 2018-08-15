@@ -12,6 +12,8 @@ var (
 	ErrClusterGroupNotFound = errors.New("cluster group not found")
 	//cluster container not found
 	ErrClusterContainerNotFound = errors.New("cluster container not found")
+	//cluster server not found
+	ErrClusterServerNotFound = errors.New("cluster server not found")
 	//cluster group no docker engine available
 	ErrClusterNoEngineAvailable = errors.New("cluster no docker-engine available")
 	//cluster containers instances invalid

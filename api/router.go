@@ -27,6 +27,7 @@ var routes = map[string]map[string]handler{
 		"/v1/groups/collections/upgrade": putGroupUpgradeContainers,
 		"/v1/groups/collections/action":  putGroupOperateContainers,
 		"/v1/groups/container/action":    putGroupOperateContainer,
+		"/v1/groups/nodelabels":          putGroupServerNodeLabels,
 	},
 	"DELETE": {
 		"/v1/groups/{groupid}/collections/{metaname}": deleteGroupRemoveContainersOfMetaName,

@@ -1,5 +1,6 @@
 package cluster
 
+import "github.com/humpback/humpback-center/cluster/types"
 import "github.com/humpback/common/models"
 import "github.com/humpback/gounits/convert"
 import "github.com/humpback/gounits/logger"
@@ -26,31 +27,58 @@ const (
 	refreshInterval = 45 * time.Second
 )
 
-// Engine state define
-type engineState int
+// Availability define
+type Availability int
+
+// Engine availability enum value
+const (
+	//Active, accept scheduling service allocations and failover at any time.
+	Active Availability = iota
+	//Pasue, pause node scheduling, node assigned services are not affected, and no fault migration occurs.
+	Pasue
+	//Expel, exclude nodes from the cluster and create all services on that node to other nodes with active availability.
+	Drain
+)
+
+// Engine availability content mapping
+var availabilityText = map[Availability]string{
+	Active: "Active",
+	Pasue:  "Pasue",
+	Drain:  "Drain",
+}
+
+// GetAvailabilityText is exported
+// return a availability typed text.
+func GetAvailabilityText(availability Availability) string {
+	return availabilityText[availability]
+}
+
+// EngineState define
+type EngineState int
 
 // State enum value
 const (
-	//pending: engine added to cluster engines pool, but not been validated.
-	StatePending engineState = iota
-	//unhealthy: engine is unreachable.
+	//StatePending, engine added to cluster engines pool, but not been validated.
+	StatePending EngineState = iota
+	//StateUnhealthy, engine is unreachable.
 	StateUnhealthy
-	//healthy: engine is ready reachable.
+	//StateHealthy, engine is ready reachable.
 	StateHealthy
-	//disconnected: engine is removed from discovery
+	//StateDisconnected, engine is removed from discovery
 	StateDisconnected
 )
 
 // Engine state content mapping
-var stateText = map[engineState]string{
+var stateText = map[EngineState]string{
 	StatePending:      "Pending",
 	StateUnhealthy:    "Unhealthy",
 	StateHealthy:      "Healthy",
 	StateDisconnected: "Disconnected",
 }
 
-// GetStateText is exported return a state typed text.
-func GetStateText(state engineState) string {
+// GetStateText is exported
+// return a state typed text.
+func GetStateText(state EngineState) string {
 	return stateText[state]
 }
 
@@ -73,14 +101,23 @@ type RemovePool struct {
 // Engine is exported
 type Engine struct {
 	sync.RWMutex
-	ID        string            `json:"ID"`
-	Name      string            `json:"Name"`
-	IP        string            `json:"IP"`
-	APIAddr   string            `json:"APIAddr"`
-	Cpus      int64             `json:"Cpus"`
-	Memory    int64             `json:"Memory"`
-	Labels    map[string]string `json:"Labels"`
-	StateText string            `json:"StateText"`
+	ID               string            `json:"ID"`
+	Name             string            `json:"Name"`
+	IP               string            `json:"IP"`
+	APIAddr          string            `json:"APIAddr"`
+	Cpus             int64             `json:"Cpus"`
+	Memory           int64             `json:"Memory"`
+	StorageDirver    string            `json:"StorageDirver"`
+	KernelVersion    string            `json:"KernelVersion"`
+	Architecture     string            `json:"Architecture"`
+	OperatingSystem  string            `json:"OperatingSystem"`
+	OSType           string            `json:"OSType"`
+	EngineLabels     map[string]string `json:"EngineLabels"`
+	NodeLabels       map[string]string `json:"NodeLabels"`
+	AppVersion       string            `json:"AppVersion"`
+	DockerVersion    string            `json:"DockerVersion"`
+	AvailabilityText string            `json:"AvailabilityText"`
+	StateText        string            `json:"StateText"`
 
 	overcommitRatio int64
 	client          *Client
@@ -88,11 +125,12 @@ type Engine struct {
 	configCache     *ContainersConfigCache
 	containers      map[string]*Container
 	stopCh          chan struct{}
-	state           engineState
+	availability    Availability
+	state           EngineState
 }
 
 // NewEngine is exported
-func NewEngine(nodeData *NodeData, overcommitRatio float64, removeDelay time.Duration, configCache *ContainersConfigCache) (*Engine, error) {
+func NewEngine(nodeData *types.NodeData, overcommitRatio float64, removeDelay time.Duration, configCache *ContainersConfigCache) (*Engine, error) {
 
 	ipAddr, err := net.ResolveIPAddr("ip4", nodeData.IP)
 	if err != nil {
@@ -105,20 +143,30 @@ func NewEngine(nodeData *NodeData, overcommitRatio float64, removeDelay time.Dur
 	}
 
 	return &Engine{
-		ID:              nodeData.ID,
-		Name:            nodeData.Name,
-		IP:              ipAddr.IP.String(),
-		APIAddr:         nodeData.APIAddr,
-		Cpus:            nodeData.Cpus,
-		Memory:          int64(math.Ceil(float64(nodeData.Memory) / 1024.0 / 1024.0)),
-		Labels:          nodeData.MapLabels(),
-		StateText:       stateText[StatePending],
-		overcommitRatio: int64(overcommitRatio * 100),
-		client:          NewClient(nodeData.APIAddr),
-		removePool:      removePool,
-		configCache:     configCache,
-		containers:      make(map[string]*Container),
-		state:           StatePending,
+		ID:               nodeData.ID,
+		Name:             nodeData.Name,
+		IP:               ipAddr.IP.String(),
+		APIAddr:          nodeData.APIAddr,
+		Cpus:             nodeData.Cpus,
+		Memory:           int64(math.Ceil(float64(nodeData.Memory) / 1024.0 / 1024.0)),
+		StorageDirver:    nodeData.StorageDirver,
+		KernelVersion:    nodeData.KernelVersion,
+		Architecture:     nodeData.Architecture,
+		OperatingSystem:  nodeData.OperatingSystem,
+		OSType:           nodeData.OSType,
+		EngineLabels:     nodeData.MapEngineLabels(),
+		NodeLabels:       map[string]string{},
+		AppVersion:       nodeData.AppVersion,
+		DockerVersion:    nodeData.DockerVersion,
+		AvailabilityText: availabilityText[Active],
+		StateText:        stateText[StatePending],
+		overcommitRatio:  int64(overcommitRatio * 100),
+		client:           NewClient(nodeData.APIAddr),
+		removePool:       removePool,
+		configCache:      configCache,
+		containers:       make(map[string]*Container),
+		availability:     Active,
+		state:            StatePending,
 	}, nil
 }
 
@@ -158,16 +206,53 @@ func (engine *Engine) Close() {
 
 // Update is exported
 // Engine update info
-func (engine *Engine) Update(nodeData *NodeData) {
+func (engine *Engine) Update(nodeData *types.NodeData) {
 
 	engine.Lock()
 	engine.ID = nodeData.ID
+	engine.IP = nodeData.IP
 	engine.Name = nodeData.Name
 	engine.APIAddr = nodeData.APIAddr
 	engine.Cpus = nodeData.Cpus
 	engine.Memory = int64(math.Ceil(float64(nodeData.Memory) / 1024.0 / 1024.0))
-	engine.Labels = nodeData.MapLabels()
+	engine.StorageDirver = nodeData.StorageDirver
+	engine.KernelVersion = nodeData.KernelVersion
+	engine.Architecture = nodeData.Architecture
+	engine.OperatingSystem = nodeData.OperatingSystem
+	engine.OSType = nodeData.OSType
+	engine.EngineLabels = nodeData.MapEngineLabels()
+	engine.AppVersion = nodeData.AppVersion
+	engine.DockerVersion = nodeData.DockerVersion
 	engine.Unlock()
+}
+
+// EngineLabelsPairs is exported
+func (engine *Engine) EngineLabelsPairs() map[string]string {
+	labels := map[string]string{}
+	engine.RLock()
+	labels = engine.EngineLabels
+	engine.RUnlock()
+	return labels
+}
+
+// GetNodeLabelsPairs is exported
+func (engine *Engine) NodeLabelsPairs() map[string]string {
+
+	labels := map[string]string{}
+	engine.RLock()
+	labels = engine.NodeLabels
+	engine.RUnlock()
+	return labels
+}
+
+// SetNodeLabelsPairs is exported
+func (engine *Engine) SetNodeLabelsPairs(labels map[string]string) {
+
+	if labels != nil {
+		engine.Lock()
+		engine.NodeLabels = labels
+		engine.Unlock()
+	}
 }
 
 // IsHealthy is exported
@@ -208,7 +293,7 @@ func (engine *Engine) State() string {
 
 // SetState is exported
 // Set engine state.
-func (engine *Engine) SetState(state engineState) {
+func (engine *Engine) SetState(state EngineState) {
 
 	engine.Lock()
 	engine.state = state
@@ -704,24 +789,19 @@ func (engine *Engine) updateSpecs() error {
 	engine.Name = strings.ToUpper(dockerInfo.Name)
 	engine.Cpus = int64(dockerInfo.NCPU)
 	engine.Memory = int64(math.Ceil(float64(dockerInfo.MemTotal) / 1024.0 / 1024.0))
-	if dockerInfo.Driver != "" {
-		engine.Labels["storagedirver"] = dockerInfo.Driver
-	}
-
-	if dockerInfo.KernelVersion != "" {
-		engine.Labels["kernelversion"] = dockerInfo.KernelVersion
-	}
-
-	if dockerInfo.OperatingSystem != "" {
-		engine.Labels["operatingsystem"] = dockerInfo.OperatingSystem
-	}
-
+	engine.StorageDirver = dockerInfo.Driver
+	engine.KernelVersion = dockerInfo.KernelVersion
+	engine.Architecture = dockerInfo.Architecture
+	engine.OperatingSystem = dockerInfo.OperatingSystem
+	engine.OSType = dockerInfo.OSType
+	engine.DockerVersion = dockerInfo.ServerVersion
+	engine.EngineLabels = map[string]string{}
 	for _, label := range dockerInfo.Labels {
 		kv := strings.SplitN(label, "=", 2)
 		if len(kv) != 2 {
 			continue
 		}
-		engine.Labels[kv[0]] = kv[1]
+		engine.EngineLabels[kv[0]] = kv[1]
 	}
 	engine.Unlock()
 	return nil
