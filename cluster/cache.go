@@ -48,6 +48,7 @@ type MetaBase struct {
 	GroupID               string           `json:"GroupId"`
 	MetaID                string           `json:"MetaId"`
 	IsRemoveDelay         bool             `json:"IsRemoveDelay"`
+	IsRecovery            bool             `json:"IsRecovery"`
 	Instances             int              `json:"Instances"`
 	WebHooks              types.WebHooks   `json:"WebHooks"`
 	Placement             types.Placement  `json:"Placement"`
@@ -286,19 +287,6 @@ func (cache *ContainersConfigCache) GetGroupMetaData(groupid string) []*MetaData
 	return out
 }
 
-// SetGroupMetaDataIsRemoveDelay is exported
-func (cache *ContainersConfigCache) SetGroupMetaDataIsRemoveDelay(groupid string, isremovedelay bool) {
-
-	cache.Lock()
-	for _, metaData := range cache.data {
-		if metaData.GroupID == groupid {
-			metaData.IsRemoveDelay = isremovedelay
-			cache.writeMetaData(metaData)
-		}
-	}
-	cache.Unlock()
-}
-
 // SetAvailableNodesChanged is exported
 func (cache *ContainersConfigCache) SetAvailableNodesChanged(metaid string, changed bool) {
 
@@ -312,10 +300,12 @@ func (cache *ContainersConfigCache) SetAvailableNodesChanged(metaid string, chan
 }
 
 // SetMetaData is exported
-func (cache *ContainersConfigCache) SetMetaData(metaid string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container) {
+func (cache *ContainersConfigCache) SetMetaData(metaid string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container, isremovedelay bool, isrecovery bool) {
 
 	cache.Lock()
 	if metaData, ret := cache.data[metaid]; ret {
+		metaData.IsRemoveDelay = isremovedelay
+		metaData.IsRecovery = isrecovery
 		metaData.Instances = instances
 		metaData.WebHooks = webhooks
 		metaData.Placement = placement
@@ -359,10 +349,15 @@ func (cache *ContainersConfigCache) RemoveGroupMetaData(groupid string) bool {
 }
 
 // CreateMetaData is exported
-func (cache *ContainersConfigCache) CreateMetaData(groupid string, isremovedelay bool, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container) (*MetaData, error) {
+func (cache *ContainersConfigCache) CreateMetaData(groupid string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container, isremovedelay bool, isrecovery bool) (*MetaData, error) {
 
 	cache.Lock()
 	defer cache.Unlock()
+	for _, pMetaData := range cache.data {
+		if pMetaData.GroupID == groupid && pMetaData.Config.Name == config.Name {
+			return pMetaData, fmt.Errorf("create meta conflict, %s", config.Name)
+		}
+	}
 	metaid := cache.MakeUniqueMetaID()
 	imageTag := getImageTag(config.Image)
 	metaData := &MetaData{
@@ -370,6 +365,7 @@ func (cache *ContainersConfigCache) CreateMetaData(groupid string, isremovedelay
 			GroupID:       groupid,
 			MetaID:        metaid,
 			IsRemoveDelay: isremovedelay,
+			IsRecovery:    isrecovery,
 			Instances:     instances,
 			WebHooks:      webhooks,
 			Placement:     placement,
@@ -462,7 +458,13 @@ func (cache *ContainersConfigCache) readMetaData(metaid string) (*MetaData, erro
 		return nil, err
 	}
 
-	metaData := &MetaData{}
+	metaData := &MetaData{
+		MetaBase: MetaBase{
+			IsRemoveDelay: true, //isremovedelay default is enabled.
+			IsRecovery:    true, //isrecovery default is enabled.
+		},
+	}
+
 	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(metaData); err != nil {
 		return nil, nil
 	}

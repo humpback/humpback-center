@@ -131,10 +131,36 @@ func ResolveGroupEngineRequest(r *http.Request) (*GroupEngineRequest, error) {
 }
 
 const (
-	GROUP_CREATE_EVENT = "create"
-	GROUP_REMOVE_EVENT = "remove"
-	GROUP_CHANGE_EVENT = "change"
+	CLUSTER_ENABLE_EVENT  = "enable"
+	CLUSTER_DISABLE_EVENT = "disable"
+	GROUP_CREATE_EVENT    = "create"
+	GROUP_REMOVE_EVENT    = "remove"
+	GROUP_CHANGE_EVENT    = "change"
 )
+
+type ClusterEventRequest struct {
+	Event string `json:"Event"`
+}
+
+func ResolveClusterEventRequest(r *http.Request) (*ClusterEventRequest, error) {
+
+	buf, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	request := &ClusterEventRequest{}
+	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
+		return nil, err
+	}
+
+	request.Event = strings.ToLower(request.Event)
+	request.Event = strings.TrimSpace(request.Event)
+	if request.Event != CLUSTER_ENABLE_EVENT && request.Event != CLUSTER_DISABLE_EVENT {
+		return nil, fmt.Errorf("event type invalid")
+	}
+	return request, nil
+}
 
 /*
 GroupEventRequest is exported
@@ -191,7 +217,13 @@ func ResolveGroupCreateContainersRequest(r *http.Request) (*GroupCreateContainer
 		return nil, err
 	}
 
-	request := &GroupCreateContainersRequest{}
+	request := &GroupCreateContainersRequest{
+		Option: types.CreateOption{
+			IsRemoveDelay: true,
+			IsRecovery:    true,
+		},
+	}
+
 	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
 		return nil, err
 	}
@@ -216,11 +248,12 @@ Method:  PUT
 Route:   /v1/groups/collections
 */
 type GroupUpdateContainersRequest struct {
-	MetaID    string           `json:"MetaId"`
-	Instances int              `json:"Instances"`
-	Placement types.Placement  `json:"Placement"`
-	WebHooks  types.WebHooks   `json:"WebHooks"`
-	Config    models.Container `json:"Config"`
+	MetaID    string             `json:"MetaId"`
+	Instances int                `json:"Instances"`
+	Placement types.Placement    `json:"Placement"`
+	WebHooks  types.WebHooks     `json:"WebHooks"`
+	Config    models.Container   `json:"Config"`
+	Option    types.UpdateOption `json:"Option"`
 }
 
 // ResolveGroupUpdateContainersRequest is exported
@@ -231,7 +264,13 @@ func ResolveGroupUpdateContainersRequest(r *http.Request) (*GroupUpdateContainer
 		return nil, err
 	}
 
-	request := &GroupUpdateContainersRequest{}
+	request := &GroupUpdateContainersRequest{
+		Option: types.UpdateOption{
+			IsRemoveDelay: true,
+			IsRecovery:    true,
+		},
+	}
+
 	if err := json.NewDecoder(bytes.NewReader(buf)).Decode(request); err != nil {
 		return nil, err
 	}

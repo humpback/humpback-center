@@ -212,7 +212,6 @@ func (engine *Engine) Update(nodeData *types.NodeData) {
 	engine.ID = nodeData.ID
 	engine.IP = nodeData.IP
 	engine.Name = nodeData.Name
-	engine.APIAddr = nodeData.APIAddr
 	engine.Cpus = nodeData.Cpus
 	engine.Memory = int64(math.Ceil(float64(nodeData.Memory) / 1024.0 / 1024.0))
 	engine.StorageDirver = nodeData.StorageDirver
@@ -223,11 +222,16 @@ func (engine *Engine) Update(nodeData *types.NodeData) {
 	engine.EngineLabels = nodeData.MapEngineLabels()
 	engine.AppVersion = nodeData.AppVersion
 	engine.DockerVersion = nodeData.DockerVersion
+	engine.APIAddr = nodeData.APIAddr
+	if engine.client != nil {
+		engine.client.ApiAddr = nodeData.APIAddr
+	}
 	engine.Unlock()
 }
 
 // EngineLabelsPairs is exported
 func (engine *Engine) EngineLabelsPairs() map[string]string {
+
 	labels := map[string]string{}
 	engine.RLock()
 	labels = engine.EngineLabels
@@ -235,7 +239,7 @@ func (engine *Engine) EngineLabelsPairs() map[string]string {
 	return labels
 }
 
-// GetNodeLabelsPairs is exported
+// NodeLabelsPairs is exported
 func (engine *Engine) NodeLabelsPairs() map[string]string {
 
 	labels := map[string]string{}
@@ -826,9 +830,12 @@ func (engine *Engine) updateContainer(containerid string, containers map[string]
 		return nil, fmt.Errorf("update container error, %s", err)
 	}
 
-	engine.Lock()
-	container.update(engine, containerJSON)
-	containers[containerid] = container
-	engine.Unlock()
+	if containerid == containerJSON.ID {
+		engine.Lock()
+		if container.update(engine, containerJSON) {
+			containers[containerid] = container
+		}
+		engine.Unlock()
+	}
 	return containers, nil
 }

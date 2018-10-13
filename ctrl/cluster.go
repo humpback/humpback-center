@@ -144,6 +144,14 @@ func (c *Controller) SetClusterServerNodeLabels(server string, labels map[string
 	return c.Cluster.SetServerNodeLabels(s, labels)
 }
 
+func (c *Controller) SetClusterEnableEvent(event string) {
+
+	logger.INFO("[#ctrl#] set cluster enable %s.", event)
+	if event == request.CLUSTER_ENABLE_EVENT {
+		c.initCluster()
+	}
+}
+
 func (c *Controller) SetClusterGroupEvent(groupid string, event string) {
 
 	logger.INFO("[#ctrl#] set cluster groupevent %s.", event)
@@ -185,9 +193,9 @@ func (c *Controller) CreateClusterContainers(groupid string, instances int, webh
 	return c.Cluster.CreateContainers(groupid, instances, webhooks, placement, config, option)
 }
 
-func (c *Controller) UpdateClusterContainers(metaid string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container) (*types.CreatedContainers, error) {
+func (c *Controller) UpdateClusterContainers(metaid string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container, option types.UpdateOption) (*types.CreatedContainers, error) {
 
-	return c.Cluster.UpdateContainers(metaid, instances, webhooks, placement, config)
+	return c.Cluster.UpdateContainers(metaid, instances, webhooks, placement, config, option)
 }
 
 func (c *Controller) OperateContainers(metaid string, action string) (*types.OperatedContainers, error) {

@@ -12,6 +12,7 @@ type handler func(c *Context) error
 var routes = map[string]map[string]handler{
 	"GET": {
 		"/v1/_ping":                            ping,
+		"/v1/configuration":                    getConfiguration,
 		"/v1/groups/{groupid}/collections":     getGroupAllContainers,
 		"/v1/groups/{groupid}/engines":         getGroupEngines,
 		"/v1/groups/collections/{metaid}":      getGroupContainers,
@@ -20,6 +21,7 @@ var routes = map[string]map[string]handler{
 	},
 	"POST": {
 		"/v1/groups/event":       postGroupEvent,
+		"/v1/cluster/event":      postClusterEvent,
 		"/v1/groups/collections": postGroupCreateContainers,
 	},
 	"PUT": {
@@ -72,6 +74,11 @@ func NewRouter(controller *ctrl.Controller, enableCors bool) *mux.Router {
 func ping(ctx *Context) error {
 
 	return ctx.JSON(http.StatusOK, "PANG")
+}
+
+func getConfiguration(ctx *Context) error {
+
+	return ctx.JSON(http.StatusOK, ctx.Controller.Configuration)
 }
 
 func optionsHandler(ctx *Context) error {

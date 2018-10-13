@@ -1,18 +1,18 @@
 package types
 
 import "github.com/docker/docker/client"
+import "github.com/humpback/common/models"
 import "github.com/humpback/discovery"
 import "github.com/humpback/discovery/backends"
 import "github.com/humpback/gounits/json"
-import "github.com/humpback/gounits/network"
 import "github.com/humpback/gounits/rand"
-import "github.com/humpback/common/models"
 
 import (
 	"context"
 	"log"
 	"net"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,15 +21,17 @@ import (
 
 //NodeRegisterOptions is exported
 type NodeRegisterOptions struct {
-	APIPort    int
+	IPAddr     string
+	BindPort   int
 	NodeConfig *models.Config
 }
 
 // NewNodeRegisterOptions is exported
-func NewNodeRegisterOptions(apiPort int, nodeConfig *models.Config) *NodeRegisterOptions {
+func NewNodeRegisterOptions(ipAddr string, bindPort int, nodeConfig *models.Config) *NodeRegisterOptions {
 
 	return &NodeRegisterOptions{
-		APIPort:    apiPort,
+		IPAddr:     ipAddr,
+		BindPort:   bindPort,
 		NodeConfig: nodeConfig,
 	}
 }
@@ -58,6 +60,7 @@ type NodeData struct {
 	EngineLabels    []string `json:"lables"`
 	AppVersion      string   `json:"appversion"`
 	DockerVersion   string   `json:"dockerversion"`
+	timestamp       int64
 }
 
 // MapEngineLabels is exported
@@ -182,18 +185,6 @@ func createNodeOptions(options *NodeRegisterOptions) (*NodeOptions, error) {
 		return nil, err
 	}
 
-	var hostIP string
-	if options.NodeConfig.DockerAgentIPAddr == "0.0.0.0" {
-		hostIP = network.GetDefaultIP()
-	} else {
-		hostIP = options.NodeConfig.DockerAgentIPAddr
-	}
-
-	if _, err := net.ResolveIPAddr("ip4", hostIP); err != nil {
-		return nil, err
-	}
-
-	apiAddr := hostIP + net.JoinHostPort("", strconv.Itoa(options.APIPort))
 	defaultHeaders := map[string]string{"User-Agent": "engine-api-cli-1.0"}
 	dockerClient, err := client.NewClient(options.NodeConfig.DockerEndPoint, options.NodeConfig.DockerAPIVersion, nil, defaultHeaders)
 	if err != nil {
@@ -210,11 +201,12 @@ func createNodeOptions(options *NodeRegisterOptions) (*NodeOptions, error) {
 		hostName = engineInfo.Name
 	}
 
+	apiAddr := net.JoinHostPort(options.IPAddr, strconv.Itoa(options.BindPort))
 	return &NodeOptions{
 		NodeData: NodeData{
 			ID:              engineInfo.ID,
 			Name:            hostName,
-			IP:              hostIP,
+			IP:              options.IPAddr,
 			APIAddr:         apiAddr,
 			Cpus:            (int64)(engineInfo.NCPU),
 			Memory:          engineInfo.MemTotal,
@@ -256,6 +248,7 @@ func (cache *NodeCache) Add(key string, nodeData *NodeData) {
 
 	cache.Lock()
 	if _, ret := cache.nodes[key]; !ret {
+		nodeData.timestamp = time.Now().UnixNano()
 		cache.nodes[key] = nodeData
 	}
 	cache.Unlock()
@@ -286,18 +279,41 @@ func (cache *NodeCache) Node(key string) *NodeData {
 // nodeCache get nodeData of server ip or server hostname
 func (cache *NodeCache) Get(IPOrName string) *NodeData {
 
+	nodes := []*NodeData{}
 	cache.RLock()
 	defer cache.RUnlock()
 	for _, nodeData := range cache.nodes {
 		if nodeData.IP == IPOrName {
-			return nodeData
+			nodes = append(nodes, nodeData)
 		}
 	}
 
 	for _, nodeData := range cache.nodes {
 		if nodeData.Name == IPOrName {
-			return nodeData
+			nodes = append(nodes, nodeData)
 		}
 	}
+
+	less := func(i, j int) bool {
+		return nodes[i].timestamp > nodes[j].timestamp
+	}
+
+	if len(nodes) > 0 {
+		sort.Slice(nodes, less)
+		return nodes[0]
+	}
 	return nil
+}
+
+// ContainsOtherKey is exported
+func (cache *NodeCache) ContainsOtherKey(key string, IPOrName string) bool {
+
+	cache.RLock()
+	defer cache.RUnlock()
+	for k, nodeData := range cache.nodes {
+		if k != key && (nodeData.IP == IPOrName || nodeData.Name == IPOrName) {
+			return true
+		}
+	}
+	return false
 }

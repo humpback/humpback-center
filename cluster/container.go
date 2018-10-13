@@ -95,7 +95,7 @@ func (c *Container) ValidateConfig() bool {
 
 // update is exported
 // update container info and config
-func (c *Container) update(engine *Engine, containerJSON *types.ContainerJSON) {
+func (c *Container) update(engine *Engine, containerJSON *types.ContainerJSON) bool {
 
 	config := &models.Container{}
 	config.Parse(containerJSON)
@@ -116,9 +116,10 @@ func (c *Container) update(engine *Engine, containerJSON *types.ContainerJSON) {
 	metaID := configEnvMap["HUMPBACK_CLUSTER_METAID"]
 	if len(groupID) > 0 && len(metaID) > 0 {
 		c.BaseConfig = engine.configCache.GetContainerBaseConfig(metaID, containerJSON.ID)
-	} else {
-		c.BaseConfig = nil
+		return true
 	}
+	c.BaseConfig = nil
+	return false
 }
 
 // Containers represents a list of containers

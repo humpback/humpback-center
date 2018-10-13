@@ -6,7 +6,6 @@ import "github.com/humpback/humpback-center/cluster/storage"
 import "github.com/humpback/humpback-center/cluster/types"
 import "github.com/humpback/discovery"
 import "github.com/humpback/discovery/backends"
-import "github.com/humpback/gounits/json"
 import "github.com/humpback/gounits/logger"
 import "github.com/humpback/gounits/system"
 
@@ -20,6 +19,8 @@ import (
 	"sync"
 	"time"
 )
+
+var pendingWaitForInterval = time.Duration(time.Second * 5)
 
 // pendingContainer is exported
 type pendingContainer struct {
@@ -38,13 +39,12 @@ type Server struct {
 // Servers: cluster group's servers.
 // ContactInfo: cluster manager contactinfo.
 type Group struct {
-	ID            string   `json:"ID"`
-	Name          string   `json:"Name"`
-	IsCluster     bool     `json:"IsCluster"`
-	IsRemoveDelay bool     `json:"IsRemoveDelay"`
-	Location      string   `json:"ClusterLocation"`
-	Servers       []Server `json:"Servers"`
-	ContactInfo   string   `json:"ContactInfo"`
+	ID          string   `json:"ID"`
+	Name        string   `json:"Name"`
+	IsCluster   bool     `json:"IsCluster"`
+	Location    string   `json:"ClusterLocation"`
+	Servers     []Server `json:"Servers"`
+	ContactInfo string   `json:"ContactInfo"`
 }
 
 // Cluster is exported
@@ -181,18 +181,12 @@ func (cluster *Cluster) Start() error {
 	}
 
 	cluster.configCache.Init()
-	cluster.Lock()
-	for _, group := range cluster.groups {
-		cluster.configCache.SetGroupMetaDataIsRemoveDelay(group.ID, group.IsRemoveDelay)
-	}
-	cluster.Unlock()
-
 	if cluster.Discovery != nil {
 		if cluster.Location != "" {
 			logger.INFO("[#cluster#] cluster location: %s", cluster.Location)
 		}
 		logger.INFO("[#cluster#] discovery service watching...")
-		cluster.Discovery.Watch(cluster.stopCh, cluster.watchDiscoveryHandleFunc)
+		cluster.Discovery.WatchNodes(cluster.stopCh, cluster.watchDiscoveryHandleFunc)
 		cluster.hooksProcessor.Start()
 		go cluster.recoveryContainersLoop()
 		return nil
@@ -395,6 +389,7 @@ func (cluster *Cluster) GetMetaEnginesContainers(metaData *MetaData, metaEngines
 		GroupID:       metaData.GroupID,
 		MetaID:        metaData.MetaID,
 		IsRemoveDelay: metaData.IsRemoveDelay,
+		IsRecovery:    metaData.IsRecovery,
 		Instances:     metaData.Instances,
 		Placement:     metaData.Placement,
 		WebHooks:      metaData.WebHooks,
@@ -453,7 +448,7 @@ func (cluster *Cluster) GetGroupAllContainers(groupid string) *types.GroupContai
 		}
 	}
 
-	cluster.RefreshEnginesContainers(metaEngines)
+	//cluster.RefreshEnginesContainers(metaEngines)
 	groupContainers := types.GroupContainers{}
 	for _, metaData := range groupMetaData {
 		if groupContainer := cluster.GetMetaEnginesContainers(metaData, metaEngines); groupContainer != nil {
@@ -477,7 +472,7 @@ func (cluster *Cluster) GetGroupContainers(metaid string) *types.GroupContainer 
 			metaEngines[engine.IP] = engine
 		}
 	}
-	cluster.RefreshEnginesContainers(metaEngines)
+	//cluster.RefreshEnginesContainers(metaEngines)
 	return cluster.GetMetaEnginesContainers(metaData, metaEngines)
 }
 
@@ -521,7 +516,6 @@ func (cluster *Cluster) SetGroup(group *Group) {
 		pGroup.Location = group.Location
 		pGroup.Servers = group.Servers
 		pGroup.IsCluster = group.IsCluster
-		pGroup.IsRemoveDelay = group.IsRemoveDelay
 		pGroup.ContactInfo = group.ContactInfo
 		logger.INFO("[#cluster#] group changed %s %s (%d)", pGroup.ID, pGroup.Name, len(pGroup.Servers))
 		for _, originServer := range origins {
@@ -572,9 +566,6 @@ func (cluster *Cluster) SetGroup(group *Group) {
 			}
 		*/
 	}
-
-	// set metadata group is remove-delay opts.
-	cluster.configCache.SetGroupMetaDataIsRemoveDelay(pGroup.ID, pGroup.IsRemoveDelay)
 }
 
 // RemoveGroup is exported
@@ -667,25 +658,26 @@ func (cluster *Cluster) watchDiscoveryHandleFunc(added backends.Entries, removed
 	watchEngines := WatchEngines{}
 	logger.INFO("[#cluster#] discovery watch removed:%d added:%d.", len(removed), len(added))
 	for _, entry := range removed {
-		nodeData := &types.NodeData{}
-		if err := json.DeCodeBufferToObject(entry.Data, nodeData); err != nil {
+		nodeData, err := deCodeEntry(entry)
+		if err != nil {
 			logger.ERROR("[#cluster#] discovery watch removed decode error: %s", err.Error())
 			continue
 		}
-		nodeData.Name = strings.ToUpper(nodeData.Name)
 		logger.INFO("[#cluster#] discovery watch, remove to pendengines %s\t%s", nodeData.IP, nodeData.Name)
-		watchEngines = append(watchEngines, NewWatchEngine(nodeData.IP, nodeData.Name, StateDisconnected))
-		cluster.enginesPool.RemoveEngine(nodeData.IP, nodeData.Name)
+
+		if cluster.nodeCache.ContainsOtherKey(entry.Key, nodeData.IP) == false {
+			watchEngines = append(watchEngines, NewWatchEngine(nodeData.IP, nodeData.Name, StateDisconnected))
+			cluster.enginesPool.RemoveEngine(nodeData.IP, nodeData.Name)
+		}
 		cluster.nodeCache.Remove(entry.Key)
 	}
 
 	for _, entry := range added {
-		nodeData := &types.NodeData{}
-		if err := json.DeCodeBufferToObject(entry.Data, nodeData); err != nil {
+		nodeData, err := deCodeEntry(entry)
+		if err != nil {
 			logger.ERROR("[#cluster#] discovery service watch added decode error: %s", err.Error())
 			continue
 		}
-		nodeData.Name = strings.ToUpper(nodeData.Name)
 		logger.INFO("[#cluster#] discovery watch, append to pendengines %s\t%s", nodeData.IP, nodeData.Name)
 		watchEngines = append(watchEngines, NewWatchEngine(nodeData.IP, nodeData.Name, StateHealthy))
 		cluster.nodeCache.Add(entry.Key, nodeData)
@@ -910,22 +902,27 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 
 	metaData, engines, err := cluster.validateMetaData(metaid)
 	if err != nil {
-		logger.WARN("[#cluster#] recovery meta %s error, %s", metaid, err.Error())
-		return err
+		return fmt.Errorf("recovery meta %s %s", metaid, err)
+	}
+
+	if !metaData.IsRecovery {
+		return fmt.Errorf("recovery meta %s is disabled", metaData.MetaID)
 	}
 
 	baseConfigs := cluster.configCache.GetMetaDataBaseConfigs(metaData.MetaID)
 	for _, baseConfig := range baseConfigs {
-		found := false
-		for _, engine := range engines {
-			if engine.IsHealthy() && engine.HasContainer(baseConfig.ID) {
-				found = true
-				break
+		if baseConfig.ID != "" {
+			found := false
+			for _, engine := range engines {
+				if engine.IsHealthy() && engine.HasContainer(baseConfig.ID) {
+					found = true
+					break
+				}
 			}
-		}
-		if !found { //clean meta invalid container.
-			cluster.configCache.RemoveContainerBaseConfig(metaData.MetaID, baseConfig.ID)
-			logger.WARN("[#cluster#] recovery meta %s remove invalid container %s", metaData.MetaID, ShortContainerID(baseConfig.ID))
+			if !found { //clean meta invalid container.
+				cluster.configCache.RemoveContainerBaseConfig(metaData.MetaID, baseConfig.ID)
+				logger.WARN("[#cluster#] recovery meta %s remove invalid container %s", metaData.MetaID, ShortContainerID(baseConfig.ID))
+			}
 		}
 	}
 
@@ -946,7 +943,7 @@ func (cluster *Cluster) RecoveryContainers(metaid string) error {
 }
 
 // UpdateContainers is exported
-func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container) (*types.CreatedContainers, error) {
+func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container, updateOption types.UpdateOption) (*types.CreatedContainers, error) {
 
 	if instances < 0 {
 		logger.ERROR("[#cluster#] update meta %s error, %s", metaid, ErrClusterContainersInstancesInvalid)
@@ -966,7 +963,7 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 	originalConfig := metaData.Config
 	originalPlacement := metaData.Placement
 	imageTag := getImageTag(config.Image)
-	cluster.configCache.SetMetaData(metaid, instances, webhooks, placement, config)
+	cluster.configCache.SetMetaData(metaid, instances, webhooks, placement, config, updateOption.IsRemoveDelay, updateOption.IsRecovery)
 	cluster.configCache.SetImageTag(metaid, imageTag)
 	metaData = cluster.configCache.GetMetaData(metaid)
 	if metaData == nil {
@@ -1025,7 +1022,7 @@ func (cluster *Cluster) UpdateContainers(metaid string, instances int, webhooks 
 }
 
 // CreateContainers is exported
-func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container, option types.CreateOption) (string, *types.CreatedContainers, error) {
+func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container, createOption types.CreateOption) (string, *types.CreatedContainers, error) {
 
 	if instances <= 0 {
 		return "", nil, ErrClusterContainersInstancesInvalid
@@ -1048,7 +1045,7 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 		bCreate bool = true
 	)
 
-	if !option.IsReCreate {
+	if !createOption.IsReCreate {
 		if ret := cluster.cehckContainerNameUniqueness(groupid, config.Name); !ret {
 			logger.ERROR("[#cluster#] create containers %s error, %s", config.Name, ErrClusterCreateContainerNameConflict)
 			return "", nil, ErrClusterCreateContainerNameConflict
@@ -1058,13 +1055,22 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 			if len(webhooks) == 0 {
 				webhooks = metaData.WebHooks
 			}
-			if option.ForceRemove {
+			if createOption.ForceRemove {
 				cluster.RemoveContainers(metaData.MetaID, "")
+				time.Sleep(pendingWaitForInterval)
 			} else {
 				imageTag := getImageTag(config.Image)
 				if metaData.ImageTag == imageTag {
 					logger.WARN("[#cluster#] re-create %s containers %s tag %s eq.", metaData.MetaID, config.Name, imageTag)
+					for {
+						time.Sleep(pendingWaitForInterval)
+						if !cluster.containsPendingContainers(groupid, config.Name) {
+							break
+						}
+						logger.WARN("[#cluster#] re-create %s containers %s pending...", metaData.MetaID, config.Name)
+					}
 					cluster.RemoveContainers(metaData.MetaID, "")
+					time.Sleep(pendingWaitForInterval)
 				} else {
 					metaID = metaData.MetaID
 					bCreate = false
@@ -1075,14 +1081,22 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 
 	createdContainers := types.CreatedContainers{}
 	if bCreate {
-		metaData, err := cluster.configCache.CreateMetaData(groupid, group.IsRemoveDelay, instances, webhooks, placement, config)
+		metaData, err := cluster.configCache.CreateMetaData(groupid, instances, webhooks, placement, config, createOption.IsRemoveDelay, createOption.IsRecovery)
 		if err != nil {
+			if strings.Contains(err.Error(), "create meta conflict") {
+				newMetaID, containers, err := cluster.reCreateContainers(groupid, metaData.MetaID, instances, webhooks, placement, config, createOption)
+				if err != nil {
+					return "", nil, err
+				}
+				createdContainers = *containers
+				return newMetaID, &createdContainers, nil
+			}
 			logger.ERROR("[#cluster#] create containers %s error, %s", config.Name, ErrClusterContainersMetaCreateFailure)
 			return "", nil, ErrClusterContainersMetaCreateFailure
 		}
 		createdContainers, err = cluster.createContainers(metaData, instances, nil, config)
 		if len(createdContainers) == 0 {
-			//cluster.configCache.RemoveMetaData(metaData.MetaID)
+			cluster.configCache.RemoveMetaData(metaData.MetaID)
 			var resultErr string
 			if err != nil {
 				resultErr = err.Error()
@@ -1093,14 +1107,59 @@ func (cluster *Cluster) CreateContainers(groupid string, instances int, webhooks
 		metaID = metaData.MetaID
 		cluster.submitHookEvent(metaData, CreateMetaEvent)
 	} else {
-		containers, err := cluster.UpdateContainers(metaID, instances, webhooks, placement, config)
-		if err != nil || len(*containers) == 0 {
-			logger.ERROR("[#cluster#] re-create %s containers %s error, %s", metaID, config.Name, ErrClusterCreateContainerFailure)
-			return "", nil, ErrClusterCreateContainerFailure
+		newMetaID, containers, err := cluster.reCreateContainers(groupid, metaID, instances, webhooks, placement, config, createOption)
+		if err != nil {
+			return "", nil, err
 		}
+		metaID = newMetaID
 		createdContainers = *containers
 	}
 	return metaID, &createdContainers, nil
+}
+
+// reContainers is exported
+func (cluster *Cluster) reCreateContainers(groupid string, metaID string, instances int, webhooks types.WebHooks, placement types.Placement, config models.Container, createOption types.CreateOption) (string, *types.CreatedContainers, error) {
+
+	retries := cluster.createRetry
+
+RECREATE:
+	for {
+		if !cluster.containsPendingContainers(groupid, config.Name) {
+			break
+		}
+		time.Sleep(pendingWaitForInterval)
+		logger.WARN("[#cluster#] re-create %s containers %s pending...", metaID, config.Name)
+	}
+
+	updateOption := types.UpdateOption{
+		IsRemoveDelay: createOption.IsRemoveDelay,
+		IsRecovery:    createOption.IsRecovery,
+	}
+	containers, err := cluster.UpdateContainers(metaID, instances, webhooks, placement, config, updateOption)
+	if err != nil || len(*containers) == 0 {
+		if err != nil {
+			if strings.Contains(err.Error(), "cluster containers state is setting") {
+				retries = retries - 1
+				if retries > 0 {
+					time.Sleep(pendingWaitForInterval)
+					goto RECREATE
+				}
+			} else if strings.Contains(err.Error(), "cluster metadata not found") {
+				retries = retries - 1
+				if retries > 0 {
+					pMetaData := cluster.configCache.GetMetaDataOfName(groupid, config.Name)
+					if pMetaData != nil && pMetaData.MetaID != metaID {
+						metaID = pMetaData.MetaID
+						time.Sleep(pendingWaitForInterval)
+						goto RECREATE
+					}
+				}
+			}
+		}
+		logger.ERROR("[#cluster#] re-create %s containers %s error, %s", metaID, config.Name, ErrClusterCreateContainerFailure)
+		return "", nil, ErrClusterCreateContainerFailure
+	}
+	return metaID, containers, nil
 }
 
 // reduceContainers is exported
@@ -1467,7 +1526,9 @@ func (cluster *Cluster) recoveryContainersLoop() {
 				if len(metaids) > 0 {
 					cluster.RefreshEnginesContainers(metaEngines)
 					for _, metaid := range metaids {
-						cluster.RecoveryContainers(metaid)
+						if err := cluster.RecoveryContainers(metaid); err != nil {
+							logger.ERROR("[#cluster#] recovery containers error, %s", err.Error())
+						}
 					}
 				}
 			}

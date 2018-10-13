@@ -134,6 +134,24 @@ func getGroupEngine(c *Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
+func postClusterEvent(c *Context) error {
+
+	result := &response.ResponseResult{ResponseID: c.ID}
+	req, err := request.ResolveClusterEventRequest(c.Request())
+	if err != nil {
+		logger.ERROR("[#api#] %s resolve cluster event request faild, %s", c.ID, err.Error())
+		result.SetError(request.RequestInvalid, request.ErrRequestInvalid, err.Error())
+		return c.JSON(http.StatusBadRequest, result)
+	}
+
+	logger.INFO("[#api#] %s resolve cluster event request successed. %+v", c.ID, req)
+	c.Controller.SetClusterEnableEvent(req.Event)
+	resp := response.NewClusterEventResponse("accepted.")
+	result.SetError(request.RequestSuccessed, request.ErrRequestSuccessed, "cluster event response")
+	result.SetResponse(resp)
+	return c.JSON(http.StatusAccepted, result)
+}
+
 func postGroupEvent(c *Context) error {
 
 	result := &response.ResponseResult{ResponseID: c.ID}
@@ -192,7 +210,7 @@ func putGroupUpdateContainers(c *Context) error {
 	}
 
 	logger.INFO("[#api#] %s resolve update containers request successed. %+v", c.ID, req)
-	updatedContainers, err := c.Controller.UpdateClusterContainers(req.MetaID, req.Instances, req.WebHooks, req.Placement, req.Config)
+	updatedContainers, err := c.Controller.UpdateClusterContainers(req.MetaID, req.Instances, req.WebHooks, req.Placement, req.Config, req.Option)
 	if err != nil {
 		logger.ERROR("[#api#] %s update containers to meta %s error: %s", c.ID, req.MetaID, err.Error())
 		result.SetError(request.RequestFailure, request.ErrRequestFailure, err.Error())

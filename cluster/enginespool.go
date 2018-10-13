@@ -70,6 +70,7 @@ func (pool *EnginesPool) AddEngine(ip string, name string) {
 	engine := pool.Cluster.GetEngine(nodeData.IP)
 	if engine != nil {
 		pool.InitEngineNodeLabels(engine)
+		engine.Update(nodeData)
 		return
 	}
 
@@ -83,6 +84,7 @@ func (pool *EnginesPool) AddEngine(ip string, name string) {
 		pool.InitEngineNodeLabels(pendEngine)
 		if pendEngine.IsHealthy() {
 			delete(pool.pendEngines, pendEngine.IP)
+			pendEngine.Update(nodeData)
 			pool.Cluster.Lock()
 			pool.Cluster.engines[pendEngine.IP] = pendEngine
 			pool.Cluster.Unlock()

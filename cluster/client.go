@@ -15,7 +15,7 @@ import (
 
 // Client is exported
 type Client struct {
-	apiAddr string
+	ApiAddr string
 	c       *httpx.HttpClient
 }
 
@@ -38,7 +38,7 @@ func NewClient(apiAddr string) *Client {
 		})
 
 	return &Client{
-		apiAddr: apiAddr,
+		ApiAddr: apiAddr,
 		c:       client,
 	}
 }
@@ -54,7 +54,7 @@ func (client *Client) Close() {
 // get docker node info
 func (client *Client) GetDockerInfoRequest(ctx context.Context) (*types.Info, error) {
 
-	respSpecs, err := client.c.Get(ctx, "http://"+client.apiAddr+"/v1/dockerinfo", nil, nil)
+	respSpecs, err := client.c.Get(ctx, "http://"+client.ApiAddr+"/v1/dockerinfo", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func (client *Client) GetDockerInfoRequest(ctx context.Context) (*types.Info, er
 func (client *Client) GetContainerRequest(ctx context.Context, containerid string) (*types.ContainerJSON, error) {
 
 	query := map[string][]string{"originaldata": []string{"true"}}
-	respContainer, err := client.c.Get(ctx, "http://"+client.apiAddr+"/v1/containers/"+containerid, query, nil)
+	respContainer, err := client.c.Get(ctx, "http://"+client.ApiAddr+"/v1/containers/"+containerid, query, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func (client *Client) GetContainerRequest(ctx context.Context, containerid strin
 func (client *Client) GetContainersRequest(ctx context.Context) ([]types.Container, error) {
 
 	query := map[string][]string{"all": []string{"true"}}
-	respContainers, err := client.c.Get(ctx, "http://"+client.apiAddr+"/v1/containers", query, nil)
+	respContainers, err := client.c.Get(ctx, "http://"+client.ApiAddr+"/v1/containers", query, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (client *Client) GetContainersRequest(ctx context.Context) ([]types.Contain
 // create a container request.
 func (client *Client) CreateContainerRequest(ctx context.Context, config models.Container) (*ctypes.CreateContainerResponse, error) {
 
-	respCreated, err := client.c.PostJSON(ctx, "http://"+client.apiAddr+"/v1/containers", nil, config, nil)
+	respCreated, err := client.c.PostJSON(ctx, "http://"+client.ApiAddr+"/v1/containers", nil, config, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func (client *Client) CreateContainerRequest(ctx context.Context, config models.
 func (client *Client) RemoveContainerRequest(ctx context.Context, containerid string) error {
 
 	query := map[string][]string{"force": []string{"true"}}
-	respRemoved, err := client.c.Delete(ctx, "http://"+client.apiAddr+"/v1/containers/"+containerid, query, nil)
+	respRemoved, err := client.c.Delete(ctx, "http://"+client.ApiAddr+"/v1/containers/"+containerid, query, nil)
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func (client *Client) RemoveContainerRequest(ctx context.Context, containerid st
 // operate a container request.
 func (client *Client) OperateContainerRequest(ctx context.Context, operate models.ContainerOperate) error {
 
-	respOperated, err := client.c.PutJSON(ctx, "http://"+client.apiAddr+"/v1/containers", nil, operate, nil)
+	respOperated, err := client.c.PutJSON(ctx, "http://"+client.ApiAddr+"/v1/containers", nil, operate, nil)
 	if err != nil {
 		return err
 	}
@@ -173,7 +173,7 @@ func (client *Client) OperateContainerRequest(ctx context.Context, operate model
 // upgrade a container request.
 func (client *Client) UpgradeContainerRequest(ctx context.Context, operate models.ContainerOperate) (*ctypes.UpgradeContainerResponse, error) {
 
-	respUpgraded, err := client.c.PutJSON(ctx, "http://"+client.apiAddr+"/v1/containers", nil, operate, nil)
+	respUpgraded, err := client.c.PutJSON(ctx, "http://"+client.ApiAddr+"/v1/containers", nil, operate, nil)
 	if err != nil {
 		return nil, err
 	}

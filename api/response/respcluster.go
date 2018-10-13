@@ -3,6 +3,7 @@ package response
 import "github.com/humpback/humpback-center/cluster"
 import "github.com/humpback/humpback-center/cluster/types"
 import "github.com/humpback/common/models"
+import units "github.com/docker/go-units"
 
 /*
 GroupAllContainersResponse is exported
@@ -45,6 +46,7 @@ type ContainersMetaBase struct {
 	GroupID       string          `json:"GroupId"`
 	MetaID        string          `json:"MetaId"`
 	IsRemoveDelay bool            `json:"IsRemoveDelay"`
+	IsRecovery    bool            `json:"IsRecovery"`
 	Instances     int             `json:"Instances"`
 	Placement     types.Placement `json:"Placement"`
 	WebHooks      types.WebHooks  `json:"WebHooks"`
@@ -66,10 +68,43 @@ type GroupContainersMetaBaseResponse struct {
 // NewGroupContainersMetaBaseResponse is exported
 func NewGroupContainersMetaBaseResponse(metaBase *cluster.MetaBase) *GroupContainersMetaBaseResponse {
 
+	if metaBase.Config.DNS == nil {
+		metaBase.Config.DNS = []string{}
+	}
+
+	if metaBase.Config.Env == nil {
+		metaBase.Config.Env = []string{}
+	}
+
+	if metaBase.Config.ExtraHosts == nil {
+		metaBase.Config.ExtraHosts = []string{}
+	}
+
+	if metaBase.Config.Links == nil {
+		metaBase.Config.Links = []string{}
+	}
+
+	if metaBase.Config.Labels == nil {
+		metaBase.Config.Labels = map[string]string{}
+	}
+
+	if metaBase.Config.Ports == nil {
+		metaBase.Config.Ports = []models.PortBinding{}
+	}
+
+	if metaBase.Config.Volumes == nil {
+		metaBase.Config.Volumes = []models.VolumesBinding{}
+	}
+
+	if metaBase.Config.Ulimits == nil {
+		metaBase.Config.Ulimits = []*units.Ulimit{}
+	}
+
 	containersMetaBase := &ContainersMetaBase{
 		GroupID:       metaBase.GroupID,
 		MetaID:        metaBase.MetaID,
 		IsRemoveDelay: metaBase.IsRemoveDelay,
+		IsRecovery:    metaBase.IsRecovery,
 		Instances:     metaBase.Instances,
 		Placement:     metaBase.Placement,
 		WebHooks:      metaBase.WebHooks,
@@ -117,6 +152,23 @@ func NewGroupEngineResponse(engine *cluster.Engine) *GroupEngineResponse {
 
 	return &GroupEngineResponse{
 		Engine: engine,
+	}
+}
+
+/*
+ClusterEventResponse is exported
+Method:  POST
+Route:   /v1/cluster/event
+*/
+type ClusterEventResponse struct {
+	Message string `json:"Message"`
+}
+
+// NewClusterEventResponse is exported
+func NewClusterEventResponse(message string) *ClusterEventResponse {
+
+	return &ClusterEventResponse{
+		Message: message,
 	}
 }
 

@@ -3,8 +3,11 @@ package cluster
 import "github.com/humpback/humpback-center/cluster/storage/entry"
 import "github.com/humpback/humpback-center/cluster/storage/node"
 import "github.com/humpback/humpback-center/cluster/types"
+import "github.com/humpback/discovery/backends"
+import "github.com/humpback/gounits/json"
 
 import (
+	"fmt"
 	"net"
 	"sort"
 	"strings"
@@ -175,4 +178,20 @@ func removeDuplicatesGroups(groups []*Group) []*Group {
 		out = append(out, pGroups[i])
 	}
 	return out
+}
+
+func deCodeEntry(entry *backends.Entry) (*types.NodeData, error) {
+
+	if entry == nil {
+		return nil, fmt.Errorf("decode entry invalid")
+	}
+
+	nodeData := &types.NodeData{}
+	err := json.DeCodeBufferToObject(entry.Data, nodeData)
+	if err != nil {
+		return nil, err
+	}
+
+	nodeData.Name = strings.ToUpper(nodeData.Name)
+	return nodeData, nil
 }

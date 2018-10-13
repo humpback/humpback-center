@@ -14,6 +14,7 @@ type GroupContainer struct {
 	GroupID       string             `json:"GroupId"`
 	MetaID        string             `json:"MetaId"`
 	IsRemoveDelay bool               `json:"IsRemoveDelay"`
+	IsRecovery    bool               `json:"IsRecovery"`
 	Instances     int                `json:"Instances"`
 	Placement     Placement          `json:"Placement"`
 	WebHooks      WebHooks           `json:"WebHooks"`
