@@ -17,6 +17,7 @@ COPY notify/template.html /opt/humpback-center/notify/template.html
 COPY humpback-center /opt/humpback-center/humpback-center
 
 COPY dumb-init /dumb-init
+RUN chmod 777 /dumb-init
 
 ENTRYPOINT ["/dumb-init", "--"]
 

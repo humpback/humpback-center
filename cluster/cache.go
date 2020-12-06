@@ -1,10 +1,5 @@
 package cluster
 
-import "github.com/humpback/gounits/system"
-import "github.com/humpback/gounits/rand"
-import "github.com/humpback/humpback-center/cluster/types"
-import "github.com/humpback/common/models"
-
 import (
 	"bytes"
 	"encoding/json"
@@ -16,6 +11,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/humpback/common/models"
+	"github.com/humpback/gounits/rand"
+	"github.com/humpback/gounits/system"
+	"github.com/humpback/humpback-center/cluster/types"
 )
 
 // ContainerBaseConfig is exported
@@ -180,11 +180,13 @@ func (cache *ContainersConfigCache) SetImageTag(metaid string, imagetag string) 
 		originalTag := metaData.ImageTag
 		metaData.ImageTag = imagetag
 		originalImage := metaData.Config.Image
-		nPos := strings.LastIndex(originalImage, ":")
+		tempPaths := strings.Split(originalImage, "/")
+		nPos := strings.LastIndex(tempPaths[len(tempPaths)-1], ":")
 		if nPos == -1 {
 			nPos = len(originalImage)
 		}
-		metaData.Config.Image = originalImage[:nPos] + ":" + imagetag
+		tempPaths[len(tempPaths)-1] = strings.Split(tempPaths[len(tempPaths)-1], ":")[0] + ":" + imagetag
+		metaData.Config.Image = strings.Join(tempPaths, "/")
 		if err := cache.writeMetaData(metaData); err != nil {
 			metaData.ImageTag = originalTag
 			metaData.Config.Image = originalImage

@@ -1,14 +1,5 @@
 package cluster
 
-import "github.com/humpback/common/models"
-import "github.com/humpback/humpback-center/notify"
-import "github.com/humpback/humpback-center/cluster/storage"
-import "github.com/humpback/humpback-center/cluster/types"
-import "github.com/humpback/discovery"
-import "github.com/humpback/discovery/backends"
-import "github.com/humpback/gounits/logger"
-import "github.com/humpback/gounits/system"
-
 import (
 	"fmt"
 	"math/rand"
@@ -18,6 +9,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/humpback/common/models"
+	"github.com/humpback/discovery"
+	"github.com/humpback/discovery/backends"
+	"github.com/humpback/gounits/logger"
+	"github.com/humpback/gounits/system"
+	"github.com/humpback/humpback-center/cluster/storage"
+	"github.com/humpback/humpback-center/cluster/types"
+	"github.com/humpback/humpback-center/notify"
 )
 
 var pendingWaitForInterval = time.Duration(time.Second * 5)
@@ -832,12 +832,9 @@ func (cluster *Cluster) UpgradeContainers(metaid string, imagetag string) (*type
 	}
 
 	config := metaData.Config
-	tagIndex := strings.LastIndex(config.Image, ":")
-	if tagIndex <= 0 {
-		return nil, fmt.Errorf("upgrade %s config tag invalid", metaid)
-	}
-
-	config.Image = config.Image[0:tagIndex] + ":" + imagetag
+	tempPaths := strings.Split(config.Image, "/")
+	tempPaths[len(tempPaths)-1] = strings.Split(tempPaths[len(tempPaths)-1], ":")[0] + ":" + imagetag
+	config.Image = strings.Join(tempPaths, "/")
 	upgradeContainers, err := cluster.upgradeContainers(metaData, engines, config)
 	if err != nil {
 		return nil, fmt.Errorf("upgrade %s failure, %s", metaid, err.Error())

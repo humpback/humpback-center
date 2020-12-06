@@ -1,12 +1,5 @@
 package cluster
 
-import "github.com/humpback/humpback-center/cluster/types"
-import "github.com/humpback/common/models"
-import "github.com/humpback/gounits/convert"
-import "github.com/humpback/gounits/logger"
-import "github.com/humpback/gounits/rand"
-import "github.com/humpback/gounits/utils"
-
 import (
 	"context"
 	"fmt"
@@ -16,6 +9,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/humpback/common/models"
+	"github.com/humpback/gounits/convert"
+	"github.com/humpback/gounits/logger"
+	"github.com/humpback/gounits/rand"
+	"github.com/humpback/gounits/utils"
+	"github.com/humpback/humpback-center/cluster/types"
 )
 
 const (
@@ -545,7 +545,8 @@ func (engine *Engine) ForceUpgradeContainer(operate models.ContainerOperate) (*C
 		return nil, fmt.Errorf("upgrade container %s not found", ShortContainerID(operate.Container))
 	}
 
-	tagIndex := strings.LastIndex(container.Config.Image, ":")
+	tempPaths := strings.Split(container.Config.Image, "/")
+	tagIndex := strings.LastIndex(tempPaths[len(tempPaths)-1], ":")
 	if tagIndex <= 0 {
 		return nil, fmt.Errorf("upgrade container %s original tag invalid.", ShortContainerID(operate.Container))
 	}
@@ -553,7 +554,8 @@ func (engine *Engine) ForceUpgradeContainer(operate models.ContainerOperate) (*C
 	metaData := engine.configCache.GetMetaData(container.MetaID())
 	containerConfig := metaData.MetaBase.Config
 	containerConfig.Name = container.Config.Name
-	containerConfig.Image = container.Config.Image[0:tagIndex] + ":" + operate.ImageTag
+	tempPaths[len(tempPaths)-1] = strings.Split(tempPaths[len(tempPaths)-1], ":")[0] + ":" + operate.ImageTag
+	containerConfig.Image = strings.Join(tempPaths, "/")
 	containerConfig.Env = container.BaseConfig.Env
 	if err := engine.RemoveContainer(operate.Container); err != nil {
 		logger.WARN("[#cluster#] engine %s upgrading, remove original container %s failure.", engine.IP, ShortContainerID(operate.Container))
@@ -591,8 +593,9 @@ func (engine *Engine) UpgradeContainer(operate models.ContainerOperate) (*Contai
 	}
 
 	baseConfig.ID = upgradeContainerResponse.ID
-	imageNameSplit := strings.SplitN(baseConfig.Image, ":", 2)
-	baseConfig.Image = imageNameSplit[0] + ":" + operate.ImageTag
+	tempPaths := strings.Split(baseConfig.Image, "/")
+	tempPaths[len(tempPaths)-1] = strings.Split(tempPaths[len(tempPaths)-1], ":")[0] + ":" + operate.ImageTag
+	baseConfig.Image = strings.Join(tempPaths, "/")
 	engine.configCache.CreateContainerBaseConfig(baseConfig.MetaData.MetaID, &baseConfig)
 	engine.configCache.RemoveContainerBaseConfig(baseConfig.MetaData.MetaID, operate.Container)
 	logger.INFO("[#cluster#] engine %s %s container %s to %s", engine.IP, operate.Action, ShortContainerID(operate.Container), ShortContainerID(upgradeContainerResponse.ID))

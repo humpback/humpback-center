@@ -1,16 +1,16 @@
 package cluster
 
-import "github.com/humpback/humpback-center/cluster/storage/entry"
-import "github.com/humpback/humpback-center/cluster/storage/node"
-import "github.com/humpback/humpback-center/cluster/types"
-import "github.com/humpback/discovery/backends"
-import "github.com/humpback/gounits/json"
-
 import (
 	"fmt"
 	"net"
 	"sort"
 	"strings"
+
+	"github.com/humpback/discovery/backends"
+	"github.com/humpback/gounits/json"
+	"github.com/humpback/humpback-center/cluster/storage/entry"
+	"github.com/humpback/humpback-center/cluster/storage/node"
+	"github.com/humpback/humpback-center/cluster/types"
 )
 
 //ParseServer is exported
@@ -29,7 +29,8 @@ func ParseServer(ipOrName string) Server {
 func getImageTag(imageName string) string {
 
 	imageTag := "latest"
-	values := strings.SplitN(imageName, ":", 2)
+	tempPaths := strings.Split(imageName, "/")
+	values := strings.SplitN(tempPaths[len(tempPaths)-1], ":", 2)
 	if len(values) == 2 {
 		imageTag = values[1]
 	}
